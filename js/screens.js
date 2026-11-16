@@ -1,0 +1,529 @@
+import { api, bus, ME, firstName } from './service.js';
+import { $, $$, h, esc, avatar, ago, hash, vibrate, pickFile, compressImage, copyText } from './util.js';
+import { icon } from './icons.js';
+import { router, bindActs, navbar, toast, sheet, confirmBox, promptBox } from './ui.js';
+import { userAvatar, chatAvatar, presence, verified, userRow, postCard, empty } from './views.js';
+import { openChat, startCall } from './chat.js';
+
+/* ================= ONBOARDING ================= */
+export function OnboardingScreen(onDone) {
+  const el = h(`<div class="onb">
+    <div class="onb-hero">
+      <div class="floaty f1">💬</div><div class="floaty f2">✨</div><div class="floaty f3">🫶</div><div class="floaty f4">🎧</div><div class="floaty f5">😆</div>
+      <div class="logo-big"><img src="icons/icon.svg" alt=""></div>
+      <h1>onix</h1>
+      <p>chat bareng circle kamu</p>
+    </div>
+    <form class="onb-form" autocomplete="off">
+      <input class="field" name="name" maxlength="30" placeholder="Nama" required aria-label="Nama">
+      <div class="field-prefix"><span>@</span><input class="field" name="id" maxlength="20" placeholder="onix id" required autocapitalize="off" autocorrect="off" aria-label="Onix ID"></div>
+      <button class="btn primary wide" type="submit">Mulai ${icon('send')}</button>
+    </form>
+  </div>`);
+  const form = $('form', el);
+  const idInp = form.elements.id;
+  form.elements.name.addEventListener('input', e => {
+    if (idInp.dataset.touched) return;
+    idInp.value = e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '').slice(0, 20);
+  });
+  idInp.addEventListener('input', () => {
+    idInp.dataset.touched = '1';
+    idInp.value = idInp.value.toLowerCase().replace(/[^a-z0-9._]/g, '');
+  });
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const name = form.elements.name.value.trim();
+    const id = idInp.value.trim();
+    if (name.length < 2) return toast('Nama min. 2 huruf');
+    if (id.length < 3) return toast('ID min. 3 karakter');
+    api.register({ name, id });
+    vibrate(15);
+    onDone();
+  });
+  return { el };
+}
+
+/* ================= PROFILE ================= */
+export function ProfileScreen(uid) {
+  if (uid === ME) return MyProfileScreen();
+  const el = h(`<div class="profile-screen"></div>`);
+  function render() {
+    const u = api.user(uid);
+    if (!u) return;
+    const fr = api.isFriend(uid), fav = api.isFav(uid), blocked = api.isBlocked(uid);
+    const story = api.storyOf(uid);
+    el.innerHTML = `
+      <div class="profile-cover" style="--h:${u.hue}">
+        <header class="navbar clear"><button class="icon-btn" data-act="back">${icon('back')}</button><div></div><div class="nav-right"><button class="icon-btn" data-act="more">${icon('more')}</button></div></header>
+      </div>
+      <div class="profile-body">
+        <button class="pav" data-act="${story ? 'story' : 'noop'}">${avatar(u, 104, { ring: !!story, seen: story?.seen })}</button>
+        <h1>${esc(u.name)}${u.official ? verified() : ''}</h1>
+        <div class="pid">@${esc(u.id)}</div>
+        <p class="pstatus">${esc(u.status || '')}</p>
+        <div class="presence ${u.online ? 'on' : ''}">${esc(presence(u))}</div>
+        ${blocked ? `<button class="btn ghost wide" data-act="unblock">Buka blokir</button>`
+          : fr || u.official ? `<div class="pactions">
+            <button data-act="chat">${icon('chat')}<span>Chat</span></button>
+            <button data-act="call">${icon('phone')}<span>Telepon</span></button>
+            <button data-act="video">${icon('video')}<span>Video</span></button>
+            ${u.official ? '' : `<button data-act="fav" class="${fav ? 'on' : ''}">${icon('star')}<span>Favorit</span></button>`}
+          </div>`
+          : `<div class="stack"><button class="btn primary wide" data-act="add">${icon('userPlus')} Tambah teman</button><button class="btn ghost wide" data-act="chat">Kirim pesan</button></div>`}
+      </div>`;
+  }
+  bindActs(el, {
+    chat: () => openChat(api.directWith(uid).id),
+    call: () => startCall(api.directWith(uid).id, false),
+    video: () => startCall(api.directWith(uid).id, true),
+    fav: () => { api.toggleFav(uid); toast(api.isFav(uid) ? 'Masuk favorit ⭐' : 'Dihapus dari favorit'); },
+    add: () => { api.addFriend(uid); toast('Ditambahkan 🎉'); },
+    unblock: () => { api.unblock(uid); ; },
+    story: () => openStories([uid]),
+    more: () => {
+      const u = api.user(uid);
+      const acts = [{ label: 'Bagikan kontak', icon: 'share', run: () => shareText(`Add ${u.name} di Onix: @${u.id}`) }];
+      if (api.isFriend(uid)) acts.push({ label: 'Hapus teman', icon: 'trash', danger: true, run: async () => { if (await confirmBox({ title: `Hapus ${firstName(u.name)}?`, ok: 'Hapus', danger: true })) { api.removeFriend(uid); toast('Teman dihapus'); } } });
+      if (!u.official && !api.isBlocked(uid)) acts.push({ label: 'Blokir', icon: 'block', danger: true, run: async () => { if (await confirmBox({ title: `Blokir ${firstName(u.name)}?`, text: 'Kamu nggak bakal nerima pesan dari dia.', ok: 'Blokir', danger: true })) { api.block(uid); toast('Diblokir'); } } });
+      sheet({ title: u.name, actions: acts });
+    },
+  });
+  const offs = [bus.on('friends', render), bus.on('presence', render), bus.on('stories', render)];
+  render();
+  return { el, destroy: () => offs.forEach(f => f()) };
+}
+
+function MyProfileScreen() {
+  const el = h(`<div class="profile-screen"></div>`);
+  function render() {
+    const me = api.me();
+    const st = api.storyOf(ME);
+    el.innerHTML = `
+      <div class="profile-cover" style="--h:${me.hue}">
+        <header class="navbar clear"><button class="icon-btn" data-act="back">${icon('back')}</button><div></div><div class="nav-right"><button class="icon-btn" data-act="qr">${icon('qr')}</button></div></header>
+      </div>
+      <div class="profile-body">
+        <button class="pav" data-act="${st ? 'story' : 'edit'}">${avatar(me, 104, { ring: !!st, seen: true })}</button>
+        <h1>${esc(me.name)}</h1>
+        <div class="pid">@${esc(me.id)}</div>
+        <p class="pstatus">${esc(me.status || '')}</p>
+        <div class="pactions">
+          <button data-act="edit">${icon('edit')}<span>Edit</span></button>
+          <button data-act="add-story">${icon('plus')}<span>Story</span></button>
+          <button data-act="qr">${icon('qr')}<span>QR</span></button>
+        </div>
+      </div>`;
+  }
+  bindActs(el, {
+    edit: () => router.push(EditProfileScreen()),
+    qr: () => router.push(AddFriendScreen('qr')),
+    'add-story': addStoryFlow,
+    story: () => openStories([ME]),
+  });
+  const offs = [bus.on('me', render), bus.on('stories', render)];
+  render();
+  return { el, destroy: () => offs.forEach(f => f()) };
+}
+
+export function EditProfileScreen() {
+  const me = api.me();
+  let avatarSrc = me.avatar;
+  const el = h(`<div class="sub-screen">
+    ${navbar('Edit profil', `<button class="text-btn" data-act="save">Simpan</button>`)}
+    <div class="content pad">
+      <div class="edit-av"><button data-act="photo">${avatar(me, 108)}<span class="cam-badge">${icon('camera')}</span></button></div>
+      <label class="lbl">Nama</label>
+      <input class="field" name="name" maxlength="30" value="${esc(me.name)}">
+      <label class="lbl">Status <span class="counter"></span></label>
+      <input class="field" name="status" maxlength="60" value="${esc(me.status || '')}" placeholder="lagi apa nih?">
+      <label class="lbl">Onix ID</label>
+      <div class="field readonly">@${esc(me.id)}</div>
+    </div>
+  </div>`);
+  const name = $('[name=name]', el), status = $('[name=status]', el), counter = $('.counter', el);
+  const upd = () => { counter.textContent = `${status.value.length}/60`; };
+  status.addEventListener('input', upd); upd();
+  const refreshAv = () => { $('.edit-av button', el).innerHTML = avatar({ ...me, name: name.value || me.name, avatar: avatarSrc }, 108) + `<span class="cam-badge">${icon('camera')}</span>`; };
+  name.addEventListener('input', refreshAv);
+  bindActs(el, {
+    photo: () => sheet({
+      title: 'Foto profil', actions: [
+        { label: 'Pilih dari galeri', icon: 'image', run: async () => { const f = await pickFile('image/*'); if (f) { avatarSrc = (await compressImage(f, 400, 0.8)).src; refreshAv(); } } },
+        ...(avatarSrc ? [{ label: 'Hapus foto', icon: 'trash', danger: true, run: () => { avatarSrc = null; refreshAv(); } }] : []),
+      ],
+    }),
+    save: () => {
+      const n = name.value.trim();
+      if (n.length < 2) return toast('Nama min. 2 huruf');
+      api.updateMe({ name: n, status: status.value.trim(), avatar: avatarSrc });
+      
+      router.back();
+    },
+  });
+  return { el };
+}
+
+/* ================= ADD FRIEND ================= */
+export function AddFriendScreen(initial = 'search') {
+  let mode = initial, q = '';
+  const el = h(`<div class="sub-screen">
+    ${navbar('Tambah teman')}
+    <div class="seg-wrap"><div class="seg"><button data-act="mode" data-m="search">ID</button><button data-act="mode" data-m="qr">QR</button></div></div>
+    <div class="af-search"><div class="search">${icon('search')}<input placeholder="Cari ID atau nama" autocapitalize="off" autocorrect="off"></div></div>
+    <div class="content af-body"></div>
+  </div>`);
+  const body = $('.af-body', el), inp = $('.af-search input', el), searchWrap = $('.af-search', el);
+  const addBtn = u => api.isFriend(u.id) ? `<span class="pill">Teman</span>` : `<button class="btn primary sm" data-act="add" data-id="${u.id}">Tambah</button>`;
+  function render() {
+    $$('.seg button', el).forEach(b => b.classList.toggle('on', b.dataset.m === mode));
+    searchWrap.hidden = mode !== 'search';
+    if (mode === 'qr') {
+      const me = api.me();
+      body.innerHTML = `<div class="qr-card">
+        ${avatar(me, 64)}<b>${esc(me.name)}</b><span>@${esc(me.id)}</span>
+        <canvas width="220" height="220"></canvas>
+      </div>
+      <div class="stack pad-x"><button class="btn primary wide" data-act="scan">${icon('scan')} Scan</button><button class="btn ghost wide" data-act="share-id">${icon('share')} Bagikan</button></div>`;
+      drawQR($('canvas', body), me.id);
+      return;
+    }
+    const res = api.searchUsers(q);
+    const rec = api.recommended();
+    body.innerHTML = (q ? `${res.length ? res.map(u => userRow(u, { right: addBtn(u) })).join('') : empty('🔍', 'Nggak ketemu')}` : '')
+      + (!q && rec.length ? `<div class="section-h">Saran</div>${rec.map(u => userRow(u, { right: addBtn(u) })).join('')}` : '')
+      + (!q && !rec.length ? empty('🫶', 'Udah temenan semua') : '');
+  }
+  inp.addEventListener('input', () => { q = inp.value; render(); });
+  bindActs(el, {
+    mode: t => { mode = t.dataset.m; render(); },
+    add: t => { api.addFriend(t.dataset.id); vibrate(10); toast('Ditambahkan 🎉'); render(); },
+    profile: t => router.push(ProfileScreen(t.dataset.id)),
+    'share-id': () => shareText(`Add aku di Onix ya! Onix ID: @${api.me().id}`),
+    scan: () => {
+      const overlay = h(`<div class="scan-overlay"><div class="scan-box"><i></i></div><button class="btn ghost" data-x>Batal</button></div>`);
+      document.getElementById('app').appendChild(overlay);
+      requestAnimationFrame(() => overlay.classList.add('show'));
+      const close = () => { overlay.classList.remove('show'); setTimeout(() => overlay.remove(), 250); };
+      const t = setTimeout(() => {
+        close();
+        const rec = api.recommended();
+        if (!rec.length) return toast('QR nggak kebaca 😅');
+        const u = rec[Math.floor(Math.random() * rec.length)];
+        toast(`QR terdeteksi: ${u.name} (demo)`);
+        router.push(ProfileScreen(u.id));
+      }, 2200);
+      $('[data-x]', overlay).addEventListener('click', () => { clearTimeout(t); close(); });
+    },
+  });
+  const off = bus.on('friends', render);
+  render();
+  return { el, destroy: off };
+}
+
+function drawQR(canvas, text) {
+  const ctx = canvas.getContext('2d');
+  const N = 25, S = canvas.width / (N + 2);
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#7C5CFF';
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  let x = hash(text);
+  const rnd = () => { x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; };
+  const finder = (cx, cy) => cx < 8 && cy < 8 || cx > N - 9 && cy < 8 || cx < 8 && cy > N - 9;
+  ctx.fillStyle = '#111';
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+    if (finder(i, j)) continue;
+    if (Math.abs(i - 12) < 3 && Math.abs(j - 12) < 3) continue;
+    if (rnd() < 0.48) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect((i + 1) * S, (j + 1) * S, S, S, S * 0.3) : ctx.rect((i + 1) * S, (j + 1) * S, S, S); ctx.fill(); }
+  }
+  [[0, 0], [N - 7, 0], [0, N - 7]].forEach(([a, b]) => {
+    const px = (a + 1) * S, py = (b + 1) * S;
+    ctx.fillStyle = '#111'; rr(ctx, px, py, 7 * S, 7 * S, S * 1.6); ctx.fill();
+    ctx.fillStyle = '#fff'; rr(ctx, px + S, py + S, 5 * S, 5 * S, S * 1.1); ctx.fill();
+    ctx.fillStyle = accent; rr(ctx, px + 2 * S, py + 2 * S, 3 * S, 3 * S, S * 0.8); ctx.fill();
+  });
+  ctx.fillStyle = accent; rr(ctx, 11 * S, 11 * S, 5 * S, 5 * S, S * 1.4); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = `bold ${S * 3}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('o', 13.5 * S, 13.3 * S);
+}
+function rr(ctx, x, y, w, hh, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + hh, r); ctx.arcTo(x + w, y + hh, x, y + hh, r); ctx.arcTo(x, y + hh, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+export async function shareText(text) {
+  if (navigator.share) { try { await navigator.share({ text }); return; } catch { return; } }
+  await copyText(text); toast('Disalin');
+}
+
+/* ================= FRIEND PICKER / NEW GROUP ================= */
+export function FriendPicker({ title, multi = false, exclude = [], confirm = 'Selesai', onDone }) {
+  const sel = new Set();
+  let q = '';
+  const el = h(`<div class="sub-screen">
+    ${navbar(esc(title), multi ? `<button class="text-btn" data-act="done" disabled>${esc(confirm)}</button>` : '')}
+    <div class="af-search"><div class="search">${icon('search')}<input placeholder="Cari teman"></div></div>
+    <div class="content picker-body"></div>
+  </div>`);
+  const body = $('.picker-body', el);
+  function render() {
+    const list = api.friends().filter(u => !exclude.includes(u.id) && u.name.toLowerCase().includes(q.toLowerCase()));
+    body.innerHTML = list.length ? list.map(u => `<div class="list-item" data-act="pick" data-id="${u.id}">${userAvatar(u, 44, { online: true })}<div class="li-main"><div class="li-name">${esc(u.name)}</div><div class="li-sub">${esc(u.status || '')}</div></div>${multi ? `<span class="check ${sel.has(u.id) ? 'on' : ''}">${icon('check')}</span>` : ''}</div>`).join('') : empty('🫥', 'Nggak ada teman yang cocok');
+    const d = $('[data-act=done]', el);
+    if (d) { d.disabled = !sel.size; d.textContent = sel.size ? `${confirm} (${sel.size})` : confirm; }
+  }
+  $('input', el).addEventListener('input', e => { q = e.target.value; render(); });
+  bindActs(el, {
+    pick: t => {
+      if (!multi) { onDone([t.dataset.id]); return; }
+      const id = t.dataset.id; sel.has(id) ? sel.delete(id) : sel.add(id); vibrate(5); render();
+    },
+    done: () => sel.size && onDone([...sel]),
+  });
+  render();
+  return { el };
+}
+
+export function NewGroupScreen() {
+  const sel = new Set();
+  const EMO = ['✨', '🔥', '💅', '🎧', '🍕', '🚀', '📚', '🌈', '🎮', '⚽'];
+  let emoji = EMO[0], q = '';
+  const el = h(`<div class="sub-screen">
+    ${navbar('Grup baru', `<button class="text-btn" data-act="create" disabled>Buat</button>`)}
+    <div class="ng-head">
+      <div class="ng-row"><button class="ng-emoji" data-act="emo">${emoji}</button><input class="field" maxlength="40" placeholder="Nama grup"></div>
+      <div class="chips"></div>
+      <div class="search">${icon('search')}<input class="q" placeholder="Cari teman"></div>
+    </div>
+    <div class="content picker-body"></div>
+  </div>`);
+  const name = $('.ng-row input', el), body = $('.picker-body', el), chips = $('.chips', el);
+  function render() {
+    const list = api.friends().filter(u => u.name.toLowerCase().includes(q.toLowerCase()));
+    body.innerHTML = `<div class="section-h">Pilih anggota</div>` + list.map(u => `<div class="list-item" data-act="pick" data-id="${u.id}">${userAvatar(u, 44)}<div class="li-main"><div class="li-name">${esc(u.name)}</div></div><span class="check ${sel.has(u.id) ? 'on' : ''}">${icon('check')}</span></div>`).join('');
+    chips.innerHTML = [...sel].map(id => `<button class="chip-user" data-act="pick" data-id="${id}">${avatar(api.user(id), 22)}${esc(firstName(api.user(id).name))}${icon('x', 'tiny')}</button>`).join('');
+    $('[data-act=create]', el).disabled = !(sel.size && name.value.trim());
+  }
+  name.addEventListener('input', render);
+  $('.q', el).addEventListener('input', e => { q = e.target.value; render(); });
+  bindActs(el, {
+    emo: t => { emoji = EMO[(EMO.indexOf(emoji) + 1) % EMO.length]; t.textContent = emoji; vibrate(5); },
+    pick: t => { const id = t.dataset.id; sel.has(id) ? sel.delete(id) : sel.add(id); vibrate(5); render(); },
+    create: () => {
+      const n = name.value.trim();
+      if (!n || !sel.size) return;
+      const c = api.createGroup(n, [...sel], emoji);
+      
+      history.back();
+      setTimeout(() => openChat(c.id), 380);
+    },
+  });
+  render();
+  return { el };
+}
+
+/* ================= GROUP INFO ================= */
+export function GroupInfoScreen(chatId) {
+  const el = h(`<div class="sub-screen">${navbar('Info grup')}<div class="content gi-body"></div></div>`);
+  const body = $('.gi-body', el);
+  function render() {
+    const c = api.chat(chatId);
+    if (!c) return;
+    const imgs = api.images(chatId);
+    body.innerHTML = `
+      <div class="gi-head">${chatAvatar(c, 96)}<h2>${esc(c.name)} <button class="icon-btn sm" data-act="rename">${icon('edit')}</button></h2><span>${c.members.length} anggota</span></div>
+      <div class="pactions">
+        <button data-act="call">${icon('phone')}<span>Telepon</span></button>
+        <button data-act="video">${icon('video')}<span>Video</span></button>
+        <button data-act="mute" class="${c.muted ? 'on' : ''}">${icon(c.muted ? 'bellOff' : 'bell')}<span>${c.muted ? 'Dibisukan' : 'Notif'}</span></button>
+        <button data-act="album">${icon('grid')}<span>Album</span></button>
+      </div>
+      ${imgs.length ? `<div class="section-h">Foto <button class="link" data-act="album">Lihat semua</button></div><div class="mini-album">${imgs.slice(-4).reverse().map(m => `<button data-act="img" data-src="${m.id}"><img src="${m.src}" alt=""></button>`).join('')}</div>` : ''}
+      <div class="section-h">Anggota</div>
+      <div class="list-item" data-act="add-members"><span class="round-ic">${icon('userPlus')}</span><div class="li-main"><div class="li-name accent-txt">Tambah anggota</div></div></div>
+      ${c.members.map(id => { const u = api.user(id); return id === ME ? `<div class="list-item">${avatar(u, 44)}<div class="li-main"><div class="li-name">${esc(u.name)} <span class="pill">Kamu</span></div></div></div>` : userRow(u, { sub: presence(u) }); }).join('')}
+      <div class="pad"><button class="btn danger-ghost wide" data-act="leave">${icon('logout')} Keluar dari grup</button></div>`;
+  }
+  bindActs(el, {
+    rename: async () => { const v = await promptBox({ title: 'Ganti nama grup', value: api.chat(chatId).name, max: 40 }); if (v) api.renameGroup(chatId, v); },
+    call: () => startCall(chatId, false),
+    video: () => startCall(chatId, true),
+    mute: () => api.toggleMute(chatId),
+    album: () => router.push(AlbumScreen(chatId)),
+    img: t => { const m = api.images(chatId).find(x => x.id === t.dataset.src); if (m) openImage(m.src); },
+    profile: t => router.push(ProfileScreen(t.dataset.id)),
+    'add-members': () => router.push(FriendPicker({
+      title: 'Tambah anggota', multi: true, exclude: api.chat(chatId).members, confirm: 'Tambah',
+      onDone: ids => { api.addMembers(chatId, ids); history.back();  },
+    })),
+    leave: async () => {
+      if (!(await confirmBox({ title: 'Keluar dari grup?', text: 'Kamu nggak bakal nerima pesan dari grup ini lagi.', ok: 'Keluar', danger: true }))) return;
+      api.leaveGroup(chatId);
+      history.go(-2);
+    },
+  });
+  const offs = [bus.on('chats', render), bus.on('messages', id => id === chatId && render())];
+  render();
+  return { el, destroy: () => offs.forEach(f => f()) };
+}
+
+export function AlbumScreen(chatId) {
+  const imgs = api.images(chatId).slice().reverse();
+  const el = h(`<div class="sub-screen">${navbar('Album')}<div class="content">${imgs.length ? `<div class="album">${imgs.map(m => `<button data-act="img" data-id="${m.id}"><img src="${m.src}" alt="" loading="lazy"></button>`).join('')}</div>` : empty('🖼️', 'Belum ada foto')}</div></div>`);
+  bindActs(el, { img: t => { const m = imgs.find(x => x.id === t.dataset.id); if (m) openImage(m.src, api.user(m.from)?.name); } });
+  return { el };
+}
+
+/* ================= IMAGE VIEWER ================= */
+export function openImage(src, caption = '') {
+  const el = h(`<div class="viewer"><div class="viewer-top"><button class="icon-btn" data-x>${icon('x')}</button><span>${esc(caption)}</span><a class="icon-btn" href="${src}" download="onix-foto.jpg">${icon('download')}</a></div><img src="${src}" alt=""></div>`);
+  document.getElementById('app').appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  const close = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 250); };
+  $('[data-x]', el).addEventListener('click', close);
+  $('img', el).addEventListener('click', close);
+  let sy = null;
+  el.addEventListener('touchstart', e => { sy = e.touches[0].clientY; }, { passive: true });
+  el.addEventListener('touchmove', e => { if (sy == null) return; const d = e.touches[0].clientY - sy; $('img', el).style.transform = `translateY(${d}px)`; el.style.setProperty('--o', Math.max(0.3, 1 - Math.abs(d) / 400)); }, { passive: true });
+  el.addEventListener('touchend', e => { const d = e.changedTouches[0].clientY - (sy ?? 0); sy = null; if (Math.abs(d) > 120) close(); else { $('img', el).style.transform = ''; el.style.removeProperty('--o'); } });
+}
+
+/* ================= VOOM ================= */
+export function PostComposeScreen() {
+  let image = null;
+  const me = api.me();
+  const el = h(`<div class="sub-screen">
+    ${navbar('Post baru', `<button class="text-btn" data-act="post" disabled>Posting</button>`)}
+    <div class="content pad">
+      <div class="compose-row">${avatar(me, 42)}<textarea placeholder="Bagikan sesuatu…" maxlength="500"></textarea></div>
+      <div class="compose-img" hidden></div>
+    </div>
+    <div class="compose-tools"><button class="tool" data-act="photo">${icon('image')} Foto</button><button class="tool" data-act="cam">${icon('camera')} Kamera</button><span class="counter">0/500</span></div>
+  </div>`);
+  const ta = $('textarea', el), imgBox = $('.compose-img', el), postBtn = $('[data-act=post]', el);
+  const upd = () => { postBtn.disabled = !(ta.value.trim() || image); $('.counter', el).textContent = `${ta.value.length}/500`; };
+  ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; upd(); });
+  const setImg = src => { image = src; imgBox.hidden = !src; imgBox.innerHTML = src ? `<img src="${src}" alt=""><button class="icon-btn rm" data-act="rm">${icon('x')}</button>` : ''; upd(); };
+  const pick = async cap => { const f = await pickFile('image/*', cap); if (f) setImg((await compressImage(f)).src); };
+  bindActs(el, {
+    photo: () => pick(), cam: () => pick('environment'), rm: () => setImg(null),
+    post: () => { api.createPost({ text: ta.value.trim(), image }); router.back(); },
+  });
+  setTimeout(() => ta.focus(), 350);
+  return { el };
+}
+
+export function PostDetailScreen(pid) {
+  const el = h(`<div class="sub-screen">${navbar('Post')}<div class="content pd-body"></div>
+    <div class="comment-bar">${avatar(api.me(), 32)}<input placeholder="Komentar" maxlength="300" enterkeyhint="send"><button class="send-btn active" data-act="send">${icon('send')}</button></div></div>`);
+  const body = $('.pd-body', el), inp = $('.comment-bar input', el);
+  function render() {
+    const p = api.post(pid);
+    if (!p) { body.innerHTML = empty('🫥', 'Post udah dihapus'); return; }
+    body.innerHTML = postCard(p, { detail: true }) + `<div class="section-h">${icon('comment', 'tiny')} ${p.comments.length}</div>` +
+      (p.comments.length ? p.comments.map(cm => { const u = api.user(cm.userId); return `<div class="comment">${avatar(u, 34)}<div><div class="cm-bubble"><b>${esc(cm.userId === ME ? 'Kamu' : u?.name)}</b>${esc(cm.text)}</div><small>${ago(cm.ts)}</small></div></div>`; }).join('') : `<p class="hint center">💬</p>`);
+  }
+  const send = () => { const v = inp.value.trim(); if (!v) return; api.comment(pid, v); inp.value = ''; setTimeout(() => body.scrollTo({ top: body.scrollHeight, behavior: 'smooth' }), 50); };
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+  bindActs(el, postActions({ send, 'focus-comment': () => inp.focus() }));
+  const off = bus.on('posts', render);
+  render();
+  return { el, destroy: off };
+}
+
+export function postActions(extra = {}) {
+  return {
+    like: t => { const liked = api.toggleLike(t.dataset.id); if (liked) { vibrate(8); t.classList.add('pop'); } },
+    post: t => router.push(PostDetailScreen(t.dataset.id)),
+    profile: t => router.push(ProfileScreen(t.dataset.id)),
+    'view-src': t => { const p = api.post(t.dataset.srcPost); if (p?.image) openImage(p.image, api.user(p.userId)?.name); },
+    'share-post': t => { const p = api.post(t.dataset.id); shareText(`${api.user(p.userId)?.name} di Onix VOOM: "${p.text}"`); },
+    'post-more': t => {
+      const p = api.post(t.dataset.id);
+      const acts = p.userId === ME
+        ? [{ label: 'Hapus post', icon: 'trash', danger: true, run: async () => { if (await confirmBox({ title: 'Hapus post ini?', ok: 'Hapus', danger: true })) { api.deletePost(p.id); if (router.top()?.el.querySelector('.pd-body')) router.back(); } } }]
+        : [{ label: 'Lihat profil', icon: 'user', run: () => router.push(ProfileScreen(p.userId)) }, { label: 'Laporkan', icon: 'info', run: () => toast('Makasih, laporan diterima (demo)') }];
+      sheet({ actions: acts });
+    },
+    ...extra,
+  };
+}
+
+/* ================= STORIES ================= */
+export function addStoryFlow() {
+  const COLORS = [265, 330, 200, 150, 25, 0];
+  sheet({
+    title: 'Story baru', actions: [
+      { label: 'Foto', icon: 'image', run: async () => { const f = await pickFile('image/*'); if (f) { const img = await compressImage(f, 900); api.addMyStory({ image: img.src, hue: 260 });  } } },
+      { label: 'Teks', icon: 'edit', run: async () => { const v = await promptBox({ title: 'Story', placeholder: 'lagi mood apa?', ok: 'Upload', max: 80 }); if (v) { api.addMyStory({ text: v, emoji: '✨', hue: COLORS[Math.floor(Math.random() * COLORS.length)] });  } } },
+    ],
+  });
+}
+
+export function openStories(uids, start = 0) {
+  uids = uids.filter(id => api.storyOf(id)?.items.length);
+  if (!uids.length) return;
+  let ui = start, ii = 0, elapsed = 0, last = 0, paused = false, raf = 0;
+  const DUR = 5000;
+  const el = h(`<div class="story-view">
+    <div class="story-stage"></div>
+    <div class="story-top"><div class="story-bars"></div><div class="story-head"></div></div>
+    <div class="story-nav"><div data-nav="prev"></div><div data-nav="next"></div></div>
+    <div class="story-bottom"></div>
+  </div>`);
+  document.getElementById('app').appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  const stage = $('.story-stage', el), bars = $('.story-bars', el), head = $('.story-head', el), bottom = $('.story-bottom', el);
+
+  function show() {
+    const uid = uids[ui];
+    const s = api.storyOf(uid), u = api.user(uid), it = s.items[ii];
+    if (uid !== ME) api.markStorySeen(uid);
+    elapsed = 0;
+    bars.innerHTML = s.items.map((_, k) => `<i><b style="width:${k < ii ? 100 : 0}%"></b></i>`).join('');
+    head.innerHTML = `${avatar(u, 34)}<b>${esc(uid === ME ? 'Story kamu' : u.name)}</b><span>${ago(it.ts)}</span><button class="icon-btn" data-x>${icon('x')}</button>`;
+    stage.style.setProperty('--h', it.hue ?? 260);
+    stage.innerHTML = it.image ? `<img src="${it.image}" alt="">` : `<div class="story-txt"><div class="se">${it.emoji || '✨'}</div><p>${esc(it.text || '')}</p></div>`;
+    bottom.innerHTML = uid === ME
+      ? `<div class="story-own"><span>${icon('eye', 'tiny')} ${s.views || 0}</span><button class="icon-btn" data-del aria-label="Hapus">${icon('trash')}</button></div>`
+      : `<div class="story-reply"><input placeholder="Balas…" maxlength="200" enterkeyhint="send"><button class="react-q" data-q="❤️">❤️</button><button class="react-q" data-q="😂">😂</button></div>`;
+  }
+  function next() { const s = api.storyOf(uids[ui]); if (ii < s.items.length - 1) ii++; else if (ui < uids.length - 1) { ui++; ii = 0; } else return close(); show(); }
+  function prev() { if (ii > 0) ii--; else if (ui > 0) { ui--; ii = 0; } show(); }
+  function loop(t) {
+    if (!last) last = t;
+    const dt = t - last; last = t;
+    if (!paused) elapsed += dt;
+    const b = bars.children[ii]?.firstElementChild;
+    if (b) b.style.width = Math.min(100, (elapsed / DUR) * 100) + '%';
+    if (elapsed >= DUR) next();
+    raf = requestAnimationFrame(loop);
+  }
+  function close() { cancelAnimationFrame(raf); el.classList.remove('show'); setTimeout(() => el.remove(), 250); }
+
+  let downT = 0;
+  el.addEventListener('pointerdown', e => { if (e.target.closest('.story-bottom,.story-head')) return; downT = Date.now(); paused = true; });
+  el.addEventListener('pointerup', e => {
+    if (e.target.closest('.story-bottom,.story-head')) return;
+    paused = false;
+    const nav = e.target.closest('[data-nav]');
+    if (nav && Date.now() - downT < 250) nav.dataset.nav === 'next' ? next() : prev();
+  });
+  el.addEventListener('click', async e => {
+    if (e.target.closest('[data-x]')) return close();
+    if (e.target.closest('[data-del]')) { paused = true; if (await confirmBox({ title: 'Hapus story?', ok: 'Hapus', danger: true })) { api.deleteMyStory(); close(); } else paused = false; return; }
+    const q = e.target.closest('[data-q]');
+    if (q) { replyStory(q.dataset.q); }
+  });
+  function replyStory(text) {
+    const uid = uids[ui];
+    const it = api.storyOf(uid).items[ii];
+    const c = api.directWith(uid);
+    api.send(c.id, { type: 'text', text, replyTo: { id: 'story', name: 'Story ' + firstName(api.user(uid).name), text: it.text || '📷 Foto' } });
+    toast('Terkirim 💌');
+    vibrate(8);
+  }
+  el.addEventListener('focusin', () => { paused = true; });
+  el.addEventListener('focusout', () => { paused = false; });
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.matches('.story-reply input')) { const v = e.target.value.trim(); if (v) { replyStory(v); e.target.value = ''; e.target.blur(); } }
+  });
+  show();
+  raf = requestAnimationFrame(loop);
+}

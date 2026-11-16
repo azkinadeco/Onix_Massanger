@@ -1,0 +1,260 @@
+// Fitur tambahan: teruskan pesan, Keep, polling, arsip, wallpaper, kunci PIN
+import { api, bus, ME, firstName } from './service.js';
+import { $, $$, h, esc, avatar, ago, listTime, vibrate, pickFile, compressImage, copyText } from './util.js';
+import { icon } from './icons.js';
+import { router, bindActs, navbar, toast, sheet, confirmBox, promptBox, onLongPress } from './ui.js';
+import { chatAvatar, chatRow, empty } from './views.js';
+import { openChat } from './chat.js';
+import { openImage } from './screens.js';
+
+/* ================= WALLPAPER ================= */
+export const WALLPAPERS = [
+  ['default', 'Default'], ['plain', 'Polos'], ['sunset', 'Sunset'], ['ocean', 'Ocean'],
+  ['mint', 'Mint'], ['grape', 'Grape'], ['peach', 'Peach'], ['night', 'Night'],
+];
+export function wallpaperSheet(chatId) {
+  const cur = api.chat(chatId).wallpaper || 'default';
+  sheet({
+    title: 'Wallpaper chat',
+    top: `<div class="wall-grid">${WALLPAPERS.map(([k, l]) => `<button class="wall-opt ${k === cur ? 'on' : ''}" data-w="${k}"><span class="wall-prev" data-wall="${k}"><i></i><i></i></span><small>${l}</small></button>`).join('')}</div>`,
+    onMount: (el, close) => el.querySelectorAll('[data-w]').forEach(b => b.addEventListener('click', () => {
+      api.setWallpaper(chatId, b.dataset.w); vibrate(6); close();
+    })),
+  });
+}
+
+/* ================= CHAT PICKER (teruskan) ================= */
+export function ChatPicker({ title = 'Teruskan ke…', onDone }) {
+  const sel = new Set();
+  let q = '';
+  const el = h(`<div class="sub-screen">
+    ${navbar(esc(title), `<button class="text-btn" data-act="done" disabled>Kirim</button>`)}
+    <div class="af-search"><div class="search">${icon('search')}<input placeholder="Cari chat"></div></div>
+    <div class="content picker-body"></div>
+  </div>`);
+  const body = $('.picker-body', el);
+  function render() {
+    const list = api.allChats().filter(c => api.chatTitle(c).toLowerCase().includes(q.toLowerCase()));
+    body.innerHTML = (list.map(c => `<div class="list-item" data-act="pick" data-id="${c.id}">${chatAvatar(c, 44, { online: false })}<div class="li-main"><div class="li-name">${esc(api.chatTitle(c))}</div><div class="li-sub">${c.type === 'group' ? c.members.length + ' anggota' : 'Personal'}</div></div><span class="check ${sel.has(c.id) ? 'on' : ''}">${icon('check')}</span></div>`).join('') || empty('🔍', 'Nggak ada chat'));
+    const d = $('[data-act=done]', el);
+    d.disabled = !sel.size; d.textContent = sel.size ? `Kirim (${sel.size})` : 'Kirim';
+  }
+  $('input', el).addEventListener('input', e => { q = e.target.value; render(); });
+  bindActs(el, {
+    pick: t => { const id = t.dataset.id; sel.has(id) ? sel.delete(id) : sel.add(id); vibrate(5); render(); },
+    done: () => { if (sel.size) onDone([...sel]); },
+  });
+  render();
+  return { el };
+}
+
+export function forwardMessage(m) {
+  router.push(ChatPicker({
+    onDone: ids => {
+      api.forward(m, ids);
+      history.back();
+      toast(ids.length > 1 ? `Diteruskan ke ${ids.length} chat ✈️` : 'Pesan diteruskan ✈️');
+    },
+  }));
+}
+
+/* ================= KEEP ================= */
+export function keepFromMessage(m, chat) {
+  const who = m.from === ME ? 'Kamu' : api.user(m.from)?.name;
+  const item = { source: `${api.chatTitle(chat)} · ${who}` };
+  if (m.type === 'text') Object.assign(item, { type: 'text', text: m.text });
+  else if (m.type === 'image') Object.assign(item, { type: 'image', src: m.src, w: m.w, h: m.h });
+  else if (m.type === 'sticker') Object.assign(item, { type: 'text', text: m.sticker });
+  else if (m.type === 'location') Object.assign(item, { type: 'location', title: m.title, address: m.address });
+  else if (m.type === 'poll') Object.assign(item, { type: 'text', text: '📊 ' + m.poll.q + '\n' + m.poll.options.map(o => `• ${o.text} (${o.votes.length})`).join('\n') });
+  else if (m.type === 'video') Object.assign(item, m.thumb ? { type: 'image', src: m.thumb, w: m.w, h: m.h } : { type: 'text', text: '🎬 Video' });
+  else if (m.type === 'file') Object.assign(item, { type: 'text', text: '📎 ' + m.name });
+  else if (m.type === 'voice') Object.assign(item, { type: 'text', text: '🎤 Voice note ' + (m.duration || 0) + ' detik' });
+  api.keepAdd(item);
+  toast('Disimpan 🔖');
+}
+
+export function KeepScreen() {
+  let filter = 'all';
+  const el = h(`<div class="sub-screen">
+    ${navbar('Keep', `<button class="icon-btn" data-act="new-note">${icon('plus')}</button>`)}
+    <div class="keep-filters chips scroll-x"></div>
+    <div class="content keep-body"></div>
+  </div>`);
+  const body = $('.keep-body', el), chips = $('.keep-filters', el);
+  const FILTERS = [['all', 'Semua'], ['text', 'Teks'], ['image', 'Foto'], ['note', 'Catatan'], ['location', 'Lokasi']];
+  function render() {
+    chips.innerHTML = FILTERS.map(([k, l]) => `<button class="chip ${k === filter ? 'on' : ''}" data-act="filter" data-f="${k}">${l}</button>`).join('');
+    const items = api.keep().filter(k => filter === 'all' || k.type === filter);
+    if (!items.length) { body.innerHTML = empty('🔖', 'Kosong'); return; }
+    body.innerHTML = `<div class="keep-list">${items.map(k => {
+      let inner;
+      if (k.type === 'image') inner = `<img src="${k.src}" alt="" loading="lazy">`;
+      else if (k.type === 'location') inner = `<div class="keep-loc">${icon('location')}<div><b>${esc(k.title)}</b><small>${esc(k.address)}</small></div></div>`;
+      else inner = `<p>${esc(k.text)}</p>`;
+      return `<button class="keep-item ${k.type}" data-act="item" data-id="${k.id}">
+        ${k.type === 'note' ? `<span class="keep-tag">${icon('edit', 'tiny')} Catatan</span>` : ''}
+        ${inner}
+        <small>${k.source ? esc(k.source) + ' · ' : ''}${listTime(k.ts)}</small>
+      </button>`;
+    }).join('')}</div>`;
+  }
+  async function newNote(existing) {
+    const v = await promptBox({ title: existing ? 'Edit catatan' : 'Catatan baru', value: existing?.text || '', placeholder: 'tulis apa aja…', max: 500, ok: 'Simpan' });
+    if (!v) return;
+    existing ? api.keepUpdate(existing.id, v) : api.keepAdd({ type: 'note', text: v });
+    
+  }
+  bindActs(el, {
+    filter: t => { filter = t.dataset.f; render(); },
+    'new-note': () => newNote(),
+    item: t => {
+      const k = api.keep().find(x => x.id === t.dataset.id);
+      if (!k) return;
+      if (k.type === 'image') return openImage(k.src, k.source);
+      const acts = [];
+      if (k.type === 'note') acts.push({ label: 'Edit catatan', icon: 'edit', run: () => newNote(k) });
+      if (k.text) acts.push({ label: 'Salin', icon: 'copy', run: async () => { await copyText(k.text); toast('Disalin'); } });
+      acts.push({ label: 'Kirim ke chat', icon: 'send', run: () => forwardMessage(k) });
+      acts.push({ label: 'Hapus', icon: 'trash', danger: true, run: () => { api.keepRemove(k.id); toast('Dihapus dari Keep'); } });
+      sheet({ title: k.type === 'note' ? 'Catatan' : 'Item Keep', actions: acts });
+    },
+  });
+  onLongPress(body, '.keep-item', t => {
+    const k = api.keep().find(x => x.id === t.dataset.id);
+    sheet({ actions: [
+      { label: 'Kirim ke chat', icon: 'send', run: () => forwardMessage(k) },
+      { label: 'Hapus', icon: 'trash', danger: true, run: () => api.keepRemove(k.id) },
+    ] });
+  });
+  const off = bus.on('keep', render);
+  render();
+  return { el, destroy: off };
+}
+
+/* ================= POLL ================= */
+export function PollComposeScreen(chatId) {
+  let opts = ['', ''], multi = false;
+  const el = h(`<div class="sub-screen">
+    ${navbar('Polling baru', `<button class="text-btn" data-act="send" disabled>Kirim</button>`)}
+    <div class="content pad">
+      <label class="lbl">Pertanyaan</label>
+      <input class="field" name="q" maxlength="120" placeholder="mis. Nonton film apa malam ini?">
+      <label class="lbl">Pilihan</label>
+      <div class="poll-opts"></div>
+      <button class="add-opt" data-act="add">${icon('plus')} Tambah pilihan</button>
+      <label class="set-group poll-multi"><div class="set-row">${icon('check')}<div class="set-txt"><span>Boleh pilih lebih dari satu</span></div><input type="checkbox" class="switch" name="multi"></div></label>
+    </div>
+  </div>`);
+  const q = $('[name=q]', el), box = $('.poll-opts', el), sendBtn = $('[data-act=send]', el), addBtn = $('[data-act=add]', el);
+  const valid = () => q.value.trim() && opts.filter(o => o.trim()).length >= 2;
+  function render() {
+    box.innerHTML = opts.map((o, i) => `<div class="poll-opt-row"><input class="field" data-i="${i}" maxlength="60" placeholder="Pilihan ${i + 1}" value="${esc(o)}">${opts.length > 2 ? `<button class="icon-btn sm" data-act="rm" data-i="${i}">${icon('x')}</button>` : ''}</div>`).join('');
+    addBtn.hidden = opts.length >= 6;
+    sendBtn.disabled = !valid();
+  }
+  box.addEventListener('input', e => { const i = e.target.dataset.i; if (i != null) { opts[+i] = e.target.value; sendBtn.disabled = !valid(); } });
+  q.addEventListener('input', () => { sendBtn.disabled = !valid(); });
+  $('[name=multi]', el).addEventListener('change', e => { multi = e.target.checked; });
+  bindActs(el, {
+    add: () => { opts.push(''); render(); box.querySelector(`[data-i="${opts.length - 1}"]`)?.focus(); },
+    rm: t => { opts.splice(+t.dataset.i, 1); render(); },
+    send: () => {
+      if (!valid()) return;
+      api.createPoll(chatId, q.value.trim(), opts.map(o => o.trim()).filter(Boolean), multi);
+      
+      router.back();
+    },
+  });
+  render();
+  setTimeout(() => q.focus(), 350);
+  return { el };
+}
+
+/* ================= ARCHIVE ================= */
+export function ArchivedScreen() {
+  const el = h(`<div class="sub-screen">${navbar('Arsip')}<div class="content arc-body"></div></div>`);
+  const body = $('.arc-body', el);
+  function render() {
+    const list = api.archived();
+    body.innerHTML = list.length ? list.map(chatRow).join('') : empty('🗂️', 'Arsip kosong', 'Tahan chat di daftar lalu pilih "Arsipkan".');
+  }
+  bindActs(el, { 'open-chat': t => openChat(t.dataset.id) });
+  onLongPress(body, '.chat-item', item => {
+    const c = api.chat(item.dataset.id);
+    sheet({ title: api.chatTitle(c), actions: [{ label: 'Batal arsip', icon: 'undo', run: () => { api.toggleArchive(c.id); toast('Dikeluarkan dari arsip'); } }] });
+  });
+  const off = bus.on('chats', render);
+  render();
+  return { el, destroy: off };
+}
+
+/* ================= PIN / LOCK ================= */
+function pinPad({ title, sub = '', canCancel = true, extra = '' }) {
+  return new Promise(resolve => {
+    let val = '';
+    const el = h(`<div class="lock">
+      <div class="lock-top"><img src="icons/icon.svg" alt=""><h2>${esc(title)}</h2><p>${esc(sub)}</p><div class="pin-dots">${'<i></i>'.repeat(4)}</div></div>
+      <div class="pin-pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-n="${n}">${n}</button>`).join('')}<button data-x class="pin-sub">${canCancel ? 'Batal' : ''}</button><button data-n="0">0</button><button data-del class="pin-sub">${icon('back')}</button></div>
+      ${extra}
+    </div>`);
+    document.getElementById('app').appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    const dots = $$('.pin-dots i', el);
+    const close = v => { el.classList.remove('show'); setTimeout(() => el.remove(), 250); resolve(v); };
+    const paint = () => dots.forEach((d, i) => d.classList.toggle('on', i < val.length));
+    el.addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      vibrate(4);
+      if (b.dataset.n != null && val.length < 4) {
+        val += b.dataset.n; paint();
+        if (val.length === 4) setTimeout(() => {
+          const res = { pin: val, el, fail: () => { el.classList.add('shake'); vibrate([30, 40, 30]); setTimeout(() => { el.classList.remove('shake'); val = ''; paint(); }, 450); }, done: () => close(val) };
+          el._onPin ? el._onPin(res) : close(val);
+        }, 120);
+      } else if (b.hasAttribute('data-del')) { val = val.slice(0, -1); paint(); }
+      else if (b.hasAttribute('data-x') && canCancel) close(null);
+      else if (b.hasAttribute('data-reset')) el._onReset?.();
+    });
+    el._resolve = close;
+    resolve.el = el;
+    pinPad.last = el;
+  });
+}
+
+export async function setupPasscode() {
+  const a = await pinPad({ title: 'Bikin PIN' });
+  if (!a) return false;
+  const b = await pinPad({ title: 'Ulangi PIN' });
+  if (!b) return false;
+  if (a !== b) { toast('PIN nggak sama'); return false; }
+  api.setSetting('passcode', a);
+  
+  return true;
+}
+
+let locked = false;
+export function lockApp() {
+  const pin = api.settings().passcode;
+  if (!pin || locked) return;
+  locked = true;
+  document.activeElement?.blur?.();
+  const p = pinPad({ title: 'Masukkan PIN', canCancel: false, extra: `<button class="lock-forgot" data-reset>Lupa PIN?</button>` });
+  const el = pinPad.last;
+  el.classList.add('instant');
+  el._onPin = res => { if (res.pin === pin) { locked = false; res.done(); } else res.fail(); };
+  el._onReset = async () => {
+    if (await confirmBox({ title: 'Lupa PIN?', text: 'Di versi demo, satu-satunya cara adalah reset semua data.', ok: 'Reset data', danger: true })) {
+      api.reset(); location.reload();
+    }
+  };
+  return p;
+}
+
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (!api.ready) return;
+  if (document.hidden) hiddenAt = Date.now();
+  else if (hiddenAt && Date.now() - hiddenAt > 30e3) lockApp();
+});

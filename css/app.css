@@ -1054,3 +1054,15 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .act-ic .ic { width: 11px; height: 11px; stroke-width: 2.6; }
 .act-txt { font-size: 14.5px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .act-txt b { font-weight: 700; }
+
+/* ============ B3: geser chat ============ */
+.chat-item { overflow: hidden; --sx: 0px; }
+.chat-item > :not(.swipe-actions):not(.swipe-left) { transform: translateX(var(--sx)); transition: transform .3s var(--ease); }
+.chat-item.swiping > :not(.swipe-actions):not(.swipe-left) { transition: none; }
+.swipe-actions { position: absolute; top: 0; bottom: 0; right: 0; display: flex; transform: translateX(calc(100% + var(--sx))); transition: transform .3s var(--ease); z-index: 2; }
+.chat-item.swiping .swipe-actions { transition: none; }
+.swipe-actions button { width: 74px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: var(--c); color: #fff; font-size: 11px; font-weight: 700; }
+.swipe-actions button .ic { width: 21px; height: 21px; }
+.swipe-left { position: absolute; top: 0; bottom: 0; left: 0; width: max(0px, var(--sx)); background: var(--accent); display: flex; align-items: center; overflow: hidden; z-index: 1; }
+.swipe-left span { margin-left: 22px; flex-shrink: 0; color: #fff; opacity: .6; transition: transform .2s var(--ease), opacity .2s; }
+.chat-item.sw-right-hit .swipe-left span { opacity: 1; transform: scale(1.2); }

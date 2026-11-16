@@ -316,6 +316,80 @@ function TabsScreen() {
     });
   });
 
+  /* ---------- geser chat: kiri = aksi, kanan = tandai dibaca ---------- */
+  let sw = null, openItem = null;
+  const ACT_W = 74;
+  const closeOpen = () => { if (openItem) { openItem.style.setProperty('--sx', '0px'); const o = openItem; setTimeout(() => o.querySelector('.swipe-actions')?.remove(), 250); openItem.classList.remove('sw-open'); openItem = null; } };
+  function actionsFor(c) {
+    return [
+      ['pin', c.pinned ? 'pin' : 'pin', '#8E8E9C', c.pinned ? 'Lepas' : 'Pin'],
+      ['mute', c.muted ? 'bell' : 'bellOff', '#7C5CFF', c.muted ? 'Bunyi' : 'Bisu'],
+      ['arc', 'archive', '#FF9F1A', 'Arsip'],
+      ['del', 'trash', '#FF3B5C', 'Hapus'],
+    ];
+  }
+  body.addEventListener('touchstart', e => {
+    const it = e.target.closest('.chat-item');
+    if (e.target.closest('.swipe-actions')) return;
+    if (openItem && openItem !== it) closeOpen();
+    if (!it || cur !== 'chats') return;
+    const t = e.touches[0];
+    sw = { it, x: t.clientX, y: t.clientY, dx: 0, active: false, base: it === openItem ? -ACT_W * 4 : 0 };
+  }, { passive: true });
+  body.addEventListener('touchmove', e => {
+    if (!sw) return;
+    const t = e.touches[0];
+    const dx = t.clientX - sw.x, dy = t.clientY - sw.y;
+    if (!sw.active) {
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+        sw.active = true;
+        sw.it.classList.add('swiping');
+        if (!sw.it.querySelector('.swipe-actions')) {
+          const c = api.chat(sw.it.dataset.id);
+          sw.it.insertAdjacentHTML('beforeend', `<div class="swipe-actions">${actionsFor(c).map(([k, ic, col, l]) => `<button data-sw="${k}" style="--c:${col}">${icon(ic)}<small>${l}</small></button>`).join('')}</div><div class="swipe-left"><span>${icon(c.unread ? 'check' : 'chat')}</span></div>`);
+        }
+      } else if (Math.abs(dy) > 10) { sw = null; return; }
+    }
+    if (sw.active) {
+      sw.dx = Math.max(-ACT_W * 4 - 30, Math.min(110, sw.base + dx));
+      sw.it.style.setProperty('--sx', sw.dx + 'px');
+      sw.it.classList.toggle('sw-right-hit', sw.dx > 80);
+    }
+  }, { passive: true });
+  const endSw = () => {
+    if (!sw) return;
+    const s = sw; sw = null;
+    if (!s.active) return;
+    s.it.classList.remove('swiping');
+    s.it._swiped = Date.now();
+    if (s.dx > 80) {
+      const c = api.chat(s.it.dataset.id);
+      vibrate(10);
+      c.unread || c.mention ? api.markRead(c.id) : api.markUnread(c.id);
+      s.it.style.setProperty('--sx', '0px');
+      return;
+    }
+    if (s.dx < -70) { s.it.style.setProperty('--sx', -ACT_W * 4 + 'px'); s.it.classList.add('sw-open'); openItem = s.it; vibrate(6); }
+    else { s.it.style.setProperty('--sx', '0px'); if (openItem === s.it) openItem = null; setTimeout(() => !s.it.classList.contains('sw-open') && s.it.querySelector('.swipe-actions')?.remove(), 250); }
+  };
+  body.addEventListener('touchend', endSw);
+  body.addEventListener('touchcancel', endSw);
+  body.addEventListener('click', async e => {
+    const b = e.target.closest('[data-sw]');
+    const it = e.target.closest('.chat-item');
+    if (b) {
+      e.stopPropagation(); e.preventDefault();
+      const id = it.dataset.id, k = b.dataset.sw;
+      closeOpen();
+      if (k === 'pin') api.togglePin(id);
+      if (k === 'mute') api.toggleMute(id);
+      if (k === 'arc') api.toggleArchive(id);
+      if (k === 'del' && await confirmBox({ title: 'Hapus chat ini?', ok: 'Hapus', danger: true })) api.deleteChat(id);
+      return;
+    }
+    if (it && (it._swiped && Date.now() - it._swiped < 350 || it === openItem)) { e.stopPropagation(); e.preventDefault(); closeOpen(); }
+  }, true);
+
   // render awal
   $$('.tab', el).forEach(t => t.classList.toggle('active', t.dataset.tab === cur));
   el.dataset.tab = cur;

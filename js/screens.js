@@ -458,7 +458,7 @@ export function GroupInfoScreen(chatId) {
     mute: () => api.toggleMute(chatId),
     album: () => router.push(AlbumScreen(chatId)),
     notes: () => router.push(NotesScreen(chatId)),
-    img: t => { const m = api.images(chatId).find(x => x.id === t.dataset.src); if (m) openImage(m.src); },
+    img: t => { const all = api.images(chatId).slice().reverse(); const i = all.findIndex(x => x.id === t.dataset.src); if (i >= 0) openGallery(all.map(m => ({ src: m.src })), i); },
     profile: t => router.push(ProfileScreen(t.dataset.id)),
     'add-members': () => router.push(FriendPicker({
       title: 'Tambah anggota', multi: true, exclude: api.chat(chatId).members, confirm: 'Tambah',
@@ -478,22 +478,124 @@ export function GroupInfoScreen(chatId) {
 export function AlbumScreen(chatId) {
   const imgs = api.images(chatId).slice().reverse();
   const el = h(`<div class="sub-screen">${navbar('Album')}<div class="content">${imgs.length ? `<div class="album">${imgs.map(m => `<button data-act="img" data-id="${m.id}"><img src="${m.src}" alt="" loading="lazy"></button>`).join('')}</div>` : empty('🖼️', 'Belum ada foto')}</div></div>`);
-  bindActs(el, { img: t => { const m = imgs.find(x => x.id === t.dataset.id); if (m) openImage(m.src, api.user(m.from)?.name); } });
+  bindActs(el, { img: t => { const i = imgs.findIndex(x => x.id === t.dataset.id); if (i >= 0) openGallery(imgs.map(m => ({ src: m.src, caption: api.user(m.from)?.name || '' })), i); } });
   return { el };
 }
 
 /* ================= IMAGE VIEWER ================= */
-export function openImage(src, caption = '') {
-  const el = h(`<div class="viewer"><div class="viewer-top"><button class="icon-btn" data-x>${icon('x')}</button><span>${esc(caption)}</span><a class="icon-btn" href="${src}" download="onix-foto.jpg">${icon('download')}</a></div><img src="${src}" alt=""></div>`);
+export function openImage(src, caption = '') { return openGallery([{ src, caption }], 0); }
+
+/* galeri: geser kiri/kanan, cubit/ketuk 2x untuk zoom, geser bawah untuk tutup */
+export function openGallery(items, start = 0) {
+  if (!items.length) return;
+  let idx = Math.min(start, items.length - 1), scale = 1, tx = 0, ty = 0;
+  const multi = items.length > 1;
+  const el = h(`<div class="viewer gallery">
+    <div class="viewer-top"><button class="icon-btn" data-x aria-label="Tutup">${icon('x')}</button><span class="g-cap"></span>${multi ? '<small class="g-count"></small>' : ''}<a class="icon-btn g-dl" download="onix-foto.jpg" aria-label="Simpan">${icon('download')}</a></div>
+    <div class="g-track">${items.map(() => `<div class="g-slide"><img alt=""></div>`).join('')}</div>
+    ${multi && items.length <= 12 ? `<div class="g-dots">${items.map(() => '<i></i>').join('')}</div>` : ''}
+  </div>`);
+  const track = $('.g-track', el), slides = [...el.querySelectorAll('.g-slide')];
+  const img = i => slides[i]?.querySelector('img');
   document.getElementById('app').appendChild(el);
   requestAnimationFrame(() => el.classList.add('show'));
-  const close = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 250); };
+  const W = () => el.clientWidth;
+  function load() { for (let i = idx - 1; i <= idx + 1; i++) if (items[i] && !img(i).src) img(i).src = items[i].src; }
+  function applyZoom(anim) {
+    const im = img(idx);
+    im.style.transition = anim ? 'transform .25s var(--ease)' : 'none';
+    im.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+    el.classList.toggle('zoomed', scale > 1.01);
+  }
+  function go(i, anim = true) {
+    if (i !== idx) { scale = 1; tx = ty = 0; applyZoom(false); }
+    idx = Math.max(0, Math.min(items.length - 1, i));
+    track.style.transition = anim ? 'transform .3s var(--ease)' : 'none';
+    track.style.transform = `translateX(${-idx * W()}px)`;
+    $('.g-cap', el).textContent = items[idx].caption || '';
+    const c = $('.g-count', el); if (c) c.textContent = `${idx + 1}/${items.length}`;
+    el.querySelectorAll('.g-dots i').forEach((d, k) => d.classList.toggle('on', k === idx));
+    $('.g-dl', el).href = items[idx].src;
+    load();
+  }
+  const close = () => { el.classList.remove('show'); document.removeEventListener('keydown', onKey); setTimeout(() => el.remove(), 250); };
+  const onKey = e => { if (e.key === 'Escape') close(); if (e.key === 'ArrowRight') go(idx + 1); if (e.key === 'ArrowLeft') go(idx - 1); };
+  document.addEventListener('keydown', onKey);
   $('[data-x]', el).addEventListener('click', close);
-  $('img', el).addEventListener('click', close);
-  let sy = null;
-  el.addEventListener('touchstart', e => { sy = e.touches[0].clientY; }, { passive: true });
-  el.addEventListener('touchmove', e => { if (sy == null) return; const d = e.touches[0].clientY - sy; $('img', el).style.transform = `translateY(${d}px)`; el.style.setProperty('--o', Math.max(0.3, 1 - Math.abs(d) / 400)); }, { passive: true });
-  el.addEventListener('touchend', e => { const d = e.changedTouches[0].clientY - (sy ?? 0); sy = null; if (Math.abs(d) > 120) close(); else { $('img', el).style.transform = ''; el.style.removeProperty('--o'); } });
+  function clampPan() {
+    const im = img(idx), r = im.getBoundingClientRect();
+    const bw = r.width / scale, bh = r.height / scale;
+    const mx = Math.max(0, (bw * scale - W()) / 2), my = Math.max(0, (bh * scale - el.clientHeight) / 2);
+    tx = Math.max(-mx, Math.min(mx, tx)); ty = Math.max(-my, Math.min(my, ty));
+  }
+  function zoomAt(x, y, s) {
+    const r = el.getBoundingClientRect();
+    const cx = x - r.left - r.width / 2, cy = y - r.top - r.height / 2;
+    const k = s / scale;
+    tx = cx - (cx - tx) * k; ty = cy - (cy - ty) * k; scale = s;
+    if (scale <= 1) { scale = 1; tx = ty = 0; } else clampPan();
+  }
+  // gestures
+  let g = null, lastTap = 0, tapT = null;
+  const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  el.addEventListener('touchstart', e => {
+    if (e.target.closest('.viewer-top')) return;
+    const t = e.touches;
+    if (t.length === 2) { g = { mode: 'pinch', d: dist(t), s: scale, mx: (t[0].clientX + t[1].clientX) / 2, my: (t[0].clientY + t[1].clientY) / 2 }; return; }
+    g = { mode: null, x: t[0].clientX, y: t[0].clientY, tx, ty, t0: Date.now(), moved: false };
+  }, { passive: true });
+  el.addEventListener('touchmove', e => {
+    if (!g) return;
+    const t = e.touches;
+    if (g.mode === 'pinch' && t.length === 2) {
+      const s = Math.max(1, Math.min(4, g.s * dist(t) / g.d));
+      zoomAt(g.mx, g.my, s); applyZoom(false); return;
+    }
+    if (t.length !== 1) return;
+    const dx = t[0].clientX - g.x, dy = t[0].clientY - g.y;
+    if (Math.abs(dx) > 6 || Math.abs(dy) > 6) g.moved = true;
+    if (!g.mode && g.moved) g.mode = scale > 1.01 ? 'pan' : Math.abs(dx) > Math.abs(dy) ? 'swipe' : 'dismiss';
+    if (g.mode === 'pan') { tx = g.tx + dx; ty = g.ty + dy; clampPan(); applyZoom(false); }
+    if (g.mode === 'swipe') {
+      const edge = (idx === 0 && dx > 0) || (idx === items.length - 1 && dx < 0);
+      track.style.transition = 'none';
+      track.style.transform = `translateX(${-idx * W() + (edge ? dx / 3 : dx)}px)`;
+    }
+    if (g.mode === 'dismiss') { img(idx).style.transform = `translateY(${dy}px) scale(${1 - Math.min(.25, Math.abs(dy) / 1200)})`; el.style.setProperty('--o', Math.max(0.2, 1 - Math.abs(dy) / 400)); }
+  }, { passive: true });
+  el.addEventListener('touchend', e => {
+    if (!g || e.touches.length) { if (g?.mode === 'pinch' && e.touches.length === 1) g = null; return; }
+    const ct = e.changedTouches[0];
+    const dx = ct.clientX - (g.x ?? ct.clientX), dy = ct.clientY - (g.y ?? ct.clientY);
+    const s = g; g = null;
+    if (s.mode === 'pinch') { if (scale < 1.05) { scale = 1; tx = ty = 0; } applyZoom(true); return; }
+    if (s.mode === 'swipe') {
+      const fast = Date.now() - s.t0 < 250 && Math.abs(dx) > 30;
+      go(Math.abs(dx) > W() * .25 || fast ? idx + (dx < 0 ? 1 : -1) : idx);
+      return;
+    }
+    if (s.mode === 'dismiss') {
+      if (Math.abs(dy) > 120) close();
+      else { img(idx).style.transition = 'transform .25s var(--ease)'; img(idx).style.transform = ''; el.style.removeProperty('--o'); }
+      return;
+    }
+    if (s.moved || e.target.closest('.viewer-top')) return;
+    // tap / double tap
+    const now = Date.now();
+    if (now - lastTap < 300) {
+      clearTimeout(tapT); lastTap = 0;
+      zoomAt(ct.clientX, ct.clientY, scale > 1.01 ? 1 : 2.5); applyZoom(true);
+      return;
+    }
+    lastTap = now;
+    tapT = setTimeout(() => el.classList.toggle('bare-ui'), 300);
+  });
+  // desktop: klik = sembunyikan UI, dobel klik = zoom
+  let lastTouch = 0;
+  el.addEventListener('touchstart', () => { lastTouch = Date.now(); }, { passive: true, capture: true });
+  el.addEventListener('dblclick', e => { if (Date.now() - lastTouch < 1000 || e.target.closest('.viewer-top')) return; zoomAt(e.clientX, e.clientY, scale > 1.01 ? 1 : 2.5); applyZoom(true); });
+  window.addEventListener('resize', () => go(idx, false), { once: true });
+  go(idx, false);
 }
 
 /* ================= VOOM ================= */

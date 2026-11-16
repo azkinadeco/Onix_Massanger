@@ -1,11 +1,11 @@
 import { api, bus, ME, firstName, mentionRe } from './service.js';
-import { $, h, esc, linkify, avatar, hm, dayLabel, isSameDay, dur, hash, vibrate, pickFile, compressImage, copyText, isJumbo } from './util.js';
+import { $, h, esc, linkify, avatar, hm, dayLabel, isSameDay, dur, hash, vibrate, pickFile, pickFiles, compressImage, copyText, isJumbo } from './util.js';
 import { icon } from './icons.js';
 import { router, bindActs, onLongPress, sheet, toast, confirmBox } from './ui.js';
 import { chatAvatar, presence, verified } from './views.js';
 import { STICKERS, STICKER_TABS, EMOJIS, ANIM_STICKERS, STORE_PACKS } from './seed.js';
 import { putMedia, mediaURL, videoInfo, fmtSize, fileExt } from './media.js';
-import { ProfileScreen, GroupInfoScreen, AlbumScreen, openImage } from './screens.js';
+import { ProfileScreen, GroupInfoScreen, AlbumScreen, openImage, openGallery } from './screens.js';
 import { forwardMessage, keepFromMessage, PollComposeScreen, wallpaperSheet, EventComposeScreen, NotesScreen, StickerStoreScreen, scheduleSheet, fmtWhen } from './features.js';
 
 const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -234,6 +234,10 @@ function ChatScreen(chatId) {
       bare = true; body = `<button class="photo vid" data-act="open-video" data-mid="${m.id}">${m.thumb ? `<img src="${m.thumb}" style="aspect-ratio:${m.w || 16}/${m.h || 9}" alt="video">` : `<span class="vid-ph" style="aspect-ratio:${m.w || 16}/${m.h || 9}"></span>`}<span class="vid-play">${icon('play')}</span><span class="vid-dur">${dur(m.duration || 0)}</span></button>`;
     } else if (m.type === 'file') {
       body = `<button class="bubble filemsg" data-act="open-file" data-mid="${m.id}"><span class="file-ic">${esc(fileExt(m.name || 'FILE')) || icon('file')}</span><span class="file-txt"><b>${esc(m.name)}</b><small>${fmtSize(m.size || 0)}</small></span>${icon('download', 'file-dl')}</button>`;
+    } else if (m.type === 'image' && m.album?.length > 1) {
+      bare = true;
+      const a = m.album, n = a.length, show = a.slice(0, 4);
+      body = `<div class="photo-grid g${Math.min(n, 4)}">${show.map((x, i) => `<button data-act="view-img" data-mid="${m.id}" data-i="${i}"><img src="${x.src}" alt="foto" loading="lazy">${i === 3 && n > 4 ? `<b>+${n - 4}</b>` : ''}</button>`).join('')}</div>`;
     } else if (m.type === 'image') {
       bare = true; body = `<button class="photo" data-act="view-img" data-mid="${m.id}"><img src="${m.src}" style="aspect-ratio:${m.w || 1}/${m.h || 1}" alt="foto"></button>`;
     } else if (m.type === 'voice') {
@@ -551,11 +555,14 @@ function ChatScreen(chatId) {
   /* ---------- actions ---------- */
   async function sendImage(capture) {
     closePanel();
-    const f = await pickFile('image/*', capture ? 'environment' : undefined);
-    if (!f) return;
+    const fs = capture ? [await pickFile('image/*', 'environment')].filter(Boolean) : await pickFiles('image/*', 10);
+    if (!fs.length) return;
     try {
-      const img = await compressImage(f);
-      api.send(chatId, withReply({ type: 'image', ...img }));
+      const max = fs.length > 1 ? 900 : 1080;
+      const imgs = [];
+      for (const f of fs) imgs.push(await compressImage(f, max, .74));
+      if (imgs.length === 1) api.send(chatId, withReply({ type: 'image', ...imgs[0] }));
+      else api.send(chatId, withReply({ type: 'image', ...imgs[0], album: imgs }));
     } catch { toast('Gagal memuat foto 😢'); }
   }
 
@@ -782,7 +789,12 @@ function ChatScreen(chatId) {
     'rec-cancel': () => stopRec(false),
     'rec-send': () => stopRec(true),
     'cancel-reply': () => setReply(null),
-    'view-img': t => { const m = msgById(t.dataset.mid); if (m) openImage(m.src, api.user(m.from)?.name); },
+    'view-img': t => {
+      const all = api.images(chatId);
+      const id = +t.dataset.i ? t.dataset.mid + '~' + t.dataset.i : t.dataset.mid;
+      const at = Math.max(0, all.findIndex(x => x.id === id));
+      openGallery(all.map(x => ({ src: x.src, caption: api.user(x.from)?.name || '' })), at);
+    },
     play: t => playVoice(t.dataset.mid),
     loc: t => { const m = msgById(t.dataset.mid); if (m) window.open('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(m.title + ' ' + m.address), '_blank'); },
     profile: t => router.push(ProfileScreen(t.dataset.id)),

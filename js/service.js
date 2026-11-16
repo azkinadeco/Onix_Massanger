@@ -123,7 +123,7 @@ const BOT = ['Ini akun resmi (dummy) Onix 🤖 Coba chat teman kamu ya!', 'Fitur
 
 function replyFor(msg) {
   if (msg.type === 'sticker') return Math.random() < 0.6 ? { type: 'sticker', ...(Math.random() < 0.5 ? pick(ANIM_REPLIES) : { sticker: pick(STICKER_REPLIES) }) } : { text: pick(['wkwk lucu stickernya', '😂😂', 'apaan sih wkwk']) };
-  if (msg.type === 'image') return { text: pick(['wih keren bgt 📸', 'aesthetic parah', 'save ah', 'dimana tuh?']) };
+  if (msg.type === 'image') return { text: pick(msg.album ? ['banyak bgt fotonya 😭', 'spam foto nih wkwk', 'yang ketiga bagus!', 'kirim lagi dong 📸'] : ['wih keren bgt 📸', 'aesthetic parah', 'save ah', 'dimana tuh?']) };
   if (msg.type === 'voice') return { text: pick(['bentar aku dengerin dulu 🎧', 'oke paham', 'wkwk suaranya lucu']) };
   if (msg.type === 'video') return { text: pick(['wkwk videonya 😭', 'bentar aku tonton dulu 🎬', 'LUCU BANGET']) };
   if (msg.type === 'file') return { text: pick(['oke aku download ya 📥', 'makasih filenya 🙏', 'sip udah masuk']) };
@@ -530,7 +530,10 @@ export const api = {
   toggleMute(chatId) { const c = db.chats[chatId]; c.muted = !c.muted; save(); bus.emit('chats'); return c.muted; },
   clearChat(chatId) { db.messages[chatId] = []; emitChat(chatId); },
   deleteChat(chatId) { const c = db.chats[chatId]; db.messages[chatId] = []; c.hidden = true; c.unread = 0; c.pinned = false; emitChat(chatId); },
-  images(chatId) { return (db.messages[chatId] || []).filter(m => m.type === 'image' && !m.unsent); },
+  images(chatId) {
+    return (db.messages[chatId] || []).filter(m => m.type === 'image' && !m.unsent)
+      .flatMap(m => (m.album?.length ? m.album : [m]).map((x, i) => ({ id: i ? m.id + '~' + i : m.id, mid: m.id, i, src: x.src, w: x.w, h: x.h, from: m.from, ts: m.ts })));
+  },
   randomPlace() { return pick(PLACES); },
 
   /* VOOM / posts */

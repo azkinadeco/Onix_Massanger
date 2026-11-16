@@ -95,6 +95,16 @@ export function pickFile(accept = 'image/*', capture) {
   });
 }
 
+export function pickFiles(accept = 'image/*', max = 10) {
+  return new Promise(res => {
+    const i = document.createElement('input');
+    i.type = 'file'; i.accept = accept; i.multiple = true; i.style.display = 'none';
+    i.onchange = () => { res([...i.files].slice(0, max)); i.remove(); };
+    document.body.appendChild(i);
+    i.click();
+  });
+}
+
 export function compressImage(file, max = 1080, q = 0.78) {
   return new Promise((res, rej) => {
     const r = new FileReader();

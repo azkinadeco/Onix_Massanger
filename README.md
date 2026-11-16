@@ -20,6 +20,18 @@ Biar terasa seperti aplikasi: Safari → tombol Share → **Add to Home Screen**
 - **Panggilan**: telepon & video call (UI + kamera depan), riwayat, telepon masuk (simulasi)
 - **Kamu**: edit profil + foto, mode terang/gelap/auto, 5 warna aksen, notifikasi, mode demo, reset
 
+### Baru di v0.5
+- **Daftar pakai nomor HP + OTP** (kode dummy muncul di banner), setup profil & cek ID
+- **Notifikasi** (lonceng di Home): like, komentar, mention, panggilan tak terjawab, permintaan teman
+- **Geser chat**: kiri = pin / bisukan / arsip / hapus, kanan = tandai dibaca
+- **Format teks** `*tebal*` `_miring_` `~coret~` `` `kode` ``, **preview link**, **efek pesan** (konfeti, hati, kembang api, balon, salju — kata kunci atau tahan tombol kirim)
+- **Kirim sampai 10 foto** jadi album + **galeri** geser, cubit/ketuk 2x untuk zoom
+- **Pesan sementara** per chat (30 detik – 7 hari) & **chat tersembunyi** pakai PIN (tahan judul "Chat")
+- **Story**: editor teks (8 latar, 5 font), daftar yang lihat + reaksi, reaksi emoji & suka
+- **VOOM**: tab Untukmu / Mengikuti, post multi-foto (carousel), kirim post ke chat, like komentar
+- **Performa**: chat muat 50 pesan dulu, sisanya pas scroll ke atas; **Penyimpanan** (ukuran per chat, hapus media); **mode offline** (banner + pesan dikirim pas online lagi)
+- **Mini game** di chat: 🎲 dadu, 🪙 koin, ✊ suit
+
 ### Baru di v0.4
 - **Event** di chat (tanggal, jam, tempat) + RSVP Ikut/Nggak
 - **Pesan terjadwal**: tahan tombol kirim → pilih waktu

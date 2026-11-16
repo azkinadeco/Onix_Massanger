@@ -1219,3 +1219,34 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .net-banner .ic { width: 15px; height: 15px; }
 .net-banner.show { transform: translate(-50%, 0); }
 .net-banner.back { background: #0FB46C; }
+
+/* ============ B10: mini game ============ */
+.game { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 4px; }
+.g-res { font-size: 13px; font-weight: 800; padding: 3px 10px; border-radius: 99px; background: var(--surface); box-shadow: 0 2px 8px rgba(0,0,0,.06); transition: opacity .2s; }
+.game.rolling .g-res { opacity: 0; }
+.dice { width: 76px; height: 76px; border-radius: 20px; background: linear-gradient(145deg, #fff, #ECEAF6); box-shadow: inset 0 -4px 0 rgba(0,0,0,.07), 0 6px 16px rgba(60,40,140,.18); display: grid; grid-template-columns: repeat(3, 1fr); padding: 13px; gap: 4px; }
+.dice i { border-radius: 50%; }
+.dice i.on { background: #2B2440; box-shadow: inset 0 2px 2px rgba(0,0,0,.35); }
+.game.rolling .dice { animation: dice-roll 1.05s cubic-bezier(.3,.8,.4,1); }
+.game.rolling .dice i.on { animation: pip-blink 1s steps(6) ; }
+@keyframes dice-roll { 0% { transform: translateY(-40px) rotate(-200deg) scale(.6); } 55% { transform: translateY(6px) rotate(25deg) scale(1.05); } 75% { transform: translateY(-6px) rotate(-8deg); } 100% { transform: none; } }
+@keyframes pip-blink { 0%, 80% { opacity: .15; } 100% { opacity: 1; } }
+.coin { width: 74px; height: 74px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, #FFE58A, #F5B700 60%, #C98A00); box-shadow: inset 0 0 0 5px rgba(255,255,255,.35), 0 6px 16px rgba(200,140,0,.35); color: #8A5A00; font-size: 30px; font-weight: 900; }
+.game.rolling .coin { animation: coin-flip 1.25s cubic-bezier(.3,.7,.4,1); }
+@keyframes coin-flip { 0% { transform: translateY(0) rotateX(0); } 50% { transform: translateY(-70px) rotateX(900deg); } 100% { transform: translateY(0) rotateX(1800deg); } }
+.suit-wrap { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 10px 14px; border-radius: 22px; background: var(--surface); box-shadow: 0 2px 10px rgba(0,0,0,.06); max-width: 220px; }
+.suit-wrap span { font-size: 38px; line-height: 1; }
+.suit-wrap .sw-vs { font-size: 12px; font-weight: 800; color: var(--text-2); align-self: center; }
+.suit-wrap.wait .sw-q { animation: suit-shake .5s ease-in-out infinite alternate; }
+@keyframes suit-shake { from { transform: rotate(-12deg); } to { transform: rotate(12deg) translateY(-3px); } }
+.suit-wrap .g-res { flex-basis: 100%; text-align: center; box-shadow: none; background: var(--surface-2); }
+.suit-wrap.win .g-res { background: rgba(15,180,108,.15); color: #0B9A5B; }
+.suit-wrap.lose .g-res { background: rgba(255,59,92,.12); color: var(--danger); }
+.suit-wrap.done .sw-opp { animation: pop .45s var(--ease); }
+.game-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.game-pick button { height: 92px; border-radius: 20px; background: var(--surface-2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-weight: 700; transition: transform .15s var(--ease); }
+.game-pick .gp-ic { font-size: 38px; }
+.game-pick small { font-size: 13px; }
+.game-suit { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+.game-suit button { height: 72px; border-radius: 20px; background: var(--surface-2); font-size: 36px; display: grid; place-items: center; transition: transform .15s var(--ease); }
+.game-pick button:active, .game-suit button:active { transform: scale(.92); }

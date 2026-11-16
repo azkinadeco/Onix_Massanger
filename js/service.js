@@ -129,6 +129,10 @@ function replyFor(msg) {
   if (msg.type === 'file') return { text: pick(['oke aku download ya 📥', 'makasih filenya 🙏', 'sip udah masuk']) };
   if (msg.type === 'event') return { text: pick(['aku ikut! 🙋', 'catet ya tanggalnya 📅', 'gas, nanti ingetin ya']) };
   if (/hbd|ulang tahun|ultah|happy birthday/i.test(msg.text || '')) return { text: pick(['MAKASIHHH 🥹🫶', 'aaa makasih banyak!! 🎂', 'thank youuu 💖']) };
+  if (msg.type === 'game') {
+    if (msg.game === 'dice') return Math.random() < .6 ? { type: 'game', game: 'dice', result: 1 + Math.floor(Math.random() * 6) } : { text: msg.result >= 5 ? pick(['hoki bgt 😭', 'curang ih', 'wih gede']) : pick(['wkwk kecil', 'aku menang pasti', 'lagi lagi!']) };
+    if (msg.game === 'coin') return { text: pick(['yaudah fix', 'best of 3?', 'wkwk takdir', 'oke deal 🤝']) };
+  }
   if (msg.type === 'post') return { text: pick(['wkwk iya liat', 'LUCU 😭', 'udah aku like 💖', 'ih bener bgt']) };
   if (msg.type === 'poll') return { text: pick(['udah aku vote ya ✅', 'vote done 🗳️', 'aku pilih yg kedua wkwk']) };
   if (/@\w/.test(msg.text || '') && Math.random() < 0.5) return { text: pick(['kenapa manggil aku? 👀', 'iyaa kenapa?', 'hadir! 🙋']) };
@@ -178,6 +182,11 @@ function addActivity(type, from, ref = {}, text = '') {
   save(); bus.emit('activity');
 }
 
+export function suitResult(a, b) {
+  if (a === b) return 0;
+  return (a === 'rock' && b === 'scissors') || (a === 'paper' && b === 'rock') || (a === 'scissors' && b === 'paper') ? 1 : -1;
+}
+
 function readAll(chatId, userId) {
   const list = db.messages[chatId] || [];
   let changed = false;
@@ -203,6 +212,7 @@ function scheduleResponses(chatId, msg) {
     if (c.type === 'group' && Math.random() < 0.25) return;
     setTimeout(() => readAll(chatId, id), rand(700, 2600));
   });
+  if (msg.type === 'game' && msg.game === 'suit') return;
   clearTimeout(pendingReply[chatId]);
   pendingReply[chatId] = setTimeout(() => {
     const mentioned = others.filter(id => mentionRe(db.users[id].name).test(msg.text || ''));
@@ -420,6 +430,25 @@ export const api = {
     scheduleResponses(chatId, m);
     return m;
   },
+  /* mini game */
+  playGame(chatId, game, pickVal) {
+    if (game === 'dice') return api.send(chatId, { type: 'game', game, result: 1 + Math.floor(Math.random() * 6) });
+    if (game === 'coin') return api.send(chatId, { type: 'game', game, result: Math.random() < .5 ? 'A' : 'G' });
+    const c = db.chats[chatId];
+    const m = api.send(chatId, { type: 'game', game: 'suit', picks: { [ME]: pickVal } });
+    const opp = c.members.find(id => id !== ME && db.users[id] && !db.users[id].official) || c.members.find(id => id !== ME);
+    if (opp) setTimeout(() => {
+      m.picks[opp] = pick(['rock', 'paper', 'scissors']);
+      m.opp = opp;
+      emitChat(chatId);
+      setTimeout(() => {
+        const r = suitResult(m.picks[ME], m.picks[opp]);
+        receive(chatId, opp, { text: r === 1 ? pick(['yah kalah 😭', 'lagi dong, rematch!', 'hoki doang itu']) : r === -1 ? pick(['EZ 😎', 'wkwk menang', 'gampang']) : pick(['seri wkwk', 'jodoh nih 🤝', 'sama lagi']) });
+      }, 1600);
+    }, rand(1800, 3200));
+    return m;
+  },
+
   /* penyimpanan */
   storageStats() {
     const size = s => new Blob([s]).size;

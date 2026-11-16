@@ -1,4 +1,4 @@
-import { TTL_OPTS, ttlLabel } from './service.js';
+import { TTL_OPTS, ttlLabel, suitResult } from './service.js';
 import { api, bus, ME, firstName, mentionRe } from './service.js';
 import { $, h, esc, linkify, avatar, hm, dayLabel, isSameDay, dur, hash, vibrate, pickFile, pickFiles, compressImage, copyText, isJumbo } from './util.js';
 import { icon } from './icons.js';
@@ -88,6 +88,26 @@ export function playEffect(fx, host = document.body) {
 
 const ttlShort = s => s >= 86400 ? Math.round(s / 86400) + 'h' : s >= 3600 ? Math.round(s / 3600) + 'j' : s >= 60 ? Math.round(s / 60) + 'm' : s + 'd';
 
+/* ---------- mini game ---------- */
+const SUIT = [['rock', '✊'], ['paper', '✋'], ['scissors', '✌️']];
+const suitEmo = k => (SUIT.find(x => x[0] === k) || [0, '❔'])[1];
+const PIPS = { 1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] };
+function gameHtml(m) {
+  if (m.game === 'dice') {
+    return `<div class="game dice-wrap"><div class="dice">${Array.from({ length: 9 }, (_, i) => `<i class="${PIPS[m.result]?.includes(i + 1) ? 'on' : ''}"></i>`).join('')}</div><b class="g-res">${m.result}</b></div>`;
+  }
+  if (m.game === 'coin') {
+    return `<div class="game coin-wrap"><div class="coin ${m.result === 'A' ? 'a' : 'g'}"><span>${m.result === 'A' ? '1' : '★'}</span></div><b class="g-res">${m.result === 'A' ? 'Angka' : 'Gambar'}</b></div>`;
+  }
+  const me = m.picks?.[ME], oppId = m.opp || Object.keys(m.picks || {}).find(k => k !== m.from);
+  const mineMsg = m.from === ME;
+  const a = m.picks?.[m.from], b = oppId ? m.picks[oppId] : null;
+  if (!b) return `<div class="game suit-wrap wait"><span class="sw-me">${suitEmo(a)}</span><span class="sw-vs">vs</span><span class="sw-q">❔</span></div>`;
+  const r = suitResult(mineMsg ? a : b, mineMsg ? b : a);
+  const label = r === 1 ? 'Menang! 🎉' : r === -1 ? 'Kalah 😭' : 'Seri 🤝';
+  return `<div class="game suit-wrap done ${r === 1 ? 'win' : r === -1 ? 'lose' : 'draw'}"><span class="sw-me">${suitEmo(a)}</span><span class="sw-vs">vs</span><span class="sw-opp">${suitEmo(b)}</span><b class="g-res">${label}</b></div>`;
+}
+
 const mapText = (html, fn) => html.split(/(<[^>]+>)/).map(p => (p.startsWith('<') ? p : fn(p))).join('');
 
 export function openChat(chatId) {
@@ -162,6 +182,20 @@ function ChatScreen(chatId) {
   const sendBtn = $('.send-btn', el), panel = $('.panel', el), jump = $('.jump', el);
   const replyBar = $('.reply-bar', el), recBar = $('.rec-bar', el), typingRow = $('.typing-row', el);
   let nodes = new Map(), lastId = null, firstRender = true, stick = true, newCount = 0;
+  const animated = new Set();
+  function gameSheet() {
+    sheet({
+      top: `<div class="game-pick">
+        <button data-g="dice"><span class="gp-ic">🎲</span><small>Dadu</small></button>
+        <button data-g="coin"><span class="gp-ic">🪙</span><small>Koin</small></button>
+      </div>
+      <div class="game-suit">${SUIT.map(([k, e]) => `<button data-s="${k}">${e}</button>`).join('')}</div>`,
+      onMount: (s, close) => {
+        s.querySelectorAll('[data-g]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); close(); api.playGame(chatId, b.dataset.g); vibrate(10); }));
+        s.querySelectorAll('[data-s]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); close(); api.playGame(chatId, 'suit', b.dataset.s); vibrate(10); }));
+      },
+    });
+  }
   const PAGE = 50;
   let limit = PAGE, loadingOlder = false;
   function ensureLoaded(mid) {
@@ -265,6 +299,8 @@ function ChatScreen(chatId) {
       body = `<div class="bubble voice" data-act="play" data-mid="${m.id}"><span class="vplay">${icon('play')}</span><span class="wave">${waveBars(m.id)}</span><span class="vdur">${dur(m.duration || 0)}</span></div>`;
     } else if (m.type === 'location') {
       body = `<div class="bubble loc" data-act="loc" data-mid="${m.id}"><div class="map"><span class="map-pin">${icon('location')}</span></div><div class="loc-txt"><b>${esc(m.title)}</b><small>${esc(m.address)}</small></div></div>`;
+    } else if (m.type === 'game') {
+      bare = true; body = gameHtml(m);
     } else if (m.type === 'post') {
       const p = api.post(m.postId), pu = p && api.user(p.userId);
       const img = p && (p.images?.[0] || p.image);
@@ -326,6 +362,13 @@ function ChatScreen(chatId) {
     if (!list.length) put('empty', `<div class="chat-empty">${chatAvatar(ch, 72, { online: false })}<b>${esc(api.chatTitle(ch))}</b><div class="quick-stickers">${['👋', '🫶', '😆', '✨'].map(s => `<button data-act="quick-sticker" data-s="${s}">${s}</button>`).join('')}</div></div>`);
     inner.replaceChildren(...out);
     nodes = fresh;
+    list.forEach(m => {
+      if (m.type !== 'game' || animated.has(m.id)) return;
+      animated.add(m.id);
+      if (Date.now() - m.ts > 2500) return;
+      const n = fresh.get(m.id)?.querySelector('.game');
+      if (n) { n.classList.add('rolling'); setTimeout(() => n.classList.remove('rolling'), m.game === 'coin' ? 1300 : 1100); }
+    });
 
     const lm = list[list.length - 1];
     const newLast = lm && lm.id !== lastId;
@@ -477,7 +520,7 @@ function ChatScreen(chatId) {
   }
   function renderPanel() {
     if (panelMode === 'plus') {
-      const items = [['photo', 'image', 'Foto', '#7C5CFF'], ['camera', 'camera', 'Kamera', '#FF3D81'], ['video', 'film', 'Video', '#14B8C4'], ['file', 'file', 'File', '#5B6CFF'], ['location', 'location', 'Lokasi', '#10B26C'], ['voice', 'mic', 'Voice', '#FF7A1A'], ['poll', 'poll', 'Polling', '#E1A100'], ['event', 'calendar', 'Event', '#2E7BFF']];
+      const items = [['photo', 'image', 'Foto', '#7C5CFF'], ['camera', 'camera', 'Kamera', '#FF3D81'], ['video', 'film', 'Video', '#14B8C4'], ['file', 'file', 'File', '#5B6CFF'], ['location', 'location', 'Lokasi', '#10B26C'], ['voice', 'mic', 'Voice', '#FF7A1A'], ['poll', 'poll', 'Polling', '#E1A100'], ['event', 'calendar', 'Event', '#2E7BFF'], ['game', 'dice', 'Game', '#FF3D6E']];
       panel.innerHTML = `<div class="attach-grid">${items.map(([a, ic, label, col]) => `<button data-act="att-${a}"><span style="--c:${col}">${icon(ic)}</span><small>${label}</small></button>`).join('')}</div>`;
     } else if (panelMode === 'stickers') {
       const owned = api.packs();
@@ -786,6 +829,7 @@ function ChatScreen(chatId) {
       ta.setSelectionRange(before.length, before.length);
       hideMentions(); autosize(); ta.focus();
     },
+    'att-game': () => { closePanel(); gameSheet(); },
     'att-poll': () => { closePanel(); router.push(PollComposeScreen(chatId)); },
     'att-event': () => { closePanel(); router.push(EventComposeScreen(chatId)); },
     rsvp: t => { api.rsvp(chatId, t.dataset.mid, t.dataset.v === '1'); vibrate(8); },

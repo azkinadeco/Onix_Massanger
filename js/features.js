@@ -483,3 +483,46 @@ export function HiddenChatsScreen() {
   render();
   return { el, destroy: off };
 }
+
+/* ================= PENYIMPANAN ================= */
+export function StorageScreen() {
+  const el = h(`<div class="sub-screen">${navbar('Penyimpanan')}<div class="content st-body"></div></div>`);
+  const body = $('.st-body', el);
+  let idb = {};
+  const fmt = b => b < 1024 ? b + ' B' : b < 1048576 ? Math.round(b / 1024) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
+  async function render() {
+    const { mediaUsage } = await import('./media.js');
+    idb = await mediaUsage();
+    const s = api.storageStats();
+    const rows = s.per.map(r => ({ ...r, total: r.media + r.text + r.mediaIds.reduce((a, id) => a + (idb[id] || 0), 0) }))
+      .filter(r => r.total > 0).sort((a, b) => b.total - a.total);
+    const media = rows.reduce((a, r) => a + r.media + r.mediaIds.reduce((x, id) => x + (idb[id] || 0), 0), 0);
+    const idbTotal = Object.values(idb).reduce((a, b) => a + b, 0);
+    const total = s.total + idbTotal;
+    const other = Math.max(0, total - media - s.posts);
+    const est = navigator.storage?.estimate ? await navigator.storage.estimate().catch(() => null) : null;
+    const seg = [[media, 'var(--accent)', 'Media'], [s.posts, '#FF9F1A', 'VOOM'], [other, '#2EE6A6', 'Lainnya']];
+    body.innerHTML = `
+      <div class="st-hero">
+        <div class="st-total">${fmt(total)}</div>
+        ${est?.quota ? `<small>dari ${fmt(est.quota)}</small>` : ''}
+        <div class="st-bar">${seg.map(([v, c]) => `<i style="flex:${Math.max(v, total * .01)};background:${c}"></i>`).join('')}</div>
+        <div class="st-legend">${seg.map(([v, c, l]) => `<span><i style="background:${c}"></i>${l}<b>${fmt(v)}</b></span>`).join('')}</div>
+      </div>
+      <div class="section-h">Chat</div>
+      ${rows.length ? rows.map(r => { const c = api.chat(r.id); return `<div class="list-item" data-act="clear-chat" data-id="${r.id}">${chatAvatar(c, 42, { online: false })}<div class="li-main"><div class="li-name">${esc(api.chatTitle(c))}</div><div class="li-sub">${r.count ? `${icon('image', 'tiny')} ${r.count}` : ''}</div></div><span class="st-size">${fmt(r.total)}</span></div>`; }).join('') : empty('✨', 'Bersih')}
+      <div class="pad"><button class="btn danger-ghost wide" data-act="clear-all">${icon('trash')} Hapus semua media</button></div>`;
+  }
+  async function clearChats(ids) {
+    const { deleteMedia } = await import('./media.js');
+    const del = ids.flatMap(id => api.clearChatMedia(id));
+    await deleteMedia(del);
+    vibrate(8); toast('Dibersihkan 🧹'); render();
+  }
+  bindActs(el, {
+    'clear-chat': async t => { if (await confirmBox({ title: `Hapus media di ${api.chatTitle(api.chat(t.dataset.id))}?`, ok: 'Hapus', danger: true })) clearChats([t.dataset.id]); },
+    'clear-all': async () => { if (await confirmBox({ title: 'Hapus semua media chat?', ok: 'Hapus', danger: true })) clearChats(api.allChats().map(c => c.id)); },
+  });
+  render();
+  return { el };
+}

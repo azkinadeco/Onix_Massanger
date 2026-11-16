@@ -162,6 +162,22 @@ function ChatScreen(chatId) {
   const sendBtn = $('.send-btn', el), panel = $('.panel', el), jump = $('.jump', el);
   const replyBar = $('.reply-bar', el), recBar = $('.rec-bar', el), typingRow = $('.typing-row', el);
   let nodes = new Map(), lastId = null, firstRender = true, stick = true, newCount = 0;
+  const PAGE = 50;
+  let limit = PAGE, loadingOlder = false;
+  function ensureLoaded(mid) {
+    const all = api.messages(chatId), i = all.findIndex(m => m.id === mid);
+    if (i >= 0 && i < all.length - limit) { limit = all.length - i + 10; renderMsgs(); }
+  }
+  function loadOlder() {
+    const all = api.messages(chatId);
+    if (loadingOlder || limit >= all.length) return;
+    loadingOlder = true; stick = false;
+    const h0 = sc.scrollHeight, t0 = sc.scrollTop;
+    limit += PAGE;
+    renderMsgs();
+    sc.scrollTop = t0 + (sc.scrollHeight - h0);
+    requestAnimationFrame(() => { loadingOlder = false; });
+  }
   let replyTo = null, panelMode = null, stickerTab = 'anim', editing = null;
   let searchQ = '', hits = [], hitIdx = -1;
   const searchBar = $('.search-bar', el), searchInp = $('.search-bar input', el), announce = $('.announce', el), mentionList = $('.mention-list', el);
@@ -237,6 +253,8 @@ function ChatScreen(chatId) {
       bare = true; body = `<button class="photo vid" data-act="open-video" data-mid="${m.id}">${m.thumb ? `<img src="${m.thumb}" style="aspect-ratio:${m.w || 16}/${m.h || 9}" alt="video">` : `<span class="vid-ph" style="aspect-ratio:${m.w || 16}/${m.h || 9}"></span>`}<span class="vid-play">${icon('play')}</span><span class="vid-dur">${dur(m.duration || 0)}</span></button>`;
     } else if (m.type === 'file') {
       body = `<button class="bubble filemsg" data-act="open-file" data-mid="${m.id}"><span class="file-ic">${esc(fileExt(m.name || 'FILE')) || icon('file')}</span><span class="file-txt"><b>${esc(m.name)}</b><small>${fmtSize(m.size || 0)}</small></span>${icon('download', 'file-dl')}</button>`;
+    } else if (m.cleared && ['image', 'video', 'file', 'voice'].includes(m.type)) {
+      body = `<div class="bubble cleared">${icon(m.type === 'image' ? 'image' : m.type === 'video' ? 'film' : m.type === 'voice' ? 'mic' : 'file', 'tiny')} ${m.type === 'image' ? 'Foto' : m.type === 'video' ? 'Video' : m.type === 'voice' ? 'Voice note' : esc(m.name || 'File')} dihapus</div>`;
     } else if (m.type === 'image' && m.album?.length > 1) {
       bare = true;
       const a = m.album, n = a.length, show = a.slice(0, 4);
@@ -289,9 +307,11 @@ function ChatScreen(chatId) {
   function renderMsgs() {
     const ch = c();
     if (!ch) return;
-    const list = api.messages(chatId);
+    const full = api.messages(chatId);
+    const list = full.length > limit ? full.slice(-limit) : full;
     const group = ch.type === 'group';
     const out = [], fresh = new Map();
+    if (full.length > list.length) out.push(h(`<div class="older"><span></span></div>`));
     const put = (k, html) => {
       let n = nodes.get(k);
       if (!n || n._h !== html) { n = h(html); n._h = html; }
@@ -338,6 +358,7 @@ function ChatScreen(chatId) {
   }
   sc.addEventListener('scroll', () => {
     stick = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
+    if (sc.scrollTop < 120 && !stick) loadOlder();
     if (stick) { jump.hidden = true; newCount = 0; }
     else if (sc.scrollHeight - sc.scrollTop - sc.clientHeight > 400) showJump();
   }, { passive: true });
@@ -661,6 +682,7 @@ function ChatScreen(chatId) {
   }
 
   function bindGoto(mid) {
+    ensureLoaded(mid);
     const n = inner.querySelector(`.msg-row[data-mid="${mid}"]`);
     if (!n) return;
     n.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -698,6 +720,7 @@ function ChatScreen(chatId) {
     $('.sr-count', el).textContent = searchQ ? (hits.length ? `${hitIdx + 1}/${hits.length}` : '0') : '';
     inner.querySelectorAll('.hit-current').forEach(n => n.classList.remove('hit-current'));
     if (hitIdx < 0) return;
+    ensureLoaded(hits[hitIdx]);
     const n = inner.querySelector(`.msg-row[data-mid="${hits[hitIdx]}"]`);
     if (n) { n.classList.add('hit-current'); n.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
   }

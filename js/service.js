@@ -226,6 +226,15 @@ function scheduleResponses(chatId, msg) {
   }, rand(1500, 3200));
 }
 
+/* ---------- offline: antrian pesan ---------- */
+const outbox = [];
+window.addEventListener('online', () => {
+  bus.emit('network', true);
+  const q = outbox.splice(0);
+  q.forEach(([chatId, m], i) => setTimeout(() => { m.status = 'sent'; emitChat(chatId); scheduleResponses(chatId, m); }, 300 + i * 150));
+});
+window.addEventListener('offline', () => bus.emit('network', false));
+
 /* ---------- pesan sementara: hapus yang kedaluwarsa ---------- */
 setInterval(() => {
   if (!db) return;
@@ -406,9 +415,40 @@ export const api = {
     db.messages[chatId].push(m);
     c.updatedAt = m.ts; c.hidden = false; c.draft = '';
     emitChat(chatId);
+    if (!navigator.onLine) { outbox.push([chatId, m]); return m; }
     setTimeout(() => { m.status = 'sent'; emitChat(chatId); }, rand(250, 600));
     scheduleResponses(chatId, m);
     return m;
+  },
+  /* penyimpanan */
+  storageStats() {
+    const size = s => new Blob([s]).size;
+    const per = Object.values(db.chats).filter(c => !c.left).map(c => {
+      const list = db.messages[c.id] || [];
+      let media = 0, text = 0, mediaIds = [], n = 0;
+      list.forEach(m => {
+        const imgs = m.type === 'image' ? (m.album?.length ? m.album : [m]) : [];
+        imgs.forEach(x => { if (x.src) { media += x.src.length; n++; } });
+        if (m.thumb) media += m.thumb.length;
+        if (m.mediaId) { mediaIds.push(m.mediaId); n++; }
+        if (m.type === 'voice' && m.src) { media += m.src.length; n++; }
+        if (m.type === 'text') text += (m.text || '').length;
+      });
+      return { id: c.id, media, text, mediaIds, count: n };
+    });
+    const all = JSON.stringify(db);
+    const posts = size(JSON.stringify(db.posts)) + size(JSON.stringify(db.myStory || null));
+    return { total: size(all), per, posts };
+  },
+  clearChatMedia(chatId) {
+    const ids = [];
+    (db.messages[chatId] || []).forEach(m => {
+      if (m.type === 'image') { m.src = null; m.album?.forEach(x => { x.src = null; }); m.cleared = true; }
+      if (m.type === 'voice' && m.src) { m.src = null; m.cleared = true; }
+      if (m.mediaId) { ids.push(m.mediaId); m.thumb = null; m.cleared = true; m.mediaId = null; }
+    });
+    emitChat(chatId);
+    return ids;
   },
   react(chatId, msgId, emoji) {
     const m = db.messages[chatId].find(x => x.id === msgId);
@@ -560,7 +600,7 @@ export const api = {
   deleteChat(chatId) { const c = db.chats[chatId]; db.messages[chatId] = []; c.hidden = true; c.unread = 0; c.pinned = false; emitChat(chatId); },
   images(chatId) {
     return (db.messages[chatId] || []).filter(m => m.type === 'image' && !m.unsent)
-      .flatMap(m => (m.album?.length ? m.album : [m]).map((x, i) => ({ id: i ? m.id + '~' + i : m.id, mid: m.id, i, src: x.src, w: x.w, h: x.h, from: m.from, ts: m.ts })));
+      .flatMap(m => (m.album?.length ? m.album : [m]).map((x, i) => ({ id: i ? m.id + '~' + i : m.id, mid: m.id, i, src: x.src, w: x.w, h: x.h, from: m.from, ts: m.ts }))).filter(x => x.src);
   },
   randomPlace() { return pick(PLACES); },
 

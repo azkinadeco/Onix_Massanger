@@ -35,6 +35,23 @@ export async function mediaURL(id) {
   urls.set(id, u);
   return u;
 }
+export async function mediaUsage() {
+  const out = {};
+  try {
+    const db = await open();
+    await new Promise((res, rej) => {
+      const r = db.transaction(STORE).objectStore(STORE).openCursor();
+      r.onsuccess = () => { const c = r.result; if (!c) return res(); out[c.key] = c.value?.size || 0; c.continue(); };
+      r.onerror = () => rej(r.error);
+    });
+  } catch { /* */ }
+  return out;
+}
+export async function deleteMedia(ids) {
+  if (!ids.length) return;
+  ids.forEach(id => { const u = urls.get(id); if (u) { URL.revokeObjectURL(u); urls.delete(id); } });
+  try { await tx('readwrite', s => { ids.forEach(id => s.delete(id)); return null; }); } catch { /* */ }
+}
 export function clearMedia() { try { indexedDB.deleteDatabase(DB); } catch { /* */ } }
 
 export const fmtSize = b => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(0) + ' KB' : (b / 1048576).toFixed(1) + ' MB';

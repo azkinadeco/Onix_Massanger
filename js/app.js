@@ -5,7 +5,7 @@ import { router, bindActs, onLongPress, toast, sheet, confirmBox, banner, initVi
 import { userAvatar, chatAvatar, chatRow, userRow, postCard, empty, preview } from './views.js';
 import { openChat, startCall } from './chat.js';
 import { clearMedia } from './media.js';
-import { KeepScreen, ArchivedScreen, setupPasscode, lockApp, StickerStoreScreen, ActivityScreen, hideChat, openHiddenChats } from './features.js';
+import { KeepScreen, ArchivedScreen, setupPasscode, lockApp, StickerStoreScreen, ActivityScreen, hideChat, openHiddenChats, StorageScreen } from './features.js';
 import {
   OnboardingScreen, ProfileScreen, EditProfileScreen, AddFriendScreen, NewGroupScreen, FriendPicker,
   PostComposeScreen, postActions, openStories, addStoryFlow,
@@ -167,6 +167,7 @@ function TabsScreen() {
           ${link('archived', 'archive', 'Arsip', `<span class="count">${api.archived().length || ''}</span>`)}
           ${s.passcode ? link('hidden-chats', 'lock', 'Tersembunyi', '') : ''}
           ${link('store', 'store', 'Sticker', `<span class="count">${api.packs().length}</span>`)}
+          ${link('storage', 'database', 'Penyimpanan')}
         </div>
         <div class="set-group">
           <label class="set-row">${icon('lock')}<div class="set-txt"><span>Kunci PIN</span></div><input type="checkbox" class="switch" data-lock ${s.passcode ? 'checked' : ''}></label>
@@ -275,6 +276,7 @@ function TabsScreen() {
     keep: () => router.push(KeepScreen()),
     feed: t => { if (st.feed === t.dataset.v) return; st.feed = t.dataset.v; renderBody(); body.scrollTo({ top: 0 }); },
     'hidden-chats': () => openHiddenChats(),
+    storage: () => router.push(StorageScreen()),
     activity: () => router.push(ActivityScreen()),
     store: () => router.push(StickerStoreScreen()),
     wish: t => {
@@ -440,6 +442,17 @@ else {
   router.setRoot(OnboardingScreen(startApp));
 }
 document.getElementById('splash')?.remove();
+
+// banner offline
+(() => {
+  const b = document.createElement('div');
+  b.className = 'net-banner';
+  b.innerHTML = `${icon('wifiOff')}<span>Offline</span>`;
+  const set = on => { b.classList.toggle('show', !on); document.documentElement.classList.toggle('is-offline', !on); if (on && b.dataset.was) { b.classList.add('back'); b.querySelector('span').textContent = 'Online lagi'; b.classList.add('show'); setTimeout(() => { b.classList.remove('show', 'back'); b.querySelector('span').textContent = 'Offline'; }, 1600); } b.dataset.was = on ? '' : '1'; };
+  const mount = () => { document.getElementById('app')?.appendChild(b); set(navigator.onLine); };
+  document.readyState === 'loading' ? addEventListener('DOMContentLoaded', mount) : mount();
+  bus.on('network', set);
+})();
 
 // carousel post: update titik & nomor saat digeser
 document.addEventListener('scroll', e => {

@@ -393,3 +393,54 @@ export function StickerStoreScreen() {
   render();
   return { el, destroy: off };
 }
+
+/* ================= NOTIFIKASI / AKTIVITAS ================= */
+const ACT = {
+  like: ['heart', '#FF3D6E', a => a.text === 'story' ? 'suka story kamu' : 'suka post kamu'],
+  comment: ['comment', '#2E7BFF', a => `komentar: ${a.text}`],
+  reply: ['comment', '#2E7BFF', a => `balas: ${a.text}`],
+  mention: ['chat', '#7C5CFF', a => `nyebut kamu: ${a.text}`],
+  friend: ['userPlus', '#0FB46C', () => 'nambahin kamu jadi teman'],
+  missed: ['phoneOff', '#FF3B5C', a => `panggilan ${a.text || ''} tak terjawab`],
+  story: ['voom', '#FF7A1A', a => `bales story: ${a.text}`],
+};
+export function ActivityScreen() {
+  const el = h(`<div class="sub-screen">${navbar('Notifikasi', `<button class="icon-btn" data-act="clear" aria-label="Hapus semua">${icon('trash')}</button>`)}<div class="content act-body"></div></div>`);
+  const body = $('.act-body', el);
+  let firstUnread = new Set(api.activity().filter(a => !a.read).map(a => a.id));
+  function row(a) {
+    const u = api.user(a.from);
+    const [ic, col, txt] = ACT[a.type] || ACT.like;
+    const right = a.type === 'friend'
+      ? (api.isFriend(a.from) ? `<span class="pill">Teman</span>` : `<button class="btn primary sm" data-act="add" data-id="${a.from}">Tambah</button>`)
+      : '';
+    return `<div class="list-item act ${firstUnread.has(a.id) ? 'new' : ''}" data-act="go" data-id="${a.id}">
+      <div class="act-av">${avatar(u, 46)}<span class="act-ic" style="--c:${col}">${icon(ic)}</span></div>
+      <div class="li-main"><div class="act-txt"><b>${esc(firstName(u.name))}</b> ${esc(txt(a))}</div><div class="li-sub">${ago(a.ts)}</div></div>
+      ${right}
+    </div>`;
+  }
+  function render() {
+    const list = api.activity();
+    if (!list.length) { body.innerHTML = empty('🔔', 'Belum ada notifikasi'); return; }
+    const fresh = list.filter(a => firstUnread.has(a.id)), old = list.filter(a => !firstUnread.has(a.id));
+    body.innerHTML = (fresh.length ? `<div class="section-h">Baru</div>${fresh.map(row).join('')}` : '')
+      + (old.length ? `<div class="section-h">Sebelumnya</div>${old.map(row).join('')}` : '');
+  }
+  bindActs(el, {
+    add: (t, e) => { e.stopPropagation(); api.addFriend(t.dataset.id); vibrate(8); toast('Ditambahkan 🎉'); render(); },
+    clear: async () => { if (await confirmBox({ title: 'Hapus semua notifikasi?', ok: 'Hapus', danger: true })) api.clearActivity(); },
+    go: async t => {
+      const a = api.activity().find(x => x.id === t.dataset.id);
+      if (!a) return;
+      const scr = await import('./screens.js');
+      if (a.ref?.postId && api.post(a.ref.postId)) router.push(scr.PostDetailScreen(a.ref.postId));
+      else if (a.ref?.chatId && api.chat(a.ref.chatId)) openChat(a.ref.chatId);
+      else router.push(scr.ProfileScreen(a.from));
+    },
+  });
+  const off = bus.on('activity', render);
+  render();
+  setTimeout(() => api.markActivityRead(), 600);
+  return { el, destroy: off };
+}

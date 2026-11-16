@@ -5,7 +5,7 @@ import { router, bindActs, onLongPress, toast, sheet, confirmBox, banner, initVi
 import { userAvatar, chatAvatar, chatRow, userRow, postCard, empty, preview } from './views.js';
 import { openChat, startCall } from './chat.js';
 import { clearMedia } from './media.js';
-import { KeepScreen, ArchivedScreen, setupPasscode, lockApp, StickerStoreScreen } from './features.js';
+import { KeepScreen, ArchivedScreen, setupPasscode, lockApp, StickerStoreScreen, ActivityScreen } from './features.js';
 import {
   OnboardingScreen, ProfileScreen, EditProfileScreen, AddFriendScreen, NewGroupScreen, FriendPicker,
   PostComposeScreen, postActions, openStories, addStoryFlow,
@@ -49,7 +49,7 @@ function TabsScreen() {
 
   /* ----- HOME ----- */
   const home = {
-    head: () => title('Home', `<button class="icon-btn" data-act="add-friend" aria-label="Tambah teman">${icon('userPlus')}</button>`) + searchBox('homeQ', 'Cari'),
+    head: () => title('Home', `<button class="icon-btn bell" data-act="activity" aria-label="Notifikasi">${icon('bell')}<i class="bell-dot" ${api.unreadActivity() ? '' : 'hidden'}>${api.unreadActivity() || ''}</i></button><button class="icon-btn" data-act="add-friend" aria-label="Tambah teman">${icon('userPlus')}</button>`) + searchBox('homeQ', 'Cari'),
     body: () => {
       const q = st.homeQ.trim().toLowerCase();
       const friends = api.friends().filter(u => !q || u.name.toLowerCase().includes(q) || u.id.includes(q));
@@ -187,6 +187,8 @@ function TabsScreen() {
     const n = api.totalUnread();
     const b = $('.tab[data-tab=chats] .badge', el);
     b.hidden = !n; b.textContent = n > 99 ? '99+' : n;
+    const hb = $('.tab[data-tab=home] .badge', el), na = api.unreadActivity();
+    hb.hidden = !na; hb.textContent = na > 99 ? '99+' : na;
     const missed = 0;
     $('.tab[data-tab=calls] .badge', el).hidden = !missed;
   }
@@ -210,10 +212,11 @@ function TabsScreen() {
     calls: ['calls', 'friends'],
     me: ['me', 'settings', 'keep', 'chats', 'packs'],
   };
-  const offs = ['friends', 'chats', 'stories', 'me', 'presence', 'posts', 'calls', 'settings', 'keep', 'packs'].map(ev => bus.on(ev, () => {
+  const offs = ['friends', 'chats', 'stories', 'me', 'presence', 'posts', 'calls', 'settings', 'keep', 'packs', 'activity'].map(ev => bus.on(ev, () => {
     if (ev === 'chats') renderBadges();
     if (watch[cur].includes(ev)) schedule();
     if (ev === 'me' && (cur === 'home' || cur === 'voom')) renderHead();
+    if (ev === 'activity') { renderBadges(); if (cur === 'home') { const d = head.querySelector('.bell-dot'); if (d) { const n = api.unreadActivity(); d.hidden = !n; d.textContent = n || ''; } } }
   }));
 
   head.addEventListener('input', e => {
@@ -253,6 +256,7 @@ function TabsScreen() {
         { label: 'Telepon masuk', icon: 'phone', run: () => setTimeout(() => api.simulateIncomingCall(false), 1500) },
         { label: 'Video call masuk', icon: 'video', run: () => setTimeout(() => api.simulateIncomingCall(true), 1500) },
         { label: 'Grup call masuk', icon: 'users', run: () => setTimeout(() => api.simulateIncomingCall(false, true), 1500) },
+        { label: 'Permintaan teman', icon: 'userPlus', run: () => setTimeout(() => api.simulateFriendRequest(), 800) },
         { label: s.simulate ? 'Matikan pesan otomatis' : 'Nyalakan pesan otomatis', icon: 'refresh', run: () => api.setSetting('simulate', !s.simulate) },
         { label: 'Reset data', icon: 'trash', danger: true, run: handlers.reset },
       ] });
@@ -267,6 +271,7 @@ function TabsScreen() {
     'clear-calls': async () => { if (await confirmBox({ title: 'Hapus riwayat panggilan?', ok: 'Hapus', danger: true })) api.clearCalls(); },
     'edit-profile': () => router.push(EditProfileScreen()),
     keep: () => router.push(KeepScreen()),
+    activity: () => router.push(ActivityScreen()),
     store: () => router.push(StickerStoreScreen()),
     wish: t => {
       const u = api.user(t.dataset.id);

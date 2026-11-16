@@ -55,6 +55,14 @@ function migrate(d) {
   d.notes ||= {};
   d.scheduled ||= [];
   d.packs ||= DEFAULT_PACKS.slice();
+  if (!d.activity) {
+    const t = Date.now();
+    d.activity = [
+      { id: 'a1', type: 'friend', from: 'luna', ts: t - 20 * 60e3, read: false },
+      { id: 'a2', type: 'like', from: 'kezia', ref: { userId: 'kezia' }, text: 'story', ts: t - 2 * 3600e3, read: false },
+      { id: 'a3', type: 'friend', from: 'reza', ts: t - 26 * 3600e3, read: true },
+    ];
+  }
   d.settings.fontSize ||= 'm';
   if (!d.featuresV4) {
     d.featuresV4 = true;
@@ -148,7 +156,7 @@ function receive(chatId, from, payload) {
   const mentionsMe = c.type === 'group' && mentionRe(db.me.name).test(m.text || '');
   if (activeChat !== chatId || document.hidden) {
     c.unread = (c.unread || 0) + 1;
-    if (mentionsMe) c.mention = true;
+    if (mentionsMe) { c.mention = true; addActivity('mention', from, { chatId }, m.text); }
     if (!c.muted || mentionsMe) bus.emit('notify', { chat: c, msg: m, mention: mentionsMe });
   }
   emitChat(chatId);
@@ -156,6 +164,13 @@ function receive(chatId, from, payload) {
 }
 
 export const mentionRe = name => new RegExp('@' + firstName(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
+
+function addActivity(type, from, ref = {}, text = '') {
+  if (!db || db.blocked.includes(from)) return;
+  db.activity.unshift({ id: uid('a'), type, from, ref, text, ts: Date.now(), read: false });
+  db.activity = db.activity.slice(0, 100);
+  save(); bus.emit('activity');
+}
 
 function readAll(chatId, userId) {
   const list = db.messages[chatId] || [];
@@ -439,6 +454,16 @@ export const api = {
     emitChat(chatId);
   },
 
+  /* Aktivitas / notifikasi */
+  activity() { return db.activity.filter(a => db.users[a.from]); },
+  unreadActivity() { return db.activity.filter(a => !a.read && db.users[a.from]).length; },
+  markActivityRead() { let ch = false; db.activity.forEach(a => { if (!a.read) { a.read = true; ch = true; } }); if (ch) { save(); bus.emit('activity'); } },
+  clearActivity() { db.activity = []; save(); bus.emit('activity'); },
+  simulateFriendRequest() {
+    const r = api.recommended();
+    if (r.length) addActivity('friend', pick(r).id);
+  },
+
   /* Event */
   createEvent(chatId, { title, at, place }) {
     const m = api.send(chatId, { type: 'event', event: { title, at, place, going: [ME], notGoing: [] } });
@@ -516,9 +541,11 @@ export const api = {
     db.posts.unshift(p);
     save(); bus.emit('posts');
     const likers = shuffle(db.friends).slice(0, 2 + Math.floor(Math.random() * 4));
-    likers.forEach((id, i) => setTimeout(() => { if (!p.likes.includes(id)) p.likes.push(id); save(); bus.emit('posts'); }, 3000 + i * rand(1500, 4000)));
+    likers.forEach((id, i) => setTimeout(() => { if (!p.likes.includes(id)) { p.likes.push(id); addActivity('like', id, { postId: p.id }); } save(); bus.emit('posts'); }, 3000 + i * rand(1500, 4000)));
     setTimeout(() => {
-      p.comments.push({ id: uid('c'), userId: pick(db.friends), text: pick(['keren bgt!! 🔥', 'wkwk valid', 'ih lucu 🥹', 'mantap', 'spill dong']), ts: Date.now() });
+      const cm = { id: uid('c'), userId: pick(db.friends), text: pick(['keren bgt!! 🔥', 'wkwk valid', 'ih lucu 🥹', 'mantap', 'spill dong']), ts: Date.now() };
+      p.comments.push(cm);
+      addActivity('comment', cm.userId, { postId: p.id }, cm.text);
       save(); bus.emit('posts');
     }, rand(6000, 10000));
     return p;
@@ -537,7 +564,9 @@ export const api = {
     save(); bus.emit('posts');
     if (p.userId !== ME) {
       setTimeout(() => {
-        p.comments.push({ id: uid('c'), userId: p.userId, text: pick(['makasih 🫶', 'wkwk iya', 'hehe 🥹', 'bener bgt']), ts: Date.now() });
+        const txt = pick(['makasih 🫶', 'wkwk iya', 'hehe 🥹', 'bener bgt']);
+        p.comments.push({ id: uid('c'), userId: p.userId, text: txt, ts: Date.now() });
+        addActivity('reply', p.userId, { postId: p.id }, txt);
         save(); bus.emit('posts');
       }, rand(3000, 6000));
     }
@@ -562,6 +591,7 @@ export const api = {
     const c = db.chats[chatId];
     const call = { id: uid('cl'), chatId, userId: c.type === 'direct' ? c.members.find(m => m !== ME) : null, video, dir, status, duration, ts: Date.now() };
     db.calls.push(call);
+    if (dir === 'in' && status === 'missed' && call.userId) addActivity('missed', call.userId, { chatId }, video ? 'video' : 'suara');
     const kind = video ? 'Video call' : 'Panggilan suara';
     const mm = String(Math.floor(duration / 60)).padStart(2, '0'), ss = String(duration % 60).padStart(2, '0');
     const text = status === 'done' ? `${video ? '🎥' : '📞'} ${kind} · ${mm}:${ss}`

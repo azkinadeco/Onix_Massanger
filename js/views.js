@@ -47,7 +47,7 @@ export function chatRow(c) {
   let sub;
   if (typing.length) sub = `<span class="accent-txt">${c.type === 'group' ? esc(firstName(api.user(typing[0])?.name)) + ' ' : ''}lagi ngetik…</span>`;
   else if (c.draft) sub = `<span class="draft">Draft:</span> ${esc(c.draft)}`;
-  else sub = esc(preview(last, c));
+  else sub = esc(preview(last, c)).replace(/(^|\s)[*_~`]([^*_~`\n]+)[*_~`](?=$|[\s.,!?])/g, '$1$2');
   const peer = api.peerOf(c);
   return `<div class="list-item chat-item" data-act="open-chat" data-id="${c.id}">
     ${chatAvatar(c, 54)}

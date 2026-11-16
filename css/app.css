@@ -1066,3 +1066,26 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .swipe-left { position: absolute; top: 0; bottom: 0; left: 0; width: max(0px, var(--sx)); background: var(--accent); display: flex; align-items: center; overflow: hidden; z-index: 1; }
 .swipe-left span { margin-left: 22px; flex-shrink: 0; color: #fff; opacity: .6; transition: transform .2s var(--ease), opacity .2s; }
 .chat-item.sw-right-hit .swipe-left span { opacity: 1; transform: scale(1.2); }
+
+/* ============ B4: format, link, efek ============ */
+.txt code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em; background: rgba(0,0,0,.08); padding: 1px 5px; border-radius: 6px; }
+.msg-row.me .txt code { background: rgba(255,255,255,.2); }
+.txt s { opacity: .75; }
+.link-card { display: flex; align-items: center; gap: 10px; margin: 8px -4px -2px; padding: 8px; border-radius: 14px; background: rgba(0,0,0,.05); color: inherit !important; text-decoration: none !important; max-width: 260px; }
+.msg-row.me .link-card { background: rgba(255,255,255,.16); }
+.lc-thumb { width: 44px; height: 44px; flex-shrink: 0; border-radius: 11px; background: var(--lc); display: grid; place-items: center; font-size: 22px; }
+.lc-txt { display: flex; flex-direction: column; min-width: 0; }
+.lc-txt b { font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lc-txt small { font-size: 12px; opacity: .65; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bubble.has-fx { cursor: pointer; }
+.sp-fx { display: flex; gap: 8px; margin-bottom: 16px; }
+.sp-fx button { flex: 1; height: 52px; border-radius: 16px; background: var(--surface-2); font-size: 26px; transition: transform .15s var(--ease); }
+.sp-fx button:active { transform: scale(.88); }
+.fx-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 60; }
+.fx-layer i { position: absolute; left: var(--x); top: -40px; font-style: normal; font-size: calc(26px * var(--s)); animation: fx-fall var(--t) cubic-bezier(.3,.6,.5,1) var(--d) both; }
+.fx-layer i.cf { width: 8px; height: 13px; border-radius: 2px; background: var(--c); }
+@keyframes fx-fall { 0% { transform: translateY(0) rotate(0); opacity: 1; } 85% { opacity: 1; } 100% { transform: translateY(calc(var(--app-h, 100vh) + 60px)) rotate(var(--r)); opacity: 0; } }
+.fx-hearts i, .fx-balloons i { top: auto; bottom: -50px; animation-name: fx-rise; }
+@keyframes fx-rise { 0% { transform: translateY(0) scale(.6); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(calc(-1 * var(--app-h, 100vh) - 80px)) translateX(var(--dx)) scale(1.1); opacity: 0; } }
+.fx-layer i.fw { top: var(--y); width: 9px; height: 9px; border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); animation: fx-burst 1.4s cubic-bezier(.1,.7,.3,1) var(--d) both; }
+@keyframes fx-burst { 0% { transform: translate(0,0) scale(.3); opacity: 0; } 10% { opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(var(--tx), calc(var(--ty) + 40px)) scale(.6); opacity: 0; } }

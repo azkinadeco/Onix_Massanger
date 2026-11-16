@@ -10,6 +10,81 @@ import { forwardMessage, keepFromMessage, PollComposeScreen, wallpaperSheet, Eve
 
 const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // jalankan fn hanya di bagian teks (bukan di dalam tag HTML)
+/* ---------- format teks: *tebal* _miring_ ~coret~ `kode` ---------- */
+export function fmtMarks(html) {
+  const B = '(^|[\\s(>])', E = '(?=$|[\\s.,!?:;)<])';
+  const parts = html.split(/(`[^`\n]+`)/);
+  return parts.map(p => {
+    if (/^`[^`\n]+`$/.test(p)) return `<code>${p.slice(1, -1)}</code>`;
+    return p
+      .replace(new RegExp(B + '\\*([^*\\n]+?)\\*' + E, 'g'), '$1<b>$2</b>')
+      .replace(new RegExp(B + '_([^_\\n]+?)_' + E, 'g'), '$1<i>$2</i>')
+      .replace(new RegExp(B + '~([^~\\n]+?)~' + E, 'g'), '$1<s>$2</s>');
+  }).join('');
+}
+export const stripMarks = s => String(s || '').replace(/(^|\s)[*_~`]([^*_~`\n]+)[*_~`](?=$|[\s.,!?])/g, '$1$2');
+
+/* ---------- preview link (dummy, tanpa server) ---------- */
+const SITES = {
+  'youtube.com': ['YouTube', '▶️', '#FF0033'], 'youtu.be': ['YouTube', '▶️', '#FF0033'],
+  'instagram.com': ['Instagram', '📸', '#E1306C'], 'tiktok.com': ['TikTok', '🎵', '#111'],
+  'spotify.com': ['Spotify', '🎧', '#1DB954'], 'github.com': ['GitHub', '🐙', '#24292F'],
+  'x.com': ['X', '✖️', '#111'], 'twitter.com': ['X', '✖️', '#111'],
+  'google.com': ['Google', '🔎', '#4285F4'], 'tokopedia.com': ['Tokopedia', '🛍️', '#03AC0E'],
+  'shopee.co.id': ['Shopee', '🛒', '#EE4D2D'], 'wikipedia.org': ['Wikipedia', '📖', '#666'],
+};
+function linkCard(text) {
+  const mm = String(text || '').match(/https?:\/\/[^\s<]+/);
+  if (!mm) return '';
+  let u;
+  try { u = new URL(mm[0]); } catch { return ''; }
+  const host = u.hostname.replace(/^www\.|^m\./, '');
+  const key = Object.keys(SITES).find(k => host === k || host.endsWith('.' + k));
+  const [name, emo, col] = key ? SITES[key] : [host, '🔗', `hsl(${hash(host) % 360} 60% 52%)`];
+  const seg = decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || '').replace(/[-_+]/g, ' ').replace(/\.\w+$/, '');
+  const title = seg && seg.length > 2 && !/^[\w]{10,}$/.test(seg) ? seg.charAt(0).toUpperCase() + seg.slice(1) : name;
+  return `<a class="link-card" href="${esc(mm[0])}" target="_blank" rel="noopener" style="--lc:${col}"><span class="lc-thumb">${emo}</span><span class="lc-txt"><b>${esc(title.slice(0, 60))}</b><small>${esc(host)}</small></span></a>`;
+}
+
+/* ---------- efek pesan ---------- */
+const FX_WORDS = [
+  [/selamat|congrat|hbd|happy birthday|ulang tahun|ultah|🎉|🥳/i, 'confetti'],
+  [/love u|love you|sayang|❤️|💖|🥰|i love/i, 'hearts'],
+  [/happy new year|tahun baru|🎆|🎇/i, 'fireworks'],
+  [/❄️|salju|snow/i, 'snow'],
+];
+function effectOf(m) {
+  if (!m || m.unsent || m.type !== 'text') return null;
+  if (m.effect) return m.effect;
+  for (const [re, fx] of FX_WORDS) if (re.test(m.text || '')) return fx;
+  return null;
+}
+export function playEffect(fx, host = document.body) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  host.querySelector('.fx-layer')?.remove();
+  const layer = document.createElement('div');
+  layer.className = 'fx-layer fx-' + fx;
+  const pool = { confetti: ['', '', '', ''], hearts: ['💖', '💜', '💗', '❤️', '💕'], fireworks: [''], snow: ['❄️'], balloons: ['🎈', '🎈', '🎈', '🎉'] }[fx] || ['✨'];
+  const n = fx === 'confetti' ? 70 : fx === 'fireworks' ? 72 : 26;
+  const cols = ['#7C5CFF', '#FF3D6E', '#FFC53D', '#2EE6A6', '#2E7BFF', '#FF7A1A'];
+  let html = '';
+  for (let i = 0; i < n; i++) {
+    const x = Math.random() * 100, d = (Math.random() * .8).toFixed(2), t = (1.8 + Math.random() * 1.6).toFixed(2), r = Math.round(Math.random() * 720 - 360), s = (0.7 + Math.random() * .8).toFixed(2);
+    const ch = pool[i % pool.length];
+    if (fx === 'fireworks') {
+      const b = i % 3, cx = [25, 70, 45][b], cy = [30, 22, 48][b], ang = (i / n) * Math.PI * 2 * 3 + b, dist = 90 + Math.random() * 80;
+      html += `<i class="fw" style="--x:${cx}%;--y:${cy}%;--d:${(b * .45).toFixed(2)}s;--tx:${Math.round(Math.cos(ang) * dist)}px;--ty:${Math.round(Math.sin(ang) * dist)}px;--c:${cols[(b * 2 + i) % cols.length]}"></i>`;
+      continue;
+    }
+    html += ch
+      ? `<i style="--x:${x}%;--d:${d}s;--t:${t}s;--r:${r}deg;--dx:${Math.round(r / 8)}px;--s:${s}">${ch}</i>`
+      : `<i class="cf" style="--x:${x}%;--d:${d}s;--t:${t}s;--r:${r}deg;--s:${s};--c:${cols[i % cols.length]}"></i>`;
+  }
+  layer.innerHTML = html;
+  host.appendChild(layer);
+  setTimeout(() => layer.remove(), 4200);
+}
+
 const mapText = (html, fn) => html.split(/(<[^>]+>)/).map(p => (p.startsWith('<') ? p : fn(p))).join('');
 
 export function openChat(chatId) {
@@ -112,6 +187,7 @@ function ChatScreen(chatId) {
   function fmtText(text) {
     const ch = c();
     let html = esc(text);
+    html = fmtMarks(html);
     html = mapText(html, t => t.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'));
     if (ch.type === 'group' && text.includes('@')) {
       const names = ch.members.map(id => ({ id, n: firstName(api.user(id)?.name || '') })).filter(x => x.n);
@@ -178,7 +254,7 @@ function ChatScreen(chatId) {
     } else if (!m.replyTo && !m.forwarded && isJumbo(m.text)) {
       bare = true; body = `<div class="jumbo">${esc(m.text)}</div>`;
     } else {
-      body = `<div class="bubble">${m.forwarded ? `<span class="fwd">${icon('forward', 'tiny')} Diteruskan</span>` : ''}${quote}<span class="txt">${fmtText(m.text)}</span></div>`;
+      body = `<div class="bubble ${effectOf(m) ? 'has-fx' : ''}" ${effectOf(m) ? `data-act="replay-fx" data-mid="${m.id}"` : ''}>${m.forwarded ? `<span class="fwd">${icon('forward', 'tiny')} Diteruskan</span>` : ''}${quote}<span class="txt">${fmtText(m.text)}</span>${linkCard(m.text)}</div>`;
     }
     const reacts = Object.entries(m.reactions || {}).filter(([, a]) => a.length);
     const reactHtml = reacts.length ? `<div class="reacts" data-act="react-info" data-mid="${m.id}">${reacts.map(([e, a]) => `<span class="${a.includes(ME) ? 'mine' : ''}">${e}${a.length > 1 ? `<small>${a.length}</small>` : ''}</span>`).join('')}</div>` : '';
@@ -220,6 +296,7 @@ function ChatScreen(chatId) {
 
     const lm = list[list.length - 1];
     const newLast = lm && lm.id !== lastId;
+    if (newLast && !firstRender) { const fx = effectOf(lm); if (fx) playEffect(fx, el); }
     if (firstRender || stick || (newLast && lm.from === ME)) { scrollBottom(); }
     else if (newLast) { newCount++; showJump(); }
     lastId = lm?.id;
@@ -272,7 +349,8 @@ function ChatScreen(chatId) {
     holdT = setTimeout(() => {
       held = true; vibrate(12);
       const text = ta.value.trim();
-      scheduleSheet(at => { api.schedule(chatId, withReply({ type: 'text', text }), at); ta.value = ''; autosize(); });
+      scheduleSheet(at => { api.schedule(chatId, withReply({ type: 'text', text }), at); ta.value = ''; autosize(); },
+        fx => { api.send(chatId, withReply({ type: 'text', text, effect: fx })); ta.value = ''; autosize(); vibrate(10); });
     }, 450);
   });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => sendBtn.addEventListener(ev, () => clearTimeout(holdT)));
@@ -692,6 +770,7 @@ function ChatScreen(chatId) {
     },
     'att-photo': () => sendImage(false),
     'att-camera': () => sendImage(true),
+    'replay-fx': (t, e) => { if (e.target.closest('a')) return; const m = api.messages(chatId).find(x => x.id === t.dataset.mid); const fx = effectOf(m); if (fx) playEffect(fx, el); },
     'att-location': () => { closePanel(); const p = api.randomPlace(); api.send(chatId, withReply({ type: 'location', ...p })); },
     'att-voice': () => startRec(),
     'att-video': sendVideo,

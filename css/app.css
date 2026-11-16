@@ -1015,3 +1015,30 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .edit-profile .edit-av .avatar { box-shadow: 0 0 0 5px var(--bg); }
 .edit-profile .edit-av small { color: var(--text-3); font-weight: 600; }
 .edit-profile .pad { padding-top: 0; }
+
+/* ============ B1: onboarding nomor HP + OTP ============ */
+.onb[data-step]:not([data-step=welcome]) { justify-content: flex-start; }
+.onb-top { display: flex; align-items: center; justify-content: space-between; padding: calc(var(--sat) + 8px) 8px 0; }
+.onb-top > span { width: 40px; }
+.onb-steps { display: flex; gap: 6px; }
+.onb-steps i { width: 22px; height: 5px; border-radius: 3px; background: var(--surface-3); transition: all .3s var(--ease); }
+.onb-steps i.on { width: 34px; background: var(--accent); }
+.onb-title { padding: 28px 24px 8px; }
+.onb-title h2 { margin: 0; font-size: 28px; letter-spacing: -.035em; }
+.onb-title p { margin: 6px 0 0; color: var(--text-2); font-weight: 600; }
+.onb-body { flex: 1; padding: 16px 24px; display: flex; flex-direction: column; gap: 12px; animation: panelIn .35s var(--ease); }
+.phone-row { display: flex; gap: 8px; }
+.phone-row .cc { height: 54px; padding: 0 14px; border-radius: 16px; background: var(--surface-2); display: flex; align-items: center; font-weight: 700; flex-shrink: 0; }
+.phone-row .field { height: 54px; font-size: 19px; font-weight: 600; letter-spacing: .02em; }
+.otp { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.otp input { height: 58px; border-radius: 16px; border: 2px solid transparent; background: var(--surface-2); text-align: center; font-size: 24px; font-weight: 800; outline: none; color: var(--text); width: 100%; min-width: 0; padding: 0; transition: border-color .15s, transform .15s; }
+.otp input:focus { border-color: var(--accent); background: var(--surface); }
+.otp.ok input { border-color: var(--ok); color: var(--ok); }
+.otp.bad { animation: shake .4s; }
+.otp.bad input { border-color: var(--danger); }
+.resend { align-self: center; margin-top: 8px; }
+.resend:disabled { color: var(--text-3); opacity: 1; }
+.onb-av { position: relative; align-self: center; margin-bottom: 8px; }
+.id-hint { font-size: 12.5px; font-weight: 600; padding: 0 6px; min-height: 18px; }
+.id-hint.ok { color: var(--ok); }
+.id-hint.bad { color: var(--danger); }

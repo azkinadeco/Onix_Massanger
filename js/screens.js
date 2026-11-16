@@ -1,47 +1,138 @@
 import { api, bus, ME, firstName } from './service.js';
 import { $, $$, h, esc, avatar, ago, hash, vibrate, pickFile, compressImage, copyText } from './util.js';
 import { icon } from './icons.js';
-import { router, bindActs, navbar, toast, sheet, confirmBox, promptBox } from './ui.js';
+import { router, bindActs, navbar, toast, sheet, confirmBox, promptBox, banner } from './ui.js';
 import { userAvatar, chatAvatar, presence, verified, userRow, postCard, empty } from './views.js';
 import { openChat, startCall } from './chat.js';
 import { NotesScreen } from './features.js';
 
 /* ================= ONBOARDING ================= */
 export function OnboardingScreen(onDone) {
-  const el = h(`<div class="onb">
-    <div class="onb-hero">
-      <div class="floaty f1">💬</div><div class="floaty f2">✨</div><div class="floaty f3">🫶</div><div class="floaty f4">🎧</div><div class="floaty f5">😆</div>
-      <div class="logo-big"><img src="icons/icon.svg" alt=""></div>
-      <h1>onix</h1>
-      <p>chat bareng circle kamu</p>
-    </div>
-    <form class="onb-form" autocomplete="off">
-      <input class="field" name="name" maxlength="30" placeholder="Nama" required aria-label="Nama">
-      <div class="field-prefix"><span>@</span><input class="field" name="id" maxlength="20" placeholder="onix id" required autocapitalize="off" autocorrect="off" aria-label="Onix ID"></div>
-      <button class="btn primary wide" type="submit">Mulai ${icon('send')}</button>
-    </form>
-  </div>`);
-  const form = $('form', el);
-  const idInp = form.elements.id;
-  form.elements.name.addEventListener('input', e => {
-    if (idInp.dataset.touched) return;
-    idInp.value = e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '').slice(0, 20);
+  // langkah: welcome -> phone -> otp -> profile
+  const data = { phone: '', code: '', name: '', id: '', avatar: null, hue: Math.floor(Math.random() * 360) };
+  const el = h(`<div class="onb"></div>`);
+  let step = 'welcome', resendT = null;
+
+  function go(s) { step = s; clearInterval(resendT); render(); }
+  const onbTop = (t, sub = '') => `<div class="onb-top"><button class="icon-btn" data-act="prev" aria-label="Kembali">${icon('back')}</button><div class="onb-steps">${['phone', 'otp', 'profile'].map(s => `<i class="${s === step ? 'on' : ''}"></i>`).join('')}</div><span></span></div><div class="onb-title"><h2>${t}</h2>${sub ? `<p>${sub}</p>` : ''}</div>`;
+  const fmtPhone = p => p.replace(/(\d{3})(\d{4})(\d+)/, '$1 $2 $3');
+
+  function render() {
+    el.dataset.step = step;
+    if (step === 'welcome') {
+      el.innerHTML = `<div class="onb-hero">
+          <div class="floaty f1">💬</div><div class="floaty f2">✨</div>
+          <div class="logo-big"><img src="icons/icon.svg" alt=""></div>
+          <h1>onix</h1><p>chat bareng circle kamu</p>
+        </div>
+        <div class="onb-form"><button class="btn primary wide" data-act="start">Mulai ${icon('send')}</button></div>`;
+    } else if (step === 'phone') {
+      el.innerHTML = `${onbTop('Nomor HP')}
+        <div class="onb-body">
+          <div class="phone-row"><span class="cc">🇮🇩 +62</span><input class="field" type="tel" inputmode="numeric" maxlength="13" placeholder="812 3456 7890" value="${esc(data.phone)}"></div>
+        </div>
+        <div class="onb-form"><button class="btn primary wide" data-act="send-otp" disabled>Kirim kode</button></div>`;
+      const inp = $('input', el), btn = $('[data-act=send-otp]', el);
+      const chk = () => { inp.value = inp.value.replace(/\D/g, '').replace(/^0+/, ''); data.phone = inp.value; btn.disabled = inp.value.length < 9; };
+      inp.addEventListener('input', chk); chk();
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !btn.disabled) sendOtp(); });
+      setTimeout(() => inp.focus(), 300);
+    } else if (step === 'otp') {
+      el.innerHTML = `${onbTop('Kode verifikasi', `+62 ${esc(fmtPhone(data.phone))}`)}
+        <div class="onb-body">
+          <div class="otp">${'<input inputmode="numeric" maxlength="6" autocomplete="one-time-code">'.repeat(6)}</div>
+          <button class="text-btn resend" data-act="resend" disabled></button>
+        </div>`;
+      const boxes = $$('.otp input', el);
+      boxes.forEach((b, i) => {
+        b.addEventListener('input', () => {
+          const v = b.value.replace(/\D/g, '');
+          if (v.length > 1) v.split('').slice(0, 6 - i).forEach((d, k) => { boxes[i + k].value = d; });
+          else b.value = v;
+          const next = boxes.find(x => !x.value);
+          (next || boxes[5]).focus();
+          checkOtp(boxes);
+        });
+        b.addEventListener('keydown', e => { if (e.key === 'Backspace' && !b.value && i) { boxes[i - 1].value = ''; boxes[i - 1].focus(); } });
+      });
+      setTimeout(() => boxes[0].focus(), 300);
+      startResend();
+    } else if (step === 'profile') {
+      el.innerHTML = `${onbTop('Profil kamu')}
+        <div class="onb-body">
+          <button class="onb-av" data-act="photo">${avatar({ name: data.name || '?', hue: data.hue, avatar: data.avatar }, 96)}<span class="cam-badge">${icon('camera')}</span></button>
+          <input class="field" name="name" maxlength="30" placeholder="Nama" value="${esc(data.name)}">
+          <div class="field-prefix"><span>@</span><input class="field" name="id" maxlength="20" placeholder="onix id" autocapitalize="off" autocorrect="off" value="${esc(data.id)}"></div>
+          <small class="id-hint"></small>
+        </div>
+        <div class="onb-form"><button class="btn primary wide" data-act="finish" disabled>Selesai ${icon('check')}</button></div>`;
+      const nm = $('[name=name]', el), id = $('[name=id]', el), hint = $('.id-hint', el), btn = $('[data-act=finish]', el);
+      let touched = !!data.id;
+      const validate = () => {
+        data.name = nm.value.trim(); data.id = id.value;
+        const taken = api.idTaken(data.id);
+        hint.textContent = data.id.length >= 3 ? (taken ? '✗ udah dipakai' : '✓ tersedia') : '';
+        hint.className = 'id-hint ' + (taken ? 'bad' : 'ok');
+        btn.disabled = data.name.length < 2 || data.id.length < 3 || taken;
+        $('.onb-av', el).firstElementChild.outerHTML = avatar({ name: data.name || '?', hue: data.hue, avatar: data.avatar }, 96);
+      };
+      nm.addEventListener('input', () => { if (!touched) id.value = nm.value.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '').slice(0, 20); validate(); });
+      id.addEventListener('input', () => { touched = true; id.value = id.value.toLowerCase().replace(/[^a-z0-9._]/g, ''); validate(); });
+      nm.addEventListener('keydown', e => { if (e.key === 'Enter') id.focus(); });
+      id.addEventListener('keydown', e => { if (e.key === 'Enter' && !btn.disabled) btn.click(); });
+      validate();
+      setTimeout(() => nm.focus(), 300);
+    }
+  }
+
+  function sendOtp() {
+    data.code = String(Math.floor(100000 + Math.random() * 900000));
+    go('otp');
+    // simulasi SMS masuk (nanti diganti SMS OTP asli dari server)
+    setTimeout(() => banner({
+      title: 'Pesan · Onix', text: `Kode Onix kamu: ${data.code}`,
+      avatarHtml: `<div class="avatar sq" style="width:40px;height:40px;--h:255"><img src="icons/icon.svg" alt=""></div>`,
+      onTap: fillOtp,
+    }), 1200);
+  }
+  function fillOtp() {
+    const boxes = $$('.otp input', el);
+    if (!boxes.length) return;
+    data.code.split('').forEach((d, i) => { boxes[i].value = d; });
+    checkOtp(boxes);
+  }
+  function checkOtp(boxes) {
+    const v = boxes.map(b => b.value).join('');
+    if (v.length < 6) return;
+    const box = $('.otp', el);
+    if (v === data.code) { vibrate(15); box.classList.add('ok'); setTimeout(() => go('profile'), 450); }
+    else {
+      vibrate([30, 40, 30]); box.classList.add('bad');
+      setTimeout(() => { box.classList.remove('bad'); boxes.forEach(b => { b.value = ''; }); boxes[0].focus(); }, 500);
+    }
+  }
+  function startResend() {
+    let n = 30;
+    const b = $('[data-act=resend]', el);
+    const tick = () => { if (!b.isConnected) return clearInterval(resendT); b.disabled = n > 0; b.textContent = n > 0 ? `Kirim ulang ${n}s` : 'Kirim ulang'; n--; };
+    tick(); resendT = setInterval(tick, 1000);
+  }
+
+  bindActs(el, {
+    start: () => go('phone'),
+    prev: () => go(step === 'phone' ? 'welcome' : 'phone'),
+    'send-otp': sendOtp,
+    resend: sendOtp,
+    photo: async () => { const f = await pickFile('image/*'); if (f) { data.avatar = (await compressImage(f, 400, 0.8)).src; render(); } },
+    finish: () => {
+      if (data.name.length < 2 || data.id.length < 3 || api.idTaken(data.id)) return;
+      api.register({ name: data.name, id: data.id, phone: '+62' + data.phone, avatar: data.avatar, hue: data.hue });
+      vibrate(15);
+      onDone();
+    },
   });
-  idInp.addEventListener('input', () => {
-    idInp.dataset.touched = '1';
-    idInp.value = idInp.value.toLowerCase().replace(/[^a-z0-9._]/g, '');
-  });
-  form.addEventListener('submit', e => {
-    e.preventDefault();
-    const name = form.elements.name.value.trim();
-    const id = idInp.value.trim();
-    if (name.length < 2) return toast('Nama min. 2 huruf');
-    if (id.length < 3) return toast('ID min. 3 karakter');
-    api.register({ name, id });
-    vibrate(15);
-    onDone();
-  });
-  return { el };
+  render();
+  return { el, destroy: () => clearInterval(resendT) };
 }
 
 /* ================= PROFILE ================= */

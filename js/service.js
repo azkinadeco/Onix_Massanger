@@ -239,10 +239,12 @@ setInterval(() => {
 export const api = {
   get ready() { return !!db?.me; },
 
-  register({ name, id }) {
-    db = migrate(buildSeed({ name, id, hue: Math.floor(Math.random() * 360) }));
+  register({ name, id, phone = null, avatar = null, hue }) {
+    db = migrate(buildSeed({ name, id, hue: hue ?? Math.floor(Math.random() * 360) }));
+    Object.assign(db.me, { phone, avatar });
     flush();
   },
+  idTaken(id) { return USERS.some(u => u.id === String(id).toLowerCase()); },
   reset() { db = null; localStorage.removeItem(KEY); },
 
   me() { return { ...db.me, id: db.me.id }; },

@@ -665,9 +665,55 @@ export function addStoryFlow() {
   sheet({
     title: 'Story baru', actions: [
       { label: 'Foto', icon: 'image', run: async () => { const f = await pickFile('image/*'); if (f) { const img = await compressImage(f, 900); api.addMyStory({ image: img.src, hue: 260 });  } } },
-      { label: 'Teks', icon: 'edit', run: async () => { const v = await promptBox({ title: 'Story', placeholder: 'lagi mood apa?', ok: 'Upload', max: 80 }); if (v) { api.addMyStory({ text: v, emoji: '✨', hue: COLORS[Math.floor(Math.random() * COLORS.length)] });  } } },
+      { label: 'Teks', icon: 'type', run: () => openStoryEditor() },
     ],
   });
+}
+
+export const STORY_BGS = [
+  'linear-gradient(160deg,#7C5CFF,#FF3D6E)', 'linear-gradient(160deg,#FF7A1A,#FFC53D)', 'linear-gradient(160deg,#00C6FF,#0072FF)',
+  'linear-gradient(160deg,#2EE6A6,#0FA36B)', 'linear-gradient(160deg,#FF9A9E,#FAD0C4)', 'linear-gradient(160deg,#232526,#414345)',
+  'linear-gradient(160deg,#F7971E,#FF3D6E,#7C5CFF)', '#111',
+];
+const STORY_FONTS = [['sans', 'Aa'], ['heavy', 'AA'], ['serif', 'Aa'], ['hand', 'Aa'], ['mono', 'Aa']];
+const storyFontSize = t => { const n = (t || '').length; return n < 20 ? 40 : n < 50 ? 32 : n < 100 ? 26 : 21; };
+
+export function openStoryEditor() {
+  let bg = Math.floor(Math.random() * STORY_BGS.length), font = 0;
+  const el = h(`<div class="story-editor">
+    <div class="se-top"><button class="icon-btn" data-x aria-label="Tutup">${icon('x')}</button><button class="se-font" data-sfont></button><button class="se-post" data-post disabled>${icon('send')}</button></div>
+    <div class="se-mid"><textarea maxlength="200" rows="1" placeholder="Ketik sesuatu…"></textarea></div>
+    <div class="se-bgs">${STORY_BGS.map((b, i) => `<button data-bg="${i}" style="background:${b}"></button>`).join('')}</div>
+  </div>`);
+  document.getElementById('app').appendChild(el);
+  const ta = $('textarea', el);
+  const paint = () => {
+    el.style.background = STORY_BGS[bg];
+    const [k, l] = STORY_FONTS[font];
+    ta.className = 'sf-' + k; $('[data-sfont]', el).className = 'se-font sf-' + k; $('[data-sfont]', el).textContent = l;
+    el.querySelectorAll('[data-bg]').forEach(b => b.classList.toggle('on', +b.dataset.bg === bg));
+    ta.style.fontSize = storyFontSize(ta.value) + 'px';
+    ta.style.height = 'auto'; if (ta.scrollHeight) ta.style.height = ta.scrollHeight + 'px';
+    $('[data-post]', el).disabled = !ta.value.trim();
+  };
+  const close = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 250); };
+  ta.addEventListener('input', paint);
+  el.addEventListener('click', e => {
+    if (e.target.closest('[data-x]')) return close();
+    const b = e.target.closest('[data-bg]');
+    if (b) { bg = +b.dataset.bg; vibrate(4); paint(); return; }
+    if (e.target.closest('[data-sfont]')) { font = (font + 1) % STORY_FONTS.length; vibrate(4); paint(); return; }
+    if (e.target.closest('[data-post]')) {
+      const text = ta.value.trim();
+      if (!text) return;
+      api.addMyStory({ text, bg, font: STORY_FONTS[font][0] });
+      close(); toast('Story diupload ✨');
+      return;
+    }
+    if (e.target === el || e.target.closest('.se-mid')) ta.focus();
+  });
+  paint();
+  requestAnimationFrame(() => { el.classList.add('show'); ta.focus(); });
 }
 
 export function openStories(uids, start = 0) {
@@ -693,10 +739,37 @@ export function openStories(uids, start = 0) {
     bars.innerHTML = s.items.map((_, k) => `<i><b style="width:${k < ii ? 100 : 0}%"></b></i>`).join('');
     head.innerHTML = `${avatar(u, 34)}<b>${esc(uid === ME ? 'Story kamu' : u.name)}</b><span>${ago(it.ts)}</span><button class="icon-btn" data-x>${icon('x')}</button>`;
     stage.style.setProperty('--h', it.hue ?? 260);
-    stage.innerHTML = it.image ? `<img src="${it.image}" alt="">` : `<div class="story-txt"><div class="se">${it.emoji || '✨'}</div><p>${esc(it.text || '')}</p></div>`;
-    bottom.innerHTML = uid === ME
-      ? `<div class="story-own"><span>${icon('eye', 'tiny')} ${s.views || 0}</span><button class="icon-btn" data-del aria-label="Hapus">${icon('trash')}</button></div>`
-      : `<div class="story-reply"><input placeholder="Balas…" maxlength="200" enterkeyhint="send"><button class="react-q" data-q="❤️">❤️</button><button class="react-q" data-q="😂">😂</button></div>`;
+    stage.style.background = it.bg != null ? STORY_BGS[it.bg] : '';
+    stage.innerHTML = it.image ? `<img src="${it.image}" alt="">`
+      : it.bg != null ? `<div class="story-txt sf-${it.font || 'sans'}"><p style="font-size:${storyFontSize(it.text)}px">${esc(it.text || '').replace(/\n/g, '<br>')}</p></div>`
+      : `<div class="story-txt"><div class="se">${it.emoji || '✨'}</div><p>${esc(it.text || '')}</p></div>`;
+    renderBottom();
+  }
+  function renderBottom() {
+    const uid = uids[ui], s = api.storyOf(uid), it = s?.items[ii];
+    if (!it) return;
+    if (uid === ME) {
+      const vs = it.viewers || [];
+      bottom.innerHTML = `<div class="story-own"><button class="sv-btn" data-views>${vs.length ? `<span class="sv-avs">${vs.slice(-3).map(v => avatar(api.user(v.id), 24)).join('')}</span>` : icon('eye', 'tiny')}<b>${vs.length}</b>${vs.some(v => v.react) ? `<span class="sv-r">${[...new Set(vs.filter(v => v.react).map(v => v.react))].slice(0, 3).join('')}</span>` : ''}</button><button class="icon-btn" data-del aria-label="Hapus">${icon('trash')}</button></div>`;
+    } else {
+      bottom.innerHTML = `<div class="story-reacts">${['😂', '😍', '🔥', '😮', '😢', '👏'].map(e => `<button data-q="${e}">${e}</button>`).join('')}</div>
+        <div class="story-reply"><input placeholder="Balas…" maxlength="200" enterkeyhint="send"><button class="react-like ${it.myReact === '❤️' ? 'on' : ''}" data-like aria-label="Suka">${icon('heart')}</button></div>`;
+    }
+  }
+  function burst(emo) {
+    const b = document.createElement('div');
+    b.className = 'story-burst';
+    b.innerHTML = Array.from({ length: 7 }, (_, k) => `<i style="--x:${Math.round(Math.random() * 160 - 80)}px;--d:${(k * .06).toFixed(2)}s">${emo}</i>`).join('');
+    el.appendChild(b); setTimeout(() => b.remove(), 1400);
+  }
+  function viewersSheet() {
+    const it = api.storyOf(ME)?.items[ii];
+    if (!it) return;
+    paused = true;
+    const vs = (it.viewers || []).slice().reverse();
+    sheet({
+      top: `<div class="sv-list"><div class="sv-head">${icon('eye')} <b>${vs.length}</b></div>${vs.length ? vs.map(v => { const u = api.user(v.id); return `<div class="list-item">${avatar(u, 42)}<div class="li-main"><div class="li-name">${esc(u?.name || '')}</div><div class="li-sub">${ago(v.ts)}</div></div>${v.react ? `<span class="sv-react">${v.react}</span>` : ''}</div>`; }).join('') : `<div class="sv-empty">👀</div>`}</div>`,
+    }).then(() => { paused = false; });
   }
   function next() { const s = api.storyOf(uids[ui]); if (ii < s.items.length - 1) ii++; else if (ui < uids.length - 1) { ui++; ii = 0; } else return close(); show(); }
   function prev() { if (ii > 0) ii--; else if (ui > 0) { ui--; ii = 0; } show(); }
@@ -709,7 +782,7 @@ export function openStories(uids, start = 0) {
     if (elapsed >= DUR) next();
     raf = requestAnimationFrame(loop);
   }
-  function close() { cancelAnimationFrame(raf); el.classList.remove('show'); setTimeout(() => el.remove(), 250); }
+  function close() { cancelAnimationFrame(raf); offStories?.(); el.classList.remove('show'); setTimeout(() => el.remove(), 250); }
 
   let downT = 0;
   el.addEventListener('pointerdown', e => { if (e.target.closest('.story-bottom,.story-head')) return; downT = Date.now(); paused = true; });
@@ -722,19 +795,27 @@ export function openStories(uids, start = 0) {
   el.addEventListener('click', async e => {
     if (e.target.closest('[data-x]')) return close();
     if (e.target.closest('[data-del]')) { paused = true; if (await confirmBox({ title: 'Hapus story?', ok: 'Hapus', danger: true })) { api.deleteMyStory(); close(); } else paused = false; return; }
+    if (e.target.closest('[data-views]')) return viewersSheet();
     const q = e.target.closest('[data-q]');
-    if (q) { replyStory(q.dataset.q); }
+    if (q) { burst(q.dataset.q); replyStory(q.dataset.q, true); e.target.closest('input')?.blur(); }
+    if (e.target.closest('[data-like]')) {
+      const uid = uids[ui], it = api.storyOf(uid).items[ii];
+      const on = api.reactStory(uid, it.id, '❤️');
+      if (on) { burst('❤️'); replyStory('❤️', true); }
+      vibrate(8); renderBottom();
+    }
   });
-  function replyStory(text) {
+  function replyStory(text, quiet) {
     const uid = uids[ui];
     const it = api.storyOf(uid).items[ii];
     const c = api.directWith(uid);
     api.send(c.id, { type: 'text', text, replyTo: { id: 'story', name: 'Story ' + firstName(api.user(uid).name), text: it.text || '📷 Foto' } });
-    toast('Terkirim 💌');
+    if (!quiet) toast('Terkirim 💌');
     vibrate(8);
   }
-  el.addEventListener('focusin', () => { paused = true; });
-  el.addEventListener('focusout', () => { paused = false; });
+  const offStories = bus.on('stories', () => { if (uids[ui] === ME) renderBottom(); });
+  el.addEventListener('focusin', () => { paused = true; el.classList.add('typing'); });
+  el.addEventListener('focusout', () => { paused = false; setTimeout(() => el.classList.remove('typing'), 150); });
   el.addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target.matches('.story-reply input')) { const v = e.target.value.trim(); if (v) { replyStory(v); e.target.value = ''; e.target.blur(); } }
   });

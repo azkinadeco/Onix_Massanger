@@ -608,10 +608,26 @@ export const api = {
   markStorySeen(userId) { const s = db.stories.find(x => x.userId === userId); if (s && !s.seen) { s.seen = true; save(); bus.emit('stories'); } },
   addMyStory(item) {
     db.myStory ||= { userId: ME, seen: true, items: [], views: 0 };
-    db.myStory.items.push({ id: uid('st'), ts: Date.now(), ...item });
-    db.myStory.views = 0;
+    const it = { id: uid('st'), ts: Date.now(), viewers: [], ...item };
+    db.myStory.items.push(it);
     save(); bus.emit('stories');
-    setTimeout(() => { if (db.myStory) { db.myStory.views += 3 + Math.floor(Math.random() * 6); save(); } }, 5000);
+    // simulasi: teman-teman lihat & kasih reaksi
+    const who = db.friends.filter(id => db.users[id] && !db.users[id].official).sort(() => Math.random() - .5).slice(0, rand(3, 7));
+    who.forEach((id, i) => setTimeout(() => {
+      if (!db.myStory?.items.includes(it)) return;
+      const react = Math.random() < .4 ? pick(['❤️', '🔥', '😂', '😍', '👏']) : null;
+      it.viewers.push({ id, ts: Date.now(), react });
+      db.myStory.views = new Set(db.myStory.items.flatMap(x => (x.viewers || []).map(v => v.id))).size;
+      if (react) addActivity('like', id, { story: it.id }, 'story');
+      save(); bus.emit('stories');
+    }, 2500 + i * rand(1200, 3500)));
+  },
+  reactStory(userId, itemId, emoji) {
+    const s = api.storyOf(userId), it = s?.items.find(x => x.id === itemId);
+    if (!it) return;
+    it.myReact = it.myReact === emoji ? null : emoji;
+    save(); bus.emit('stories');
+    return it.myReact;
   },
   deleteMyStory() { db.myStory = null; save(); bus.emit('stories'); },
 

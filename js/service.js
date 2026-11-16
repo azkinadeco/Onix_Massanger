@@ -12,7 +12,7 @@
  *  stories, calls, settings, presence, notify({chat,msg}),
  *  incoming-call({chatId,video}), storage-full
  */
-import { buildSeed, USERS, PLACES } from './seed.js';
+import { buildSeed, USERS, PLACES, DEFAULT_PACKS, STORE_PACKS } from './seed.js';
 
 export const ME = 'me';
 const KEY = 'onix:v1';
@@ -52,7 +52,22 @@ try {
 /* ---------- migrasi data lama -> fitur baru ---------- */
 function migrate(d) {
   d.keep ||= [];
+  d.notes ||= {};
+  d.scheduled ||= [];
+  d.packs ||= DEFAULT_PACKS.slice();
   d.settings.fontSize ||= 'm';
+  if (!d.featuresV4) {
+    d.featuresV4 = true;
+    const t = Date.now(), day = 864e5;
+    const mmdd = ts => { const x = new Date(ts); return `${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+    const bd = { nadia: mmdd(t), kezia: mmdd(t + 3 * day), dimas: mmdd(t + 9 * day), salsa: mmdd(t + 20 * day), raka: mmdd(t + 40 * day) };
+    Object.entries(bd).forEach(([id, v]) => { if (d.users[id]) d.users[id].birthday = v; });
+    if (d.chats.g_project) d.notes.g_project = [
+      { id: 'n1', from: 'raka', ts: t - 2 * day, text: '📌 Pembagian tugas laporan\n• Bab 1: Raka\n• Bab 2: Dimas\n• Bab 3 + kesimpulan: kamu\n• Slide: Farel\n• Revisi & dapus: Yoga' },
+      { id: 'n2', from: 'yoga', ts: t - day, text: 'Format: Times New Roman 12, spasi 1.5, margin 4-3-3-3 ✍️' },
+    ];
+    if (d.chats.g_bestie) d.notes.g_bestie = [{ id: 'n3', from: 'salsa', ts: t - 3 * day, text: '🎤 List lagu karaoke:\n1. APT.\n2. Dynamite\n3. Sial\n4. Monokrom' }];
+  }
   if (!('passcode' in d.settings)) d.settings.passcode = null;
   Object.values(d.chats).forEach(c => { c.wallpaper ||= 'default'; });
   if (!d.featuresV2) {
@@ -104,6 +119,8 @@ function replyFor(msg) {
   if (msg.type === 'voice') return { text: pick(['bentar aku dengerin dulu 🎧', 'oke paham', 'wkwk suaranya lucu']) };
   if (msg.type === 'video') return { text: pick(['wkwk videonya 😭', 'bentar aku tonton dulu 🎬', 'LUCU BANGET']) };
   if (msg.type === 'file') return { text: pick(['oke aku download ya 📥', 'makasih filenya 🙏', 'sip udah masuk']) };
+  if (msg.type === 'event') return { text: pick(['aku ikut! 🙋', 'catet ya tanggalnya 📅', 'gas, nanti ingetin ya']) };
+  if (/hbd|ulang tahun|ultah|happy birthday/i.test(msg.text || '')) return { text: pick(['MAKASIHHH 🥹🫶', 'aaa makasih banyak!! 🎂', 'thank youuu 💖']) };
   if (msg.type === 'poll') return { text: pick(['udah aku vote ya ✅', 'vote done 🗳️', 'aku pilih yg kedua wkwk']) };
   if (/@\w/.test(msg.text || '') && Math.random() < 0.5) return { text: pick(['kenapa manggil aku? 👀', 'iyaa kenapa?', 'hadir! 🙋']) };
   if (msg.type === 'location') return { text: pick(['oke otw kesana', 'deket dari aku tuh', 'share loc diterima 📍']) };
@@ -190,6 +207,17 @@ function scheduleResponses(chatId, msg) {
 
 /* ---------- simulasi aktivitas ---------- */
 let nextIncoming = Date.now() + rand(40e3, 70e3);
+setInterval(() => {
+  if (!db) return;
+  const now = Date.now();
+  const due = db.scheduled.filter(x => x.at <= now);
+  if (due.length) {
+    db.scheduled = db.scheduled.filter(x => x.at > now);
+    due.forEach(x => { if (db.chats[x.chatId]) api.send(x.chatId, x.payload); });
+    bus.emit('scheduled');
+  }
+}, 3000);
+
 setInterval(() => {
   if (!db) return;
   // presence acak
@@ -373,6 +401,7 @@ export const api = {
       keys.forEach(k => { if (msg[k] !== undefined && msg[k] !== null) payload[k] = msg[k]; });
       if (msg.type === 'poll') { payload.type = 'text'; payload.text = '📊 ' + msg.poll.q; }
       if (msg.type === 'note') payload.type = 'text';
+      if (msg.type === 'event') { payload.type = 'text'; payload.text = '📅 ' + msg.event.title; }
       api.send(cid, payload);
     });
   },
@@ -407,6 +436,62 @@ export const api = {
     if (!had) o.votes.push(ME);
     emitChat(chatId);
   },
+
+  /* Event */
+  createEvent(chatId, { title, at, place }) {
+    const m = api.send(chatId, { type: 'event', event: { title, at, place, going: [ME], notGoing: [] } });
+    db.chats[chatId].members.filter(id => id !== ME && db.users[id] && !db.users[id].official).forEach(id => {
+      if (Math.random() < 0.15) return;
+      setTimeout(() => { (Math.random() < 0.75 ? m.event.going : m.event.notGoing).push(id); emitChat(chatId); }, rand(2500, 10000));
+    });
+    return m;
+  },
+  rsvp(chatId, msgId, yes) {
+    const m = db.messages[chatId].find(x => x.id === msgId);
+    if (!m?.event) return;
+    const e = m.event;
+    const wasYes = e.going.includes(ME), wasNo = e.notGoing.includes(ME);
+    e.going = e.going.filter(x => x !== ME); e.notGoing = e.notGoing.filter(x => x !== ME);
+    if (yes && !wasYes) e.going.push(ME);
+    if (!yes && !wasNo) e.notGoing.push(ME);
+    emitChat(chatId);
+  },
+
+  /* Pesan terjadwal */
+  schedule(chatId, payload, at) { db.scheduled.push({ id: uid('sc'), chatId, payload, at }); save(); bus.emit('scheduled'); },
+  scheduledIn(chatId) { return db.scheduled.filter(x => x.chatId === chatId).sort((a, b) => a.at - b.at); },
+  cancelScheduled(id) { db.scheduled = db.scheduled.filter(x => x.id !== id); save(); bus.emit('scheduled'); },
+  sendScheduledNow(id) { const x = db.scheduled.find(s => s.id === id); if (!x) return; api.cancelScheduled(id); api.send(x.chatId, x.payload); },
+
+  /* Catatan grup */
+  notes(chatId) { return (db.notes[chatId] || []).slice().sort((a, b) => b.ts - a.ts); },
+  addNote(chatId, text) {
+    (db.notes[chatId] ||= []).push({ id: uid('n'), from: ME, ts: Date.now(), text });
+    db.messages[chatId].push(newMsg(chatId, ME, { type: 'system', text: '📝 Kamu menambah catatan' }));
+    emitChat(chatId); bus.emit('notes', chatId);
+  },
+  updateNote(chatId, id, text) { const n = (db.notes[chatId] || []).find(x => x.id === id); if (n) { n.text = text; n.ts = Date.now(); save(); bus.emit('notes', chatId); } },
+  deleteNote(chatId, id) { db.notes[chatId] = (db.notes[chatId] || []).filter(x => x.id !== id); save(); bus.emit('notes', chatId); },
+
+  /* Sticker */
+  packs() { return db.packs; },
+  storePacks() { return STORE_PACKS; },
+  ownsPack(id) { return db.packs.includes(id); },
+  addPack(id) { if (!db.packs.includes(id)) db.packs.push(id); save(); bus.emit('packs'); },
+  removePack(id) { db.packs = db.packs.filter(x => x !== id); save(); bus.emit('packs'); },
+
+  /* Ulang tahun */
+  birthdays() {
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    return api.friends().filter(u => u.birthday).map(u => {
+      const [mm, dd] = u.birthday.split('-').map(Number);
+      let d = new Date(t.getFullYear(), mm - 1, dd);
+      if (d < t) d = new Date(t.getFullYear() + 1, mm - 1, dd);
+      return { user: u, days: Math.round((d - t) / 864e5) };
+    }).filter(x => x.days <= 14).sort((a, b) => a.days - b.days);
+  },
+  wished(userId) { const y = new Date().getFullYear(); return db.me.wished?.[userId] === y; },
+  markWished(userId) { (db.me.wished ||= {})[userId] = new Date().getFullYear(); save(); bus.emit('friends'); },
 
   /* Keep */
   keep() { return db.keep.slice().sort((a, b) => b.ts - a.ts); },

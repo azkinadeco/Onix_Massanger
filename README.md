@@ -20,6 +20,13 @@ Biar terasa seperti aplikasi: Safari → tombol Share → **Add to Home Screen**
 - **Panggilan**: telepon & video call (UI + kamera depan), riwayat, telepon masuk (simulasi)
 - **Kamu**: edit profil + foto, mode terang/gelap/auto, 5 warna aksen, notifikasi, mode demo, reset
 
+### Baru di v0.4
+- **Event** di chat (tanggal, jam, tempat) + RSVP Ikut/Nggak
+- **Pesan terjadwal**: tahan tombol kirim → pilih waktu
+- **Toko sticker**: 6 paket gratis (2 animasi), bisa download/hapus
+- **Catatan grup** (Notes), **ulang tahun teman** di Home + kirim ucapan 1 tap
+- **Cover profil** & tanggal lahir di Edit profil
+
 ### Baru di v0.3
 - **Kirim video & file** (maks 50 MB, disimpan di IndexedDB), video ada thumbnail + durasi
 - **Panggilan grup**: tampilan grid peserta, teman gabung satu-satu, indikator yang lagi ngomong

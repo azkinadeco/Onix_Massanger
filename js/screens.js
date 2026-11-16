@@ -4,6 +4,7 @@ import { icon } from './icons.js';
 import { router, bindActs, navbar, toast, sheet, confirmBox, promptBox } from './ui.js';
 import { userAvatar, chatAvatar, presence, verified, userRow, postCard, empty } from './views.js';
 import { openChat, startCall } from './chat.js';
+import { NotesScreen } from './features.js';
 
 /* ================= ONBOARDING ================= */
 export function OnboardingScreen(onDone) {
@@ -53,7 +54,7 @@ export function ProfileScreen(uid) {
     const fr = api.isFriend(uid), fav = api.isFav(uid), blocked = api.isBlocked(uid);
     const story = api.storyOf(uid);
     el.innerHTML = `
-      <div class="profile-cover" style="--h:${u.hue}">
+      <div class="profile-cover ${u.cover ? 'has-img' : ''}" style="${coverStyle(u)}">
         <header class="navbar clear"><button class="icon-btn" data-act="back">${icon('back')}</button><div></div><div class="nav-right"><button class="icon-btn" data-act="more">${icon('more')}</button></div></header>
       </div>
       <div class="profile-body">
@@ -61,7 +62,7 @@ export function ProfileScreen(uid) {
         <h1>${esc(u.name)}${u.official ? verified() : ''}</h1>
         <div class="pid">@${esc(u.id)}</div>
         <p class="pstatus">${esc(u.status || '')}</p>
-        <div class="presence ${u.online ? 'on' : ''}">${esc(presence(u))}</div>
+        <div class="presence ${u.online ? 'on' : ''}">${esc(presence(u))}${u.birthday ? `<span class="bd-pill">🎂 ${bdayLabel(u.birthday)}</span>` : ''}</div>
         ${blocked ? `<button class="btn ghost wide" data-act="unblock">Buka blokir</button>`
           : fr || u.official ? `<div class="pactions">
             <button data-act="chat">${icon('chat')}<span>Chat</span></button>
@@ -99,7 +100,7 @@ function MyProfileScreen() {
     const me = api.me();
     const st = api.storyOf(ME);
     el.innerHTML = `
-      <div class="profile-cover" style="--h:${me.hue}">
+      <div class="profile-cover ${me.cover ? 'has-img' : ''}" style="${coverStyle(me)}">
         <header class="navbar clear"><button class="icon-btn" data-act="back">${icon('back')}</button><div></div><div class="nav-right"><button class="icon-btn" data-act="qr">${icon('qr')}</button></div></header>
       </div>
       <div class="profile-body">
@@ -127,41 +128,59 @@ function MyProfileScreen() {
 
 export function EditProfileScreen() {
   const me = api.me();
-  let avatarSrc = me.avatar;
-  const el = h(`<div class="sub-screen">
+  let avatarSrc = me.avatar, coverSrc = me.cover || null;
+  const el = h(`<div class="sub-screen edit-profile">
     ${navbar('Edit profil', `<button class="text-btn" data-act="save">Simpan</button>`)}
-    <div class="content pad">
-      <div class="edit-av"><button data-act="photo">${avatar(me, 108)}<span class="cam-badge">${icon('camera')}</span></button></div>
-      <label class="lbl">Nama</label>
-      <input class="field" name="name" maxlength="30" value="${esc(me.name)}">
-      <label class="lbl">Status <span class="counter"></span></label>
-      <input class="field" name="status" maxlength="60" value="${esc(me.status || '')}" placeholder="lagi apa nih?">
-      <label class="lbl">Onix ID</label>
-      <div class="field readonly">@${esc(me.id)}</div>
+    <div class="content">
+      <button class="edit-cover" data-act="cover"><span class="cam-badge">${icon('camera')}</span></button>
+      <div class="edit-av"><button data-act="photo">${avatar(me, 96)}<span class="cam-badge">${icon('camera')}</span></button><small>@${esc(me.id)}</small></div>
+      <div class="pad">
+        <label class="lbl">Nama</label>
+        <input class="field" name="name" maxlength="30" value="${esc(me.name)}">
+        <label class="lbl">Status <span class="counter"></span></label>
+        <input class="field" name="status" maxlength="60" value="${esc(me.status || '')}" placeholder="lagi apa nih?">
+        <label class="lbl">🎂 Ulang tahun</label>
+        <input class="field" type="date" name="bday" value="${esc(me.birthdayFull || '')}">
+      </div>
     </div>
   </div>`);
-  const name = $('[name=name]', el), status = $('[name=status]', el), counter = $('.counter', el);
+  const name = $('[name=name]', el), status = $('[name=status]', el), counter = $('.counter', el), cover = $('.edit-cover', el);
   const upd = () => { counter.textContent = `${status.value.length}/60`; };
   status.addEventListener('input', upd); upd();
-  const refreshAv = () => { $('.edit-av button', el).innerHTML = avatar({ ...me, name: name.value || me.name, avatar: avatarSrc }, 108) + `<span class="cam-badge">${icon('camera')}</span>`; };
+  const paintCover = () => {
+    cover.style.setProperty('--h', me.hue);
+    cover.style.backgroundImage = coverSrc ? `url("${coverSrc}")` : '';
+    cover.classList.toggle('has-img', !!coverSrc);
+  };
+  paintCover();
+  const refreshAv = () => { $('.edit-av button', el).innerHTML = avatar({ ...me, name: name.value || me.name, avatar: avatarSrc }, 96) + `<span class="cam-badge">${icon('camera')}</span>`; };
   name.addEventListener('input', refreshAv);
   bindActs(el, {
     photo: () => sheet({
-      title: 'Foto profil', actions: [
-        { label: 'Pilih dari galeri', icon: 'image', run: async () => { const f = await pickFile('image/*'); if (f) { avatarSrc = (await compressImage(f, 400, 0.8)).src; refreshAv(); } } },
+      actions: [
+        { label: 'Pilih foto', icon: 'image', run: async () => { const f = await pickFile('image/*'); if (f) { avatarSrc = (await compressImage(f, 400, 0.8)).src; refreshAv(); } } },
         ...(avatarSrc ? [{ label: 'Hapus foto', icon: 'trash', danger: true, run: () => { avatarSrc = null; refreshAv(); } }] : []),
+      ],
+    }),
+    cover: () => sheet({
+      actions: [
+        { label: 'Pilih cover', icon: 'image', run: async () => { const f = await pickFile('image/*'); if (f) { coverSrc = (await compressImage(f, 900, 0.75)).src; paintCover(); } } },
+        ...(coverSrc ? [{ label: 'Hapus cover', icon: 'trash', danger: true, run: () => { coverSrc = null; paintCover(); } }] : []),
       ],
     }),
     save: () => {
       const n = name.value.trim();
       if (n.length < 2) return toast('Nama min. 2 huruf');
-      api.updateMe({ name: n, status: status.value.trim(), avatar: avatarSrc });
-      
+      const bd = $('[name=bday]', el).value;
+      api.updateMe({ name: n, status: status.value.trim(), avatar: avatarSrc, cover: coverSrc, birthdayFull: bd || null, birthday: bd ? bd.slice(5) : null });
       router.back();
     },
   });
   return { el };
 }
+
+export const coverStyle = u => `--h:${u.hue}${u.cover ? `;background-image:url('${u.cover}')` : ''}`;
+const bdayLabel = mmdd => { if (!mmdd) return ''; const [m, d] = mmdd.split('-').map(Number); return new Date(2000, m - 1, d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }); };
 
 /* ================= ADD FRIEND ================= */
 export function AddFriendScreen(initial = 'search') {
@@ -335,6 +354,7 @@ export function GroupInfoScreen(chatId) {
         <button data-act="album">${icon('grid')}<span>Album</span></button>
       </div>
       ${imgs.length ? `<div class="section-h">Foto <button class="link" data-act="album">Lihat semua</button></div><div class="mini-album">${imgs.slice(-4).reverse().map(m => `<button data-act="img" data-src="${m.id}"><img src="${m.src}" alt=""></button>`).join('')}</div>` : ''}
+      <div class="list-item slim" data-act="notes"><span class="round-ic">${icon('note')}</span><div class="li-main"><div class="li-name">Catatan</div></div><span class="count">${api.notes(chatId).length || ''}</span>${icon('chevronRight', 'tiny')}</div>
       <div class="section-h">Anggota</div>
       <div class="list-item" data-act="add-members"><span class="round-ic">${icon('userPlus')}</span><div class="li-main"><div class="li-name accent-txt">Tambah anggota</div></div></div>
       ${c.members.map(id => { const u = api.user(id); return id === ME ? `<div class="list-item">${avatar(u, 44)}<div class="li-main"><div class="li-name">${esc(u.name)} <span class="pill">Kamu</span></div></div></div>` : userRow(u, { sub: presence(u) }); }).join('')}
@@ -346,6 +366,7 @@ export function GroupInfoScreen(chatId) {
     video: () => startCall(chatId, true),
     mute: () => api.toggleMute(chatId),
     album: () => router.push(AlbumScreen(chatId)),
+    notes: () => router.push(NotesScreen(chatId)),
     img: t => { const m = api.images(chatId).find(x => x.id === t.dataset.src); if (m) openImage(m.src); },
     profile: t => router.push(ProfileScreen(t.dataset.id)),
     'add-members': () => router.push(FriendPicker({
@@ -358,7 +379,7 @@ export function GroupInfoScreen(chatId) {
       history.go(-2);
     },
   });
-  const offs = [bus.on('chats', render), bus.on('messages', id => id === chatId && render())];
+  const offs = [bus.on('chats', render), bus.on('messages', id => id === chatId && render()), bus.on('notes', id => id === chatId && render())];
   render();
   return { el, destroy: () => offs.forEach(f => f()) };
 }

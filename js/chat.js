@@ -3,10 +3,10 @@ import { $, h, esc, linkify, avatar, hm, dayLabel, isSameDay, dur, hash, vibrate
 import { icon } from './icons.js';
 import { router, bindActs, onLongPress, sheet, toast, confirmBox } from './ui.js';
 import { chatAvatar, presence, verified } from './views.js';
-import { STICKERS, STICKER_TABS, EMOJIS, ANIM_STICKERS } from './seed.js';
+import { STICKERS, STICKER_TABS, EMOJIS, ANIM_STICKERS, STORE_PACKS } from './seed.js';
 import { putMedia, mediaURL, videoInfo, fmtSize, fileExt } from './media.js';
 import { ProfileScreen, GroupInfoScreen, AlbumScreen, openImage } from './screens.js';
-import { forwardMessage, keepFromMessage, PollComposeScreen, wallpaperSheet } from './features.js';
+import { forwardMessage, keepFromMessage, PollComposeScreen, wallpaperSheet, EventComposeScreen, NotesScreen, StickerStoreScreen, scheduleSheet, fmtWhen } from './features.js';
 
 const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // jalankan fn hanya di bagian teks (bukan di dalam tag HTML)
@@ -19,6 +19,18 @@ export function openChat(chatId) {
 }
 
 const REACTS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+
+// isi & cover paket sticker -> [[emoji, anim?], ...]
+function packItems(id) {
+  if (id === 'anim') return ANIM_STICKERS;
+  if (STICKERS[id]) return STICKERS[id].map(s => [s]);
+  const p = STORE_PACKS.find(x => x.id === id);
+  return p ? p.stickers.map(s => (Array.isArray(s) ? s : [s])) : [];
+}
+function packCover(id) {
+  const t = STICKER_TABS.find(x => x[0] === id);
+  return t ? t[1] : STORE_PACKS.find(x => x.id === id)?.cover || '❓';
+}
 
 function waveBars(id, n = 26) {
   let x = hash(id);
@@ -53,6 +65,7 @@ function ChatScreen(chatId) {
     <button class="jump" hidden>${icon('chevronDown')}<b></b></button>
     <div class="composer-wrap">
       <div class="mention-list" hidden></div>
+      <button class="sched-bar" data-act="sched-list" hidden></button>
       <div class="reply-bar" hidden></div>
       <div class="rec-bar" hidden></div>
       <div class="composer">
@@ -153,6 +166,15 @@ function ChatScreen(chatId) {
       body = `<div class="bubble loc" data-act="loc" data-mid="${m.id}"><div class="map"><span class="map-pin">${icon('location')}</span></div><div class="loc-txt"><b>${esc(m.title)}</b><small>${esc(m.address)}</small></div></div>`;
     } else if (m.type === 'poll') {
       body = pollHtml(m);
+    } else if (m.type === 'event') {
+      const e = m.event, d = new Date(e.at);
+      const mon = d.toLocaleDateString('id-ID', { month: 'short' });
+      const meGo = e.going.includes(ME), meNo = e.notGoing.includes(ME);
+      body = `<div class="bubble event">
+        <div class="ev-top"><div class="ev-date"><small>${esc(mon)}</small><b>${d.getDate()}</b></div><div class="ev-info"><b>${esc(e.title)}</b><small>${icon('clock', 'tiny')} ${esc(fmtWhen(e.at))}</small>${e.place ? `<small>${icon('location', 'tiny')} ${esc(e.place)}</small>` : ''}</div></div>
+        <div class="ev-people">${e.going.slice(0, 5).map(id => avatar(api.user(id), 22)).join('')}<span>${e.going.length} ikut</span></div>
+        <div class="ev-btns"><button class="${meGo ? 'on' : ''}" data-act="rsvp" data-mid="${m.id}" data-v="1">${icon('check', 'tiny')} Ikut</button><button class="${meNo ? 'on no' : ''}" data-act="rsvp" data-mid="${m.id}" data-v="0">${icon('x', 'tiny')} Nggak</button></div>
+      </div>`;
     } else if (!m.replyTo && !m.forwarded && isJumbo(m.text)) {
       bare = true; body = `<div class="jumbo">${esc(m.text)}</div>`;
     } else {
@@ -242,6 +264,26 @@ function ChatScreen(chatId) {
     sendBtn.classList.toggle('active', has);
   }
   ta.addEventListener('input', () => { autosize(); checkMention(); });
+  // tahan tombol kirim = jadwalkan
+  let holdT = null, held = false;
+  sendBtn.addEventListener('pointerdown', () => {
+    held = false;
+    if (!ta.value.trim() || editing) return;
+    holdT = setTimeout(() => {
+      held = true; vibrate(12);
+      const text = ta.value.trim();
+      scheduleSheet(at => { api.schedule(chatId, withReply({ type: 'text', text }), at); ta.value = ''; autosize(); });
+    }, 450);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => sendBtn.addEventListener(ev, () => clearTimeout(holdT)));
+  sendBtn.addEventListener('click', e => { if (held) { e.stopImmediatePropagation(); held = false; } }, true);
+  sendBtn.addEventListener('contextmenu', e => e.preventDefault());
+  const schedBar = $('.sched-bar', el);
+  function renderSched() {
+    const list = api.scheduledIn(chatId);
+    schedBar.hidden = !list.length;
+    if (list.length) schedBar.innerHTML = `${icon('clock', 'tiny')} ${list.length} terjadwal · ${esc(fmtWhen(list[0].at))}`;
+  }
   let mentionQ = null;
   function checkMention() {
     const ch = c();
@@ -323,16 +365,18 @@ function ChatScreen(chatId) {
   }
   function renderPanel() {
     if (panelMode === 'plus') {
-      const items = [['photo', 'image', 'Foto', '#7C5CFF'], ['camera', 'camera', 'Kamera', '#FF3D81'], ['video', 'film', 'Video', '#14B8C4'], ['file', 'file', 'File', '#5B6CFF'], ['location', 'location', 'Lokasi', '#10B26C'], ['voice', 'mic', 'Voice', '#FF7A1A'], ['poll', 'poll', 'Polling', '#E1A100'], ['vcall', 'video', 'Video call', '#2E7BFF']];
+      const items = [['photo', 'image', 'Foto', '#7C5CFF'], ['camera', 'camera', 'Kamera', '#FF3D81'], ['video', 'film', 'Video', '#14B8C4'], ['file', 'file', 'File', '#5B6CFF'], ['location', 'location', 'Lokasi', '#10B26C'], ['voice', 'mic', 'Voice', '#FF7A1A'], ['poll', 'poll', 'Polling', '#E1A100'], ['event', 'calendar', 'Event', '#2E7BFF']];
       panel.innerHTML = `<div class="attach-grid">${items.map(([a, ic, label, col]) => `<button data-act="att-${a}"><span style="--c:${col}">${icon(ic)}</span><small>${label}</small></button>`).join('')}</div>`;
     } else if (panelMode === 'stickers') {
+      const owned = api.packs();
+      if (stickerTab !== 'emoji' && !owned.includes(stickerTab)) stickerTab = owned[0] || 'emoji';
       const isEmoji = stickerTab === 'emoji';
+      const items = isEmoji ? [] : packItems(stickerTab);
       const grid = isEmoji
         ? `<div class="emoji-grid">${EMOJIS.map(e => `<button data-act="emoji" data-e="${e}">${e}</button>`).join('')}</div>`
-        : stickerTab === 'anim'
-          ? `<div class="sticker-grid">${ANIM_STICKERS.map(([s, a]) => `<button data-act="sticker" data-s="${s}" data-a="${a}"><span class="anim-${a}">${s}</span></button>`).join('')}</div>`
-          : `<div class="sticker-grid">${STICKERS[stickerTab].map(s => `<button data-act="sticker" data-s="${s}">${s}</button>`).join('')}</div>`;
-      panel.innerHTML = `<div class="sticker-wrap">${grid}</div><div class="sticker-tabs">${STICKER_TABS.map(([k, e]) => `<button class="${k === stickerTab ? 'on' : ''}" data-act="stab" data-k="${k}">${e}</button>`).join('')}<button class="${isEmoji ? 'on' : ''}" data-act="stab" data-k="emoji">😀</button></div>`;
+        : `<div class="sticker-grid">${items.map(([s, a]) => a ? `<button data-act="sticker" data-s="${s}" data-a="${a}"><span class="anim-${a}">${s}</span></button>` : `<button data-act="sticker" data-s="${s}">${s}</button>`).join('')}</div>`;
+      const tabs = owned.map(k => `<button class="${k === stickerTab ? 'on' : ''}" data-act="stab" data-k="${k}">${packCover(k)}</button>`).join('');
+      panel.innerHTML = `<div class="sticker-wrap">${grid}</div><div class="sticker-tabs"><div class="st-scroll">${tabs}<button class="${isEmoji ? 'on' : ''}" data-act="stab" data-k="emoji">😀</button></div><button class="st-store" data-act="store" aria-label="Toko sticker">${icon('store')}</button></div>`;
     }
   }
 
@@ -503,6 +547,7 @@ function ChatScreen(chatId) {
     else acts.push({ label: 'Lihat profil', icon: 'user', run: () => router.push(ProfileScreen(api.peerOf(ch).id)) });
     acts.push({ label: 'Video call', icon: 'video', run: () => startCall(chatId, true) });
     acts.push({ label: 'Cari', icon: 'search', run: openSearch });
+    if (ch.type === 'group') acts.push({ label: 'Catatan', icon: 'note', run: () => router.push(NotesScreen(chatId)) });
     acts.push({ label: 'Album', icon: 'grid', run: () => router.push(AlbumScreen(chatId)) });
     acts.push({ label: 'Wallpaper', icon: 'palette', run: () => wallpaperSheet(chatId) });
     acts.push({ label: ch.muted ? 'Bunyikan' : 'Bisukan', icon: ch.muted ? 'bell' : 'bellOff', run: () => { api.toggleMute(chatId); renderHeader(); } });
@@ -616,6 +661,20 @@ function ChatScreen(chatId) {
       hideMentions(); autosize(); ta.focus();
     },
     'att-poll': () => { closePanel(); router.push(PollComposeScreen(chatId)); },
+    'att-event': () => { closePanel(); router.push(EventComposeScreen(chatId)); },
+    rsvp: t => { api.rsvp(chatId, t.dataset.mid, t.dataset.v === '1'); vibrate(8); },
+    store: () => router.push(StickerStoreScreen()),
+    'sched-list': () => {
+      const list = api.scheduledIn(chatId);
+      sheet({
+        top: `<div class="sheet-list">${list.map(x => `<div class="list-item sched-item"><span class="round-ic">${icon('clock')}</span><div class="li-main"><div class="li-name">${esc(x.payload.text || '')}</div><div class="li-sub">${esc(fmtWhen(x.at))}</div></div><button class="icon-btn sm" data-now="${x.id}" aria-label="Kirim sekarang">${icon('send')}</button><button class="icon-btn sm danger-txt" data-del="${x.id}" aria-label="Batal">${icon('trash')}</button></div>`).join('')}</div>`,
+        onMount: (s, close) => s.addEventListener('click', e => {
+          const n = e.target.closest('[data-now]'), d = e.target.closest('[data-del]');
+          if (n) { api.sendScheduledNow(n.dataset.now); close(); }
+          if (d) { api.cancelScheduled(d.dataset.del); close(); }
+        }),
+      });
+    },
     info: () => { const ch = c(); router.push(ch.type === 'group' ? GroupInfoScreen(chatId) : ProfileScreen(api.peerOf(ch).id)); },
     call: () => startCall(chatId, false),
     video: () => startCall(chatId, true),
@@ -664,6 +723,8 @@ function ChatScreen(chatId) {
     bus.on('chats', renderHeader),
     bus.on('presence', renderHeader),
     bus.on('wallpaper', id => id === chatId && renderHeader()),
+    bus.on('scheduled', renderSched),
+    bus.on('packs', () => panelMode === 'stickers' && renderPanel()),
   ];
   const onVis = () => { if (!document.hidden) api.markRead(chatId); };
   document.addEventListener('visibilitychange', onVis);
@@ -673,6 +734,7 @@ function ChatScreen(chatId) {
   renderHeader();
   renderMsgs();
   renderTyping();
+  renderSched();
 
   return {
     el, chatId,

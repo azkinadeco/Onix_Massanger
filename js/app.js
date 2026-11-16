@@ -5,7 +5,7 @@ import { router, bindActs, onLongPress, toast, sheet, confirmBox, banner, initVi
 import { userAvatar, chatAvatar, chatRow, userRow, postCard, empty, preview } from './views.js';
 import { openChat, startCall } from './chat.js';
 import { clearMedia } from './media.js';
-import { KeepScreen, ArchivedScreen, setupPasscode, lockApp } from './features.js';
+import { KeepScreen, ArchivedScreen, setupPasscode, lockApp, StickerStoreScreen } from './features.js';
 import {
   OnboardingScreen, ProfileScreen, EditProfileScreen, AddFriendScreen, NewGroupScreen, FriendPicker,
   PostComposeScreen, postActions, openStories, addStoryFlow,
@@ -63,12 +63,26 @@ function TabsScreen() {
           <button class="story-item" data-act="${my ? 'my-story' : 'add-story'}"><div class="story-av ${my ? 'has seen' : ''}">${avatar(me, 58)}${my ? '' : `<span class="plus">${icon('plus')}</span>`}</div><small>Kamu</small></button>
           ${api.stories().map(s => { const u = api.user(s.userId); return `<button class="story-item" data-act="story" data-id="${u.id}"><div class="story-av has ${s.seen ? 'seen' : ''}">${avatar(u, 58)}</div><small>${esc(firstName(u.name))}</small></button>`; }).join('')}
         </div>`}
+        ${q ? '' : bdays()}
         ${favs.length ? `<div class="section-h">Favorit</div><div class="fav-row">${favs.map(u => `<button data-act="profile" data-id="${u.id}">${userAvatar(u, 52, { online: true })}<small>${esc(firstName(u.name))}</small></button>`).join('')}</div>` : ''}
         ${groups.length ? `<div class="section-h">Grup</div>${groups.map(g => `<div class="list-item slim" data-act="open-chat" data-id="${g.id}">${chatAvatar(g, 42)}<div class="li-main"><div class="li-name">${esc(g.name)}</div></div><span class="count">${g.members.length}</span></div>`).join('')}` : ''}
         <div class="section-h">Teman <span class="n">${friends.length}</span></div>
         ${friends.map(row).join('') || empty('🔍', 'Nggak ketemu')}`;
     },
   };
+
+  function bdays() {
+    const list = api.birthdays();
+    if (!list.length) return '';
+    return `<div class="bday-row">${list.map(({ user: u, days }) => {
+      const today = days === 0, done = api.wished(u.id);
+      return `<div class="bday ${today ? 'today' : ''}">
+        <button data-act="profile" data-id="${u.id}">${avatar(u, 40)}</button>
+        <div class="bd-txt"><b>${esc(firstName(u.name))}</b><small>${today ? '🎂 Hari ini' : `🎂 ${days} hari lagi`}</small></div>
+        ${today ? `<button class="bd-btn ${done ? 'done' : ''}" data-act="wish" data-id="${u.id}" ${done ? 'disabled' : ''} aria-label="Kirim ucapan">${icon(done ? 'check' : 'gift')}</button>` : ''}
+      </div>`;
+    }).join('')}</div>`;
+  }
 
   /* ----- CHATS ----- */
   const FILTERS = [['all', 'Semua'], ['unread', 'Belum dibaca'], ['groups', 'Grup']];
@@ -150,6 +164,7 @@ function TabsScreen() {
         <div class="set-group">
           ${link('keep', 'bookmark', 'Keep', `<span class="count">${api.keep().length || ''}</span>`)}
           ${link('archived', 'archive', 'Arsip', `<span class="count">${api.archived().length || ''}</span>`)}
+          ${link('store', 'store', 'Sticker', `<span class="count">${api.packs().length}</span>`)}
         </div>
         <div class="set-group">
           <label class="set-row">${icon('lock')}<div class="set-txt"><span>Kunci PIN</span></div><input type="checkbox" class="switch" data-lock ${s.passcode ? 'checked' : ''}></label>
@@ -193,9 +208,9 @@ function TabsScreen() {
     chats: ['chats', 'presence'],
     voom: ['posts', 'me'],
     calls: ['calls', 'friends'],
-    me: ['me', 'settings', 'keep', 'chats'],
+    me: ['me', 'settings', 'keep', 'chats', 'packs'],
   };
-  const offs = ['friends', 'chats', 'stories', 'me', 'presence', 'posts', 'calls', 'settings', 'keep'].map(ev => bus.on(ev, () => {
+  const offs = ['friends', 'chats', 'stories', 'me', 'presence', 'posts', 'calls', 'settings', 'keep', 'packs'].map(ev => bus.on(ev, () => {
     if (ev === 'chats') renderBadges();
     if (watch[cur].includes(ev)) schedule();
     if (ev === 'me' && (cur === 'home' || cur === 'voom')) renderHead();
@@ -252,6 +267,16 @@ function TabsScreen() {
     'clear-calls': async () => { if (await confirmBox({ title: 'Hapus riwayat panggilan?', ok: 'Hapus', danger: true })) api.clearCalls(); },
     'edit-profile': () => router.push(EditProfileScreen()),
     keep: () => router.push(KeepScreen()),
+    store: () => router.push(StickerStoreScreen()),
+    wish: t => {
+      const u = api.user(t.dataset.id);
+      const c = api.directWith(u.id);
+      api.send(c.id, { type: 'sticker', sticker: '🎂', anim: 'beat' });
+      setTimeout(() => api.send(c.id, { type: 'text', text: `HBD ${firstName(u.name)}!! 🎉🥳 wish you all the best 💖` }), 400);
+      api.markWished(u.id);
+      vibrate(15);
+      openChat(c.id);
+    },
     archived: () => router.push(ArchivedScreen()),
     font: t => { api.setSetting('fontSize', t.dataset.v); applyTheme(); vibrate(5); },
     'my-qr': () => router.push(AddFriendScreen('qr')),

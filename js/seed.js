@@ -38,6 +38,17 @@ export const STICKERS = {
 // sticker animasi: [emoji, jenis animasi]
 export const ANIM_STICKERS = [['👋', 'wave'], ['💖', 'beat'], ['😂', 'shake'], ['🥳', 'bounce'], ['🔥', 'flicker'], ['😴', 'float'], ['🤩', 'spin'], ['🫠', 'jelly'], ['🐱', 'bounce'], ['🫶', 'beat'], ['🙏', 'wave'], ['💀', 'shake'], ['✨', 'spin'], ['🐸', 'jelly'], ['🎉', 'flicker'], ['👀', 'float']];
 export const STICKER_TABS = [['anim', '✨'], ['mood', '😂'], ['love', '🫶'], ['animal', '🐱'], ['food', '🧋']];
+export const DEFAULT_PACKS = STICKER_TABS.map(t => t[0]);
+
+// Toko sticker (gratis). anim: true -> tiap sticker punya animasi
+export const STORE_PACKS = [
+  { id: 'space', name: 'Space Trip', cover: '🚀', hue: 240, stickers: ['🚀', '🪐', '👽', '🌙', '⭐', '☄️', '🛸', '🌌', '👨‍🚀', '🌍', '🔭', '🌠'] },
+  { id: 'kawaii', name: 'Kawaii', cover: '🎀', hue: 330, stickers: ['🎀', '🧸', '🍡', '🌸', '🐰', '💮', '🍓', '🫧', '🦢', '🍥', '💝', '🐣'] },
+  { id: 'party', name: 'Party Mode', cover: '🎉', hue: 45, anim: true, stickers: [['🎉', 'flicker'], ['🥳', 'bounce'], ['🍾', 'shake'], ['🎂', 'beat'], ['🪩', 'spin'], ['💃', 'jelly'], ['🕺', 'jelly'], ['🎈', 'float'], ['🎁', 'shake'], ['🥂', 'wave'], ['🎊', 'flicker'], ['🎶', 'float']] },
+  { id: 'sport', name: 'Sporty', cover: '⚽', hue: 140, stickers: ['⚽', '🏀', '🏸', '🏆', '🥇', '🎾', '🏐', '🛹', '🏋️', '🚴', '🏊', '🧘'] },
+  { id: 'weather', name: 'Mood Cuaca', cover: '🌈', hue: 200, anim: true, stickers: [['☀️', 'spin'], ['🌧️', 'float'], ['⛈️', 'shake'], ['🌈', 'beat'], ['❄️', 'spin'], ['🌪️', 'shake'], ['🌤️', 'float'], ['🌙', 'float'], ['🔥', 'flicker'], ['💨', 'wave'], ['🌊', 'jelly'], ['⚡', 'flicker']] },
+  { id: 'food2', name: 'Jajan Malam', cover: '🍢', hue: 20, stickers: ['🍢', '🍜', '🥟', '🍗', '🌭', '🧇', '🍧', '🥤', '🍤', '🍙', '🥞', '🍫'] },
+];
 
 export const EMOJIS = '😀 😁 😂 🤣 😊 😍 🥰 😘 😎 🤩 🥳 😏 😌 😴 🤔 🤫 🤭 🙄 😬 😮 😳 🥺 😢 😭 😤 😡 🤯 😱 🫠 🫡 🫶 👍 👎 👏 🙏 💪 🔥 ✨ 💯 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 💔 🎉 🎂 🎁 🌈 ☀️ 🌙 ⭐ 🍀 🌸 🍕 🍔 🍜 🧋 ☕ ⚽ 🎮 🎧 📸 ✈️ 🏖️ 💤 💀 👀'.split(' ');
 

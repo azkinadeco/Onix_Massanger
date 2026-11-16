@@ -258,3 +258,138 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) hiddenAt = Date.now();
   else if (hiddenAt && Date.now() - hiddenAt > 30e3) lockApp();
 });
+
+/* ================= WAKTU ================= */
+export function fmtWhen(ts) {
+  const d = new Date(ts), now = new Date();
+  const t = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(':', '.');
+  const day0 = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day0(d) - day0(now)) / 864e5);
+  if (diff === 0) return `Hari ini ${t}`;
+  if (diff === 1) return `Besok ${t}`;
+  if (diff === -1) return `Kemarin ${t}`;
+  return `${d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })} ${t}`;
+}
+const toLocalInput = ts => { const d = new Date(ts - new Date().getTimezoneOffset() * 60e3); return d.toISOString().slice(0, 16); };
+
+/* ================= PESAN TERJADWAL ================= */
+export function scheduleSheet(onPick) {
+  const now = Date.now();
+  const tomorrow8 = new Date(); tomorrow8.setDate(tomorrow8.getDate() + 1); tomorrow8.setHours(8, 0, 0, 0);
+  const opts = [['1 menit', now + 60e3], ['1 jam', now + 3600e3], ['Besok 08.00', tomorrow8.getTime()]];
+  sheet({
+    top: `<div class="sched-pick">
+      <div class="sp-head">${icon('clock')} Kirim nanti</div>
+      <div class="sp-opts">${opts.map(([l, t], i) => `<button data-i="${i}" class="sp-opt">${l}</button>`).join('')}</div>
+      <div class="sp-custom"><input type="datetime-local" class="field" min="${toLocalInput(now)}" value="${toLocalInput(now + 30 * 60e3)}"><button class="btn primary sm" data-custom>${icon('check')}</button></div>
+    </div>`,
+    onMount: (s, close) => {
+      s.querySelectorAll('.sp-opt').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); onPick(opts[+b.dataset.i][1]); close(); toast('Dijadwalkan ⏰'); }));
+      s.querySelector('[data-custom]').addEventListener('click', e => {
+        e.stopPropagation();
+        const v = new Date(s.querySelector('input').value).getTime();
+        if (!v || v < Date.now()) return toast('Pilih waktu nanti');
+        onPick(v); close(); toast('Dijadwalkan ⏰');
+      });
+    },
+  });
+}
+
+/* ================= EVENT ================= */
+export function EventComposeScreen(chatId) {
+  const def = new Date(); def.setDate(def.getDate() + 1); def.setHours(19, 0, 0, 0);
+  const EMO = ['📅', '🎉', '🍕', '🎤', '📚', '⚽', '🎬', '☕'];
+  let emo = EMO[0];
+  const el = h(`<div class="sub-screen">
+    ${navbar('Event', `<button class="text-btn" data-act="send" disabled>Kirim</button>`)}
+    <div class="content pad">
+      <div class="ng-row"><button class="ng-emoji" data-act="emo">${emo}</button><input class="field" name="title" maxlength="60" placeholder="Nama event"></div>
+      <label class="lbl">${icon('clock', 'tiny')}</label>
+      <input class="field" type="datetime-local" name="at" value="${toLocalInput(def.getTime())}">
+      <label class="lbl">${icon('location', 'tiny')}</label>
+      <input class="field" name="place" maxlength="60" placeholder="Tempat (opsional)">
+    </div>
+  </div>`);
+  const title = $('[name=title]', el), btn = $('[data-act=send]', el);
+  title.addEventListener('input', () => { btn.disabled = !title.value.trim(); });
+  bindActs(el, {
+    emo: t => { emo = EMO[(EMO.indexOf(emo) + 1) % EMO.length]; t.textContent = emo; vibrate(5); },
+    send: () => {
+      const at = new Date($('[name=at]', el).value).getTime();
+      if (!title.value.trim() || !at) return;
+      api.createEvent(chatId, { title: `${emo} ${title.value.trim()}`, at, place: $('[name=place]', el).value.trim() });
+      router.back();
+    },
+  });
+  setTimeout(() => title.focus(), 350);
+  return { el };
+}
+
+/* ================= CATATAN GRUP ================= */
+export function NotesScreen(chatId) {
+  const el = h(`<div class="sub-screen">${navbar('Catatan', `<button class="icon-btn" data-act="new">${icon('plus')}</button>`)}<div class="content notes-body"></div></div>`);
+  const body = $('.notes-body', el);
+  function render() {
+    const list = api.notes(chatId);
+    body.innerHTML = list.length ? list.map(n => { const u = api.user(n.from); return `<button class="note-card" data-act="open" data-id="${n.id}">
+      <div class="note-head">${avatar(u, 28)}<b>${esc(n.from === ME ? 'Kamu' : u?.name)}</b><small>${ago(n.ts)}</small></div>
+      <p>${esc(n.text)}</p></button>`; }).join('') : empty('📝', 'Belum ada catatan');
+  }
+  async function editNote(n) {
+    const v = await promptBox({ title: n ? 'Edit catatan' : 'Catatan baru', value: n?.text || '', max: 1000 });
+    if (!v) return;
+    n ? api.updateNote(chatId, n.id, v) : api.addNote(chatId, v);
+  }
+  bindActs(el, {
+    new: () => editNote(),
+    open: t => {
+      const n = api.notes(chatId).find(x => x.id === t.dataset.id);
+      if (!n) return;
+      const acts = [{ label: 'Salin', icon: 'copy', run: async () => { await copyText(n.text); toast('Disalin'); } },
+        { label: 'Keep', icon: 'bookmark', run: () => { api.keepAdd({ type: 'note', text: n.text, source: api.chatTitle(api.chat(chatId)) }); toast('Disimpan 🔖'); } }];
+      if (n.from === ME) acts.push({ label: 'Edit', icon: 'edit', run: () => editNote(n) }, { label: 'Hapus', icon: 'trash', danger: true, run: () => api.deleteNote(chatId, n.id) });
+      sheet({ top: `<p class="sheet-note">${esc(n.text)}</p>`, actions: acts });
+    },
+  });
+  const off = bus.on('notes', id => id === chatId && render());
+  render();
+  return { el, destroy: off };
+}
+
+/* ================= TOKO STICKER ================= */
+export function StickerStoreScreen() {
+  const el = h(`<div class="sub-screen">${navbar('Sticker')}<div class="content store-body"></div></div>`);
+  const body = $('.store-body', el);
+  const items = p => p.stickers.map(s => (Array.isArray(s) ? s : [s]));
+  function render() {
+    body.innerHTML = `<div class="store-grid">${api.storePacks().map(p => {
+      const own = api.ownsPack(p.id);
+      return `<div class="pack-card" style="--h:${p.hue}">
+        <button class="pack-cover" data-act="preview" data-id="${p.id}"><span class="${p.anim ? 'anim-bounce' : ''}">${p.cover}</span>${p.anim ? `<i class="pack-tag">${icon('sparkle', 'tiny')}</i>` : ''}</button>
+        <b>${esc(p.name)}</b>
+        <button class="pack-btn ${own ? 'owned' : ''}" data-act="${own ? 'remove' : 'get'}" data-id="${p.id}">${own ? icon('check') : icon('download')}</button>
+      </div>`;
+    }).join('')}</div>`;
+  }
+  function preview(p) {
+    const own = api.ownsPack(p.id);
+    sheet({
+      title: p.name,
+      top: `<div class="sticker-grid preview">${items(p).map(([s, a]) => `<div>${a ? `<span class="anim-${a}">${s}</span>` : s}</div>`).join('')}</div>`,
+      actions: own ? [] : [{ label: 'Download gratis', icon: 'download', run: () => get(p.id) }],
+    });
+  }
+  function get(id) {
+    const btn = body.querySelector(`.pack-btn[data-id="${id}"]`);
+    if (btn) { btn.classList.add('loading'); btn.innerHTML = '<i class="spin"></i>'; }
+    setTimeout(() => { api.addPack(id); vibrate(10); toast('Sticker siap dipakai ✨'); }, 900);
+  }
+  bindActs(el, {
+    preview: t => preview(api.storePacks().find(p => p.id === t.dataset.id)),
+    get: t => get(t.dataset.id),
+    remove: async t => { if (await confirmBox({ title: 'Hapus paket ini?', ok: 'Hapus', danger: true })) api.removePack(t.dataset.id); },
+  });
+  const off = bus.on('packs', render);
+  render();
+  return { el, destroy: off };
+}

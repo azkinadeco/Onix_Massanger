@@ -129,6 +129,7 @@ function replyFor(msg) {
   if (msg.type === 'file') return { text: pick(['oke aku download ya 📥', 'makasih filenya 🙏', 'sip udah masuk']) };
   if (msg.type === 'event') return { text: pick(['aku ikut! 🙋', 'catet ya tanggalnya 📅', 'gas, nanti ingetin ya']) };
   if (/hbd|ulang tahun|ultah|happy birthday/i.test(msg.text || '')) return { text: pick(['MAKASIHHH 🥹🫶', 'aaa makasih banyak!! 🎂', 'thank youuu 💖']) };
+  if (msg.type === 'post') return { text: pick(['wkwk iya liat', 'LUCU 😭', 'udah aku like 💖', 'ih bener bgt']) };
   if (msg.type === 'poll') return { text: pick(['udah aku vote ya ✅', 'vote done 🗳️', 'aku pilih yg kedua wkwk']) };
   if (/@\w/.test(msg.text || '') && Math.random() < 0.5) return { text: pick(['kenapa manggil aku? 👀', 'iyaa kenapa?', 'hadir! 🙋']) };
   if (msg.type === 'location') return { text: pick(['oke otw kesana', 'deket dari aku tuh', 'share loc diterima 📍']) };
@@ -565,9 +566,17 @@ export const api = {
 
   /* VOOM / posts */
   posts() { return db.posts.filter(p => !db.blocked.includes(p.userId)).sort((a, b) => b.ts - a.ts); },
+  feed(tab = 'foryou') {
+    const list = api.posts();
+    if (tab === 'following') return list.filter(p => p.userId === ME || db.friends.includes(p.userId));
+    const now = Date.now();
+    const score = p => (p.likes.length * 2 + p.comments.length * 3 + 4) / Math.pow((now - p.ts) / 3600e3 + 2, 1.3) + (p.userId === ME && now - p.ts < 600e3 ? 100 : 0);
+    return list.slice().sort((a, b) => score(b) - score(a));
+  },
   post(id) { return db.posts.find(p => p.id === id); },
-  createPost({ text, image }) {
-    const p = { id: uid('p'), userId: ME, ts: Date.now(), text, image, likes: [], comments: [] };
+  createPost({ text, image, images }) {
+    images = images?.length ? images : image ? [image] : [];
+    const p = { id: uid('p'), userId: ME, ts: Date.now(), text, image: images[0] || null, images, likes: [], comments: [] };
     db.posts.unshift(p);
     save(); bus.emit('posts');
     const likers = shuffle(db.friends).slice(0, 2 + Math.floor(Math.random() * 4));
@@ -580,6 +589,16 @@ export const api = {
     }, rand(6000, 10000));
     return p;
   },
+  toggleCommentLike(pid, cid) {
+    const c = api.post(pid)?.comments.find(x => x.id === cid);
+    if (!c) return;
+    c.likes ||= [];
+    const i = c.likes.indexOf(ME);
+    i >= 0 ? c.likes.splice(i, 1) : c.likes.push(ME);
+    save(); bus.emit('posts');
+    return i < 0;
+  },
+  sharePost(pid, chatIds) { chatIds.forEach(id => api.send(id, { type: 'post', postId: pid })); },
   deletePost(id) { db.posts = db.posts.filter(p => p.id !== id); save(); bus.emit('posts'); },
   toggleLike(id) {
     const p = api.post(id);
@@ -590,8 +609,10 @@ export const api = {
   },
   comment(id, text) {
     const p = api.post(id);
-    p.comments.push({ id: uid('c'), userId: ME, text, ts: Date.now() });
+    const mine = { id: uid('c'), userId: ME, text, ts: Date.now(), likes: [] };
+    p.comments.push(mine);
     save(); bus.emit('posts');
+    if (p.userId !== ME && Math.random() < .8) setTimeout(() => { mine.likes ||= []; if (!mine.likes.includes(p.userId)) mine.likes.push(p.userId); save(); bus.emit('posts'); }, rand(1500, 3000));
     if (p.userId !== ME) {
       setTimeout(() => {
         const txt = pick(['makasih 🫶', 'wkwk iya', 'hehe 🥹', 'bener bgt']);

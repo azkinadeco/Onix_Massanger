@@ -26,7 +26,7 @@ export function preview(m, c) {
   if (m.from === ME) who = 'Kamu: ';
   else if (c.type === 'group') who = firstName(api.user(m.from)?.name) + ': ';
   if (m.unsent) return who + 'Pesan ditarik';
-  const body = { sticker: 'Sticker ' + (m.sticker || ''), image: m.album?.length > 1 ? `📷 ${m.album.length} foto` : '📷 Foto', voice: '🎤 Voice note', location: '📍 ' + (m.title || 'Lokasi'), poll: '📊 ' + (m.poll?.q || 'Polling'), event: '📅 ' + (m.event?.title || 'Event'), video: '🎬 Video', file: '📎 ' + (m.name || 'File') }[m.type] || m.text;
+  const body = { sticker: 'Sticker ' + (m.sticker || ''), image: m.album?.length > 1 ? `📷 ${m.album.length} foto` : '📷 Foto', voice: '🎤 Voice note', location: '📍 ' + (m.title || 'Lokasi'), poll: '📊 ' + (m.poll?.q || 'Polling'), event: '📅 ' + (m.event?.title || 'Event'), video: '🎬 Video', file: '📎 ' + (m.name || 'File'), post: '📰 Post VOOM' }[m.type] || m.text;
   return who + body;
 }
 
@@ -69,13 +69,20 @@ export function postCard(p, { detail = false } = {}) {
       <button class="icon-btn sm" data-act="post-more" data-id="${p.id}">${icon('more')}</button>
     </div>
     ${p.text ? `<div class="post-text ${!p.image && p.text.length < 80 ? 'big' : ''}">${esc(p.text)}</div>` : ''}
-    ${p.image ? `<button class="post-img" data-act="view-src" data-src-post="${p.id}"><img src="${p.image}" alt="" loading="lazy"></button>` : ''}
+    ${postMedia(p)}
     <div class="post-actions">
       <button class="pa ${liked ? 'liked' : ''}" data-act="like" data-id="${p.id}">${icon('heart')}<span>${p.likes.length || ''}</span></button>
       <button class="pa" data-act="${detail ? 'focus-comment' : 'post'}" data-id="${p.id}">${icon('comment')}<span>${p.comments.length || ''}</span></button>
       <button class="pa" data-act="share-post" data-id="${p.id}">${icon('share')}</button>
     </div>
   </article>`;
+}
+
+function postMedia(p) {
+  const imgs = p.images?.length ? p.images : p.image ? [p.image] : [];
+  if (!imgs.length) return '';
+  if (imgs.length === 1) return `<button class="post-img" data-act="view-src" data-src-post="${p.id}" data-i="0"><img src="${imgs[0]}" alt="" loading="lazy"></button>`;
+  return `<div class="post-car" data-n="${imgs.length}"><div class="pc-track">${imgs.map((src, i) => `<button class="post-img" data-act="view-src" data-src-post="${p.id}" data-i="${i}"><img src="${src}" alt="" loading="lazy"></button>`).join('')}</div><span class="pc-count">1/${imgs.length}</span><div class="pc-dots">${imgs.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div></div>`;
 }
 
 export function empty(emoji, title, text = '') {

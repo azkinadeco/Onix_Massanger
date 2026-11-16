@@ -4,7 +4,8 @@ import { icon } from './icons.js';
 import { router, bindActs, navbar, toast, sheet, confirmBox, promptBox, banner } from './ui.js';
 import { userAvatar, chatAvatar, presence, verified, userRow, postCard, empty } from './views.js';
 import { openChat, startCall } from './chat.js';
-import { NotesScreen } from './features.js';
+import { NotesScreen, ChatPicker } from './features.js';
+import { pickFiles } from './util.js';
 
 /* ================= ONBOARDING ================= */
 export function OnboardingScreen(onDone) {
@@ -600,7 +601,7 @@ export function openGallery(items, start = 0) {
 
 /* ================= VOOM ================= */
 export function PostComposeScreen() {
-  let image = null;
+  let images = [];
   const me = api.me();
   const el = h(`<div class="sub-screen">
     ${navbar('Post baru', `<button class="text-btn" data-act="post" disabled>Posting</button>`)}
@@ -611,13 +612,22 @@ export function PostComposeScreen() {
     <div class="compose-tools"><button class="tool" data-act="photo">${icon('image')} Foto</button><button class="tool" data-act="cam">${icon('camera')} Kamera</button><span class="counter">0/500</span></div>
   </div>`);
   const ta = $('textarea', el), imgBox = $('.compose-img', el), postBtn = $('[data-act=post]', el);
-  const upd = () => { postBtn.disabled = !(ta.value.trim() || image); $('.counter', el).textContent = `${ta.value.length}/500`; };
+  const upd = () => { postBtn.disabled = !(ta.value.trim() || images.length); $('.counter', el).textContent = `${ta.value.length}/500`; };
   ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; upd(); });
-  const setImg = src => { image = src; imgBox.hidden = !src; imgBox.innerHTML = src ? `<img src="${src}" alt=""><button class="icon-btn rm" data-act="rm">${icon('x')}</button>` : ''; upd(); };
-  const pick = async cap => { const f = await pickFile('image/*', cap); if (f) setImg((await compressImage(f)).src); };
+  const paintImgs = () => {
+    imgBox.hidden = !images.length;
+    imgBox.classList.toggle('multi', images.length > 1);
+    imgBox.innerHTML = images.map((src, i) => `<div class="ci-item"><img src="${src}" alt=""><button class="icon-btn rm" data-act="rm" data-i="${i}">${icon('x')}</button></div>`).join('');
+    upd();
+  };
+  const pick = async cap => {
+    const fs = cap ? [await pickFile('image/*', cap)].filter(Boolean) : await pickFiles('image/*', 10 - images.length);
+    for (const f of fs) images.push((await compressImage(f, 1080, .76)).src);
+    images = images.slice(0, 10); paintImgs();
+  };
   bindActs(el, {
-    photo: () => pick(), cam: () => pick('environment'), rm: () => setImg(null),
-    post: () => { api.createPost({ text: ta.value.trim(), image }); router.back(); },
+    photo: () => pick(), cam: () => pick('environment'), rm: t => { images.splice(+t.dataset.i, 1); paintImgs(); },
+    post: () => { api.createPost({ text: ta.value.trim(), images }); router.back(); },
   });
   setTimeout(() => ta.focus(), 350);
   return { el };
@@ -631,7 +641,7 @@ export function PostDetailScreen(pid) {
     const p = api.post(pid);
     if (!p) { body.innerHTML = empty('🫥', 'Post udah dihapus'); return; }
     body.innerHTML = postCard(p, { detail: true }) + `<div class="section-h">${icon('comment', 'tiny')} ${p.comments.length}</div>` +
-      (p.comments.length ? p.comments.map(cm => { const u = api.user(cm.userId); return `<div class="comment">${avatar(u, 34)}<div><div class="cm-bubble"><b>${esc(cm.userId === ME ? 'Kamu' : u?.name)}</b>${esc(cm.text)}</div><small>${ago(cm.ts)}</small></div></div>`; }).join('') : `<p class="hint center">💬</p>`);
+      (p.comments.length ? p.comments.map(cm => { const u = api.user(cm.userId); const lk = cm.likes || [], on = lk.includes(ME), byAuthor = lk.includes(p.userId) && p.userId !== cm.userId && p.userId !== ME; return `<div class="comment">${avatar(u, 34)}<div class="cm-main"><div class="cm-bubble"><b>${esc(cm.userId === ME ? 'Kamu' : u?.name)}</b>${esc(cm.text)}</div><small>${ago(cm.ts)}${byAuthor ? ` · <span class="cm-auth">${icon('heart', 'tiny')} ${esc(firstName(api.user(p.userId)?.name || ''))}</span>` : ''}</small></div><button class="cm-like ${on ? 'on' : ''}" data-act="cm-like" data-pid="${p.id}" data-cid="${cm.id}">${icon('heart')}<span>${lk.length || ''}</span></button></div>`; }).join('') : `<p class="hint center">💬</p>`);
   }
   const send = () => { const v = inp.value.trim(); if (!v) return; api.comment(pid, v); inp.value = ''; setTimeout(() => body.scrollTo({ top: body.scrollHeight, behavior: 'smooth' }), 50); };
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
@@ -646,8 +656,19 @@ export function postActions(extra = {}) {
     like: t => { const liked = api.toggleLike(t.dataset.id); if (liked) { vibrate(8); t.classList.add('pop'); } },
     post: t => router.push(PostDetailScreen(t.dataset.id)),
     profile: t => router.push(ProfileScreen(t.dataset.id)),
-    'view-src': t => { const p = api.post(t.dataset.srcPost); if (p?.image) openImage(p.image, api.user(p.userId)?.name); },
-    'share-post': t => { const p = api.post(t.dataset.id); shareText(`${api.user(p.userId)?.name} di Onix VOOM: "${p.text}"`); },
+    'view-src': t => {
+      const p = api.post(t.dataset.srcPost);
+      const imgs = p?.images?.length ? p.images : p?.image ? [p.image] : [];
+      if (imgs.length) openGallery(imgs.map(src => ({ src, caption: api.user(p.userId)?.name || '' })), +t.dataset.i || 0);
+    },
+    'share-post': t => {
+      const p = api.post(t.dataset.id);
+      sheet({ actions: [
+        { label: 'Kirim ke chat', icon: 'send', run: () => router.push(ChatPicker({ title: 'Kirim ke…', onDone: ids => { api.sharePost(p.id, ids); history.back(); toast('Terkirim ✈️'); } })) },
+        { label: 'Bagikan', icon: 'share', run: () => shareText(`${api.user(p.userId)?.name} di Onix VOOM: "${p.text}"`) },
+      ] });
+    },
+    'cm-like': t => { const on = api.toggleCommentLike(t.dataset.pid, t.dataset.cid); if (on) vibrate(6); },
     'post-more': t => {
       const p = api.post(t.dataset.id);
       const acts = p.userId === ME

@@ -42,7 +42,7 @@ function TabsScreen() {
   </div>`);
   const head = $('.tab-head', el), body = $('.tab-body', el);
   let cur = 'chats';
-  const st = { homeQ: '', chatQ: '', filter: 'all' };
+  const st = { homeQ: '', chatQ: '', filter: 'all', feed: 'foryou' };
   const scrollPos = {};
   const title = (t, actions = '') => `<div class="th-row"><h1>${t}</h1><div class="th-actions">${actions}</div></div>`;
   const searchBox = (k, ph) => `<div class="search">${icon('search')}<input data-q="${k}" placeholder="${ph}" value="${esc(st[k])}"></div>`;
@@ -113,8 +113,9 @@ function TabsScreen() {
   /* ----- VOOM ----- */
   const voom = {
     head: () => title('VOOM', `<button class="icon-btn" data-act="compose-post" aria-label="Post baru">${icon('plus')}</button>`),
-    body: () => `<button class="composer-card" data-act="compose-post">${avatar(api.me(), 36)}<span>Bagikan sesuatu…</span>${icon('image')}</button>`
-      + api.posts().map(p => postCard(p)).join(''),
+    body: () => `<div class="seg voom-tabs">${[['foryou', 'Untukmu'], ['following', 'Mengikuti']].map(([k, l]) => `<button class="${st.feed === k ? 'on' : ''}" data-act="feed" data-v="${k}">${l}</button>`).join('')}</div>`
+      + `<button class="composer-card" data-act="compose-post">${avatar(api.me(), 36)}<span>Bagikan sesuatu…</span>${icon('image')}</button>`
+      + (api.feed(st.feed).map(p => postCard(p)).join('') || empty('🌱', 'Belum ada post')),
   };
 
   /* ----- CALLS ----- */
@@ -272,6 +273,7 @@ function TabsScreen() {
     'clear-calls': async () => { if (await confirmBox({ title: 'Hapus riwayat panggilan?', ok: 'Hapus', danger: true })) api.clearCalls(); },
     'edit-profile': () => router.push(EditProfileScreen()),
     keep: () => router.push(KeepScreen()),
+    feed: t => { if (st.feed === t.dataset.v) return; st.feed = t.dataset.v; renderBody(); body.scrollTo({ top: 0 }); },
     'hidden-chats': () => openHiddenChats(),
     activity: () => router.push(ActivityScreen()),
     store: () => router.push(StickerStoreScreen()),
@@ -438,6 +440,15 @@ else {
   router.setRoot(OnboardingScreen(startApp));
 }
 document.getElementById('splash')?.remove();
+
+// carousel post: update titik & nomor saat digeser
+document.addEventListener('scroll', e => {
+  const tr = e.target;
+  if (!tr.classList?.contains('pc-track')) return;
+  const i = Math.round(tr.scrollLeft / tr.clientWidth), car = tr.parentElement;
+  car.querySelectorAll('.pc-dots i').forEach((d, k) => d.classList.toggle('on', k === i));
+  const c = car.querySelector('.pc-count'); if (c) c.textContent = `${i + 1}/${car.dataset.n}`;
+}, true);
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});

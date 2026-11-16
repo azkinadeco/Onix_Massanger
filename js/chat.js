@@ -247,6 +247,12 @@ function ChatScreen(chatId) {
       body = `<div class="bubble voice" data-act="play" data-mid="${m.id}"><span class="vplay">${icon('play')}</span><span class="wave">${waveBars(m.id)}</span><span class="vdur">${dur(m.duration || 0)}</span></div>`;
     } else if (m.type === 'location') {
       body = `<div class="bubble loc" data-act="loc" data-mid="${m.id}"><div class="map"><span class="map-pin">${icon('location')}</span></div><div class="loc-txt"><b>${esc(m.title)}</b><small>${esc(m.address)}</small></div></div>`;
+    } else if (m.type === 'post') {
+      const p = api.post(m.postId), pu = p && api.user(p.userId);
+      const img = p && (p.images?.[0] || p.image);
+      body = p
+        ? `<button class="bubble postmsg" data-act="open-post" data-pid="${p.id}">${img ? `<img src="${img}" alt="">` : ''}<span class="pm-txt"><span class="pm-who">${avatar(pu, 20)}<b>${esc(pu?.name || '')}</b></span>${p.text ? `<span class="pm-body">${esc(p.text.slice(0, 120))}</span>` : ''}<small>${icon('voom', 'tiny')} VOOM${p.images?.length > 1 ? ` · ${p.images.length} foto` : ''}</small></span></button>`
+        : `<div class="bubble unsent">${icon('voom', 'tiny')} Post udah dihapus</div>`;
     } else if (m.type === 'poll') {
       body = pollHtml(m);
     } else if (m.type === 'event') {
@@ -790,6 +796,7 @@ function ChatScreen(chatId) {
     'att-photo': () => sendImage(false),
     'att-camera': () => sendImage(true),
     'replay-fx': (t, e) => { if (e.target.closest('a')) return; const m = api.messages(chatId).find(x => x.id === t.dataset.mid); const fx = effectOf(m); if (fx) playEffect(fx, el); },
+    'open-post': async t => { const { PostDetailScreen } = await import('./screens.js'); if (api.post(t.dataset.pid)) router.push(PostDetailScreen(t.dataset.pid)); },
     'att-location': () => { closePanel(); const p = api.randomPlace(); api.send(chatId, withReply({ type: 'location', ...p })); },
     'att-voice': () => startRec(),
     'att-video': sendVideo,

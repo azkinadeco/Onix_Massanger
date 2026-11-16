@@ -1110,3 +1110,14 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .g-dots i.on { width: 18px; background: #fff; }
 .gallery .viewer-top { transition: opacity .2s; }
 .gallery.bare-ui .viewer-top, .gallery.bare-ui .g-dots, .gallery.zoomed .g-dots { opacity: 0; pointer-events: none; }
+
+/* ============ B6: pesan sementara + tersembunyi ============ */
+.ttl-pill { display: inline-flex; align-items: center; gap: 2px; margin-left: 6px; padding: 1px 6px 1px 4px; border-radius: 99px; background: rgba(var(--accent-rgb), .14); color: var(--accent); font-size: 10.5px; font-weight: 800; vertical-align: 2px; }
+.ttl-pill .ic { width: 11px; height: 11px; stroke-width: 2.6; }
+.meta .exp .ic { width: 11px; height: 11px; opacity: .7; }
+.ttl-pick { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 4px 0 6px; }
+.ttl-ic { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: rgba(var(--accent-rgb), .14); color: var(--accent); }
+.ttl-ic .ic { width: 28px; height: 28px; }
+.ttl-opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; }
+.ttl-opts button { height: 46px; border-radius: 14px; background: var(--surface-2); font-weight: 700; font-size: 14px; }
+.ttl-opts button.on { background: var(--accent); color: #fff; }

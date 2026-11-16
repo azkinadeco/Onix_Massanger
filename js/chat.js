@@ -1,3 +1,4 @@
+import { TTL_OPTS, ttlLabel } from './service.js';
 import { api, bus, ME, firstName, mentionRe } from './service.js';
 import { $, h, esc, linkify, avatar, hm, dayLabel, isSameDay, dur, hash, vibrate, pickFile, pickFiles, compressImage, copyText, isJumbo } from './util.js';
 import { icon } from './icons.js';
@@ -84,6 +85,8 @@ export function playEffect(fx, host = document.body) {
   host.appendChild(layer);
   setTimeout(() => layer.remove(), 4200);
 }
+
+const ttlShort = s => s >= 86400 ? Math.round(s / 86400) + 'h' : s >= 3600 ? Math.round(s / 3600) + 'j' : s >= 60 ? Math.round(s / 60) + 'm' : s + 'd';
 
 const mapText = (html, fn) => html.split(/(<[^>]+>)/).map(p => (p.startsWith('<') ? p : fn(p))).join('');
 
@@ -173,7 +176,7 @@ function ChatScreen(chatId) {
     else if (ch.type === 'group') sub = `${ch.members.length} anggota`;
     else sub = esc(presence(api.peerOf(ch)));
     const peer = api.peerOf(ch);
-    $('.chat-title', el).innerHTML = `${chatAvatar(ch, 36)}<span class="ct-txt"><b>${esc(api.chatTitle(ch))}${peer?.official ? verified() : ''}${ch.muted ? icon('bellOff', 'tiny muted-ic') : ''}</b><small>${sub}</small></span>`;
+    $('.chat-title', el).innerHTML = `${chatAvatar(ch, 36)}<span class="ct-txt"><b>${esc(api.chatTitle(ch))}${peer?.official ? verified() : ''}${ch.muted ? icon('bellOff', 'tiny muted-ic') : ''}${ch.ttl ? `<span class="ttl-pill">${icon('clock')}${esc(ttlShort(ch.ttl))}</span>` : ''}</b><small>${sub}</small></span>`;
     const n = api.totalUnread(chatId);
     $('.back-count', el).textContent = n ? (n > 99 ? '99+' : n) : '';
     el.dataset.wall = ch.wallpaper || 'default';
@@ -269,7 +272,7 @@ function ChatScreen(chatId) {
       else if (n) read = group ? `<button class="read" data-act="readers" data-mid="${m.id}">${icon('checks')}${n}</button>` : `<span class="read">${icon('checks')}</span>`;
       else read = `<span class="sent">${icon('check')}</span>`;
     }
-    const meta = last || m.edited ? `<div class="meta">${m.edited ? `<span class="edited">${icon('edit')}</span>` : ''}${last ? `<span class="tm">${read}${hm(m.ts)}</span>` : ''}</div>` : '';
+    const meta = last || m.edited || m.expires ? `<div class="meta">${m.expires ? `<span class="exp">${icon('clock')}</span>` : ''}${m.edited ? `<span class="edited">${icon('edit')}</span>` : ''}${last ? `<span class="tm">${read}${hm(m.ts)}</span>` : ''}</div>` : '';
     return `<div class="msg-row ${mine ? 'me' : 'them'} ${first ? 'first' : ''} ${last ? 'last' : ''} ${bare ? 'bare' : ''}" data-mid="${m.id}">
       ${!mine ? `<div class="av-col">${first ? `<button data-act="profile" data-id="${m.from}">${avatar(u, 32)}</button>` : ''}</div>` : ''}
       <div class="msg-col">${!mine && first && group ? `<div class="sender">${esc(u.name)}</div>` : ''}
@@ -625,6 +628,14 @@ function ChatScreen(chatId) {
     });
   }
 
+  function ttlSheet() {
+    const cur = c().ttl || 0;
+    sheet({
+      top: `<div class="ttl-pick"><div class="ttl-ic">${icon('clock')}</div><div class="ttl-opts">${TTL_OPTS.map(([s, l]) => `<button class="${s === cur ? 'on' : ''}" data-s="${s}">${l}</button>`).join('')}</div></div>`,
+      onMount: (s, close) => s.querySelectorAll('[data-s]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); api.setTTL(chatId, +b.dataset.s); renderHeader(); close(); vibrate(6); })),
+    });
+  }
+
   function chatMenu() {
     const ch = c();
     const acts = [];
@@ -635,6 +646,7 @@ function ChatScreen(chatId) {
     if (ch.type === 'group') acts.push({ label: 'Catatan', icon: 'note', run: () => router.push(NotesScreen(chatId)) });
     acts.push({ label: 'Album', icon: 'grid', run: () => router.push(AlbumScreen(chatId)) });
     acts.push({ label: 'Wallpaper', icon: 'palette', run: () => wallpaperSheet(chatId) });
+    acts.push({ label: ch.ttl ? `Pesan sementara · ${ttlLabel(ch.ttl)}` : 'Pesan sementara', icon: 'clock', run: ttlSheet });
     acts.push({ label: ch.muted ? 'Bunyikan' : 'Bisukan', icon: ch.muted ? 'bell' : 'bellOff', run: () => { api.toggleMute(chatId); renderHeader(); } });
     acts.push({ label: ch.pinned ? 'Lepas pin' : 'Pin', icon: 'pin', run: () => api.togglePin(chatId) });
     acts.push({ label: ch.archived ? 'Batal arsip' : 'Arsipkan', icon: 'archive', run: () => api.toggleArchive(chatId) });

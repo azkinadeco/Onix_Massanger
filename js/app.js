@@ -5,7 +5,7 @@ import { router, bindActs, onLongPress, toast, sheet, confirmBox, banner, initVi
 import { userAvatar, chatAvatar, chatRow, userRow, postCard, empty, preview } from './views.js';
 import { openChat, startCall } from './chat.js';
 import { clearMedia } from './media.js';
-import { KeepScreen, ArchivedScreen, setupPasscode, lockApp, StickerStoreScreen, ActivityScreen } from './features.js';
+import { KeepScreen, ArchivedScreen, setupPasscode, lockApp, StickerStoreScreen, ActivityScreen, hideChat, openHiddenChats } from './features.js';
 import {
   OnboardingScreen, ProfileScreen, EditProfileScreen, AddFriendScreen, NewGroupScreen, FriendPicker,
   PostComposeScreen, postActions, openStories, addStoryFlow,
@@ -164,6 +164,7 @@ function TabsScreen() {
         <div class="set-group">
           ${link('keep', 'bookmark', 'Keep', `<span class="count">${api.keep().length || ''}</span>`)}
           ${link('archived', 'archive', 'Arsip', `<span class="count">${api.archived().length || ''}</span>`)}
+          ${s.passcode ? link('hidden-chats', 'lock', 'Tersembunyi', '') : ''}
           ${link('store', 'store', 'Sticker', `<span class="count">${api.packs().length}</span>`)}
         </div>
         <div class="set-group">
@@ -226,7 +227,7 @@ function TabsScreen() {
   body.addEventListener('change', async e => {
     if (e.target.hasAttribute('data-lock')) {
       if (e.target.checked) { const ok = await setupPasscode(); if (!ok) e.target.checked = false; }
-      else if (await confirmBox({ title: 'Matikan kunci aplikasi?', ok: 'Matikan', danger: true })) { api.setSetting('passcode', null); }
+      else if (await confirmBox({ title: 'Matikan kunci aplikasi?', text: api.secretChats().length ? 'Chat tersembunyi bakal ditampilkan lagi.' : '', ok: 'Matikan', danger: true })) { api.setSetting('passcode', null); api.unhideAllSecret(); renderBody(); }
       else e.target.checked = true;
       return;
     }
@@ -271,6 +272,7 @@ function TabsScreen() {
     'clear-calls': async () => { if (await confirmBox({ title: 'Hapus riwayat panggilan?', ok: 'Hapus', danger: true })) api.clearCalls(); },
     'edit-profile': () => router.push(EditProfileScreen()),
     keep: () => router.push(KeepScreen()),
+    'hidden-chats': () => openHiddenChats(),
     activity: () => router.push(ActivityScreen()),
     store: () => router.push(StickerStoreScreen()),
     wish: t => {
@@ -310,11 +312,15 @@ function TabsScreen() {
         { label: c.pinned ? 'Lepas pin' : 'Pin', icon: 'pin', run: () => api.togglePin(c.id) },
         { label: c.muted ? 'Bunyikan' : 'Bisukan', icon: c.muted ? 'bell' : 'bellOff', run: () => api.toggleMute(c.id) },
         { label: 'Arsipkan', icon: 'archive', run: () => api.toggleArchive(c.id) },
+        { label: 'Sembunyikan', icon: 'lock', run: () => hideChat(c.id) },
         c.unread ? { label: 'Tandai dibaca', icon: 'check', run: () => api.markRead(c.id) } : { label: 'Tandai belum dibaca', icon: 'chat', run: () => api.markUnread(c.id) },
         { label: 'Hapus', icon: 'trash', danger: true, run: async () => { if (await confirmBox({ title: 'Hapus chat ini?', ok: 'Hapus', danger: true })) api.deleteChat(c.id); } },
       ],
     });
   });
+
+  // tahan judul "Chat" = buka chat tersembunyi
+  onLongPress(head, '.th-row h1', () => { if (cur === 'chats') openHiddenChats(); });
 
   /* ---------- geser chat: kiri = aksi, kanan = tandai dibaca ---------- */
   let sw = null, openItem = null;

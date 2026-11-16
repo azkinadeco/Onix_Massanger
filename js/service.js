@@ -142,8 +142,13 @@ function replyFor(msg) {
 function emitChat(chatId) { bus.emit('messages', chatId); bus.emit('chats'); save(); }
 
 function newMsg(chatId, from, payload) {
-  return { id: uid(), chatId, from, ts: Date.now(), type: 'text', reactions: {}, readBy: [], status: 'sent', ...payload };
+  const m = { id: uid(), chatId, from, ts: Date.now(), type: 'text', reactions: {}, readBy: [], status: 'sent', ...payload };
+  const ttl = db?.chats[chatId]?.ttl;
+  if (ttl && m.type !== 'system') m.expires = m.ts + ttl * 1000;
+  return m;
 }
+export const TTL_OPTS = [[0, 'Mati'], [30, '30 detik'], [300, '5 menit'], [3600, '1 jam'], [86400, '1 hari'], [604800, '7 hari']];
+export const ttlLabel = s => (TTL_OPTS.find(x => x[0] === s) || [0, `${s} dtk`])[1];
 
 function receive(chatId, from, payload) {
   const c = db.chats[chatId];
@@ -157,7 +162,7 @@ function receive(chatId, from, payload) {
   if (activeChat !== chatId || document.hidden) {
     c.unread = (c.unread || 0) + 1;
     if (mentionsMe) { c.mention = true; addActivity('mention', from, { chatId }, m.text); }
-    if (!c.muted || mentionsMe) bus.emit('notify', { chat: c, msg: m, mention: mentionsMe });
+    if (!c.secret && (!c.muted || mentionsMe)) bus.emit('notify', { chat: c, msg: m, mention: mentionsMe });
   }
   emitChat(chatId);
   return m;
@@ -219,6 +224,18 @@ function scheduleResponses(chatId, msg) {
     });
   }, rand(1500, 3200));
 }
+
+/* ---------- pesan sementara: hapus yang kedaluwarsa ---------- */
+setInterval(() => {
+  if (!db) return;
+  const now = Date.now();
+  for (const id in db.messages) {
+    const list = db.messages[id];
+    if (!list.some(m => m.expires && m.expires <= now)) continue;
+    db.messages[id] = list.filter(m => !(m.expires && m.expires <= now));
+    emitChat(id);
+  }
+}, 1000);
 
 /* ---------- simulasi aktivitas ---------- */
 let nextIncoming = Date.now() + rand(40e3, 70e3);
@@ -314,10 +331,20 @@ export const api = {
 
   /* chats */
   chats() {
-    return Object.values(db.chats).filter(c => !c.hidden && !c.left && !c.archived)
+    return Object.values(db.chats).filter(c => !c.hidden && !c.left && !c.archived && !c.secret)
       .sort((a, b) => (b.pinned - a.pinned) || (b.updatedAt - a.updatedAt));
   },
-  archived() { return Object.values(db.chats).filter(c => !c.hidden && !c.left && c.archived).sort((a, b) => b.updatedAt - a.updatedAt); },
+  archived() { return Object.values(db.chats).filter(c => !c.hidden && !c.left && c.archived && !c.secret).sort((a, b) => b.updatedAt - a.updatedAt); },
+  secretChats() { return Object.values(db.chats).filter(c => !c.left && c.secret).sort((a, b) => b.updatedAt - a.updatedAt); },
+  setSecret(chatId, v) { const c = db.chats[chatId]; c.secret = !!v; if (v) { c.pinned = false; c.archived = false; } save(); bus.emit('chats'); },
+  unhideAllSecret() { Object.values(db.chats).forEach(c => { c.secret = false; }); save(); bus.emit('chats'); },
+  setTTL(chatId, sec) {
+    const c = db.chats[chatId];
+    if ((c.ttl || 0) === sec) return;
+    c.ttl = sec || 0;
+    db.messages[chatId].push(newMsg(chatId, ME, { type: 'system', text: sec ? `⏱ Pesan sementara · ${ttlLabel(sec)}` : '⏱ Pesan sementara dimatikan' }));
+    emitChat(chatId);
+  },
   toggleArchive(chatId) { const c = db.chats[chatId]; c.archived = !c.archived; if (c.archived) c.pinned = false; save(); bus.emit('chats'); return c.archived; },
   setWallpaper(chatId, key) { db.chats[chatId].wallpaper = key; save(); bus.emit('chats'); bus.emit('wallpaper', chatId); },
   allChats() { return Object.values(db.chats).filter(c => !c.hidden && !c.left).sort((a, b) => b.updatedAt - a.updatedAt); },
@@ -366,7 +393,7 @@ export const api = {
   messages(chatId) { return db.messages[chatId] || []; },
   lastMessage(chatId) { const l = db.messages[chatId]; return l?.[l.length - 1]; },
   typingIn(chatId) { return [...(typing[chatId] || [])]; },
-  totalUnread(exceptId) { return Object.values(db.chats).filter(c => !c.left && c.id !== exceptId).reduce((s, c) => s + (c.unread || 0), 0); },
+  totalUnread(exceptId) { return Object.values(db.chats).filter(c => !c.left && !c.secret && c.id !== exceptId).reduce((s, c) => s + (c.unread || 0), 0); },
   setActive(chatId) { activeChat = chatId; },
   markRead(chatId) { const c = db.chats[chatId]; if (c && (c.unread || c.mention)) { c.unread = 0; c.mention = false; save(); bus.emit('chats'); } },
   markUnread(chatId) { const c = db.chats[chatId]; c.unread = Math.max(1, c.unread || 0); save(); bus.emit('chats'); },

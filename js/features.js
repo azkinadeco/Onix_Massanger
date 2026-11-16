@@ -447,3 +447,39 @@ export function ActivityScreen() {
   setTimeout(() => api.markActivityRead(), 600);
   return { el, destroy: off };
 }
+
+/* ================= CHAT TERSEMBUNYI ================= */
+export async function askPin(title = 'Masukkan PIN') {
+  let pin = api.settings().passcode;
+  if (!pin) { if (!(await setupPasscode())) return false; return true; }
+  return new Promise(res => {
+    const p = pinPad({ title });
+    const el = pinPad.last;
+    el._onPin = r => { if (r.pin === pin) { r.done(); res(true); } else r.fail(); };
+    p.then(v => { if (v == null) res(false); });
+  });
+}
+export async function hideChat(chatId) {
+  if (!(await askPin(api.settings().passcode ? 'PIN buat sembunyiin' : 'Bikin PIN'))) return;
+  api.setSecret(chatId, true);
+  toast('Disembunyikan 🤫');
+}
+export async function openHiddenChats() {
+  if (!api.settings().passcode) return toast('Belum ada chat tersembunyi');
+  if (await askPin()) router.push(HiddenChatsScreen());
+}
+export function HiddenChatsScreen() {
+  const el = h(`<div class="sub-screen">${navbar('Tersembunyi')}<div class="content hid-body"></div></div>`);
+  const body = $('.hid-body', el);
+  const render = () => {
+    const list = api.secretChats();
+    body.innerHTML = list.length ? list.map(c => chatRow(c)).join('') : empty('🤫', 'Kosong');
+  };
+  bindActs(el, { 'open-chat': t => openChat(t.dataset.id) });
+  onLongPress(body, '.chat-item', item => sheet({ actions: [
+    { label: 'Tampilkan', icon: 'eye', run: () => { api.setSecret(item.dataset.id, false); toast('Ditampilkan'); } },
+  ] }));
+  const off = bus.on('chats', render);
+  render();
+  return { el, destroy: off };
+}

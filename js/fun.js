@@ -5,7 +5,7 @@ import { icon } from './icons.js';
 import { router, bindActs, navbar, sheet, toast } from './ui.js';
 
 // item tambahan di menu + : [aksi, ikon, label, warna]
-export const FUN_ITEMS = [['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0']];
+export const FUN_ITEMS = [['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0']];
 
 /* ============ MODE KALEM ============
    Pesan yang kelihatan lagi emosi -> ditawarin tahan dulu sebelum kekirim */
@@ -448,3 +448,36 @@ export function doodleEditor(chatId) {
   document.getElementById('app').appendChild(el);
   requestAnimationFrame(() => el.classList.add('show'));
 }
+
+/* ============ GAYA TEKS ============
+   Ubah tulisan jadi gaya unik (tetap teks biasa, jadi kebaca di mana aja) */
+const mapRange = (s, lowA, upA, dig) => [...s].map(ch => {
+  const c = ch.codePointAt(0);
+  if (c >= 97 && c <= 122 && lowA) return String.fromCodePoint(lowA + c - 97);
+  if (c >= 65 && c <= 90 && upA) return String.fromCodePoint(upA + c - 65);
+  if (c >= 48 && c <= 57 && dig) return String.fromCodePoint(dig + c - 48);
+  return ch;
+}).join('');
+const SUP = { a: 'ᵃ', b: 'ᵇ', c: 'ᶜ', d: 'ᵈ', e: 'ᵉ', f: 'ᶠ', g: 'ᵍ', h: 'ʰ', i: 'ⁱ', j: 'ʲ', k: 'ᵏ', l: 'ˡ', m: 'ᵐ', n: 'ⁿ', o: 'ᵒ', p: 'ᵖ', q: 'q', r: 'ʳ', s: 'ˢ', t: 'ᵗ', u: 'ᵘ', v: 'ᵛ', w: 'ʷ', x: 'ˣ', y: 'ʸ', z: 'ᶻ', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+const FLIP = { a: 'ɐ', b: 'q', c: 'ɔ', d: 'p', e: 'ǝ', f: 'ɟ', g: 'ƃ', h: 'ɥ', i: 'ᴉ', j: 'ɾ', k: 'ʞ', l: 'l', m: 'ɯ', n: 'u', o: 'o', p: 'd', q: 'b', r: 'ɹ', s: 's', t: 'ʇ', u: 'n', v: 'ʌ', w: 'ʍ', x: 'x', y: 'ʎ', z: 'z', '?': '¿', '!': '¡', '.': '˙', ',': "'", "'": ',', '(': ')', ')': '(' };
+export const TEXT_STYLES = [
+  ['Tebal', s => mapRange(s, 0x1D5EE, 0x1D5D4, 0x1D7EC)],
+  ['Sambung', s => mapRange(s, 0x1D4EA, 0x1D4D0)],
+  ['Spongebob', s => { let i = 0; return [...s].map(ch => /\p{L}/u.test(ch) ? (i++ % 2 ? ch.toUpperCase() : ch.toLowerCase()) : ch).join(''); }],
+  ['Kecil', s => [...s.toLowerCase()].map(ch => SUP[ch] || ch).join('')],
+  ['Bulet', s => mapRange(s, 0x24D0, 0x24B6)],
+  ['Terbalik', s => [...s.toLowerCase()].map(ch => FLIP[ch] || ch).reverse().join('')],
+  ['Alay', s => [...s].map(ch => ({ a: '4', e: '3', i: '1', o: '0', s: '5' }[ch.toLowerCase()] || (Math.random() < .5 ? ch.toUpperCase() : ch.toLowerCase()))).join('')],
+  ['Renggang', s => [...s].join(' ')],
+];
+export function styleSheet(text, onPick) {
+  const src = text.trim() || 'halo';
+  sheet({
+    top: `<div class="ts-list">${TEXT_STYLES.map(([n, f], i) => `<button class="ts-item" data-s="${i}"><small>${esc(n)}</small><span>${esc(f(src).slice(0, 120))}</span></button>`).join('')}</div>`,
+    onMount: (s, close) => s.addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (b) { e.stopPropagation(); onPick(TEXT_STYLES[+b.dataset.s][1](src)); close(); } }),
+  });
+}
+
+/* ============ EFEK SUARA ============ */
+export const VOICE_FX = [[null, '🙂', 1], ['chip', '🐿️', 1.55], ['deep', '🐻', 0.72]];
+export const vfxOf = k => VOICE_FX.find(v => v[0] === (k || null)) || VOICE_FX[0];

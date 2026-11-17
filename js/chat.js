@@ -338,7 +338,7 @@ function ChatScreen(chatId) {
     } else if (m.type === 'image') {
       bare = true; body = `<button class="photo" data-act="view-img" data-mid="${m.id}"><img src="${m.src}" style="aspect-ratio:${m.w || 1}/${m.h || 1}" alt="foto"></button>`;
     } else if (m.type === 'voice') {
-      body = `<div class="bubble voice" data-act="play" data-mid="${m.id}"><span class="vplay">${icon('play')}</span><span class="wave">${waveBars(m.id)}</span><span class="vdur">${dur(m.duration || 0)}</span></div>`;
+      body = `<div class="bubble voice" data-act="play" data-mid="${m.id}"><span class="vplay">${icon('play')}</span><span class="wave">${waveBars(m.id)}</span><span class="vdur">${dur(Math.round((m.duration || 0) / fun.vfxOf(m.vfx)[2]))}</span>${m.vfx ? `<span class="vfx-tag">${fun.vfxOf(m.vfx)[1]}</span>` : ''}</div>`;
     } else if (m.type === 'location') {
       body = `<div class="bubble loc" data-act="loc" data-mid="${m.id}"><div class="map"><span class="map-pin">${icon('location')}</span></div><div class="loc-txt"><b>${esc(m.title)}</b><small>${esc(m.address)}</small></div></div>`;
     } else if (m.type === 'pay') {
@@ -630,7 +630,7 @@ function ChatScreen(chatId) {
     rec = { t0: Date.now(), chunks: [], media: null, stream: null, timer: null };
     recBar.hidden = false;
     el.classList.add('recording');
-    recBar.innerHTML = `<button class="icon-btn rec-cancel" data-act="rec-cancel">${icon('trash')}</button><div class="rec-mid"><i class="rec-dot"></i><span class="rec-time">00:00</span><span class="rec-hint"></span></div><button class="send-btn active" data-act="rec-send">${icon('send')}</button>`;
+    recBar.innerHTML = `<button class="icon-btn rec-cancel" data-act="rec-cancel">${icon('trash')}</button><div class="rec-mid"><i class="rec-dot"></i><span class="rec-time">00:00</span><span class="rec-hint"></span></div><button class="rec-fx" data-act="rec-fx" aria-label="Efek suara">🙂</button><button class="send-btn active" data-act="rec-send">${icon('send')}</button>`;
     rec.timer = setInterval(() => {
       const s = (Date.now() - rec.t0) / 1000;
       $('.rec-time', recBar).textContent = dur(s);
@@ -657,7 +657,7 @@ function ChatScreen(chatId) {
     const duration = Math.max(1, Math.round((Date.now() - r.t0) / 1000));
     const finish = (src) => {
       r.stream?.getTracks().forEach(t => t.stop());
-      if (send) api.send(chatId, withReply({ type: 'voice', duration, src }));
+      if (send) api.send(chatId, withReply({ type: 'voice', duration, src, ...(r.vfx ? { vfx: r.vfx } : {}) }));
     };
     if (r.media && r.media.state !== 'inactive') {
       r.media.onstop = () => {
@@ -683,9 +683,11 @@ function ChatScreen(chatId) {
     }
     const p = { mid, t0: Date.now(), audio: null, raf: 0 };
     playing = p;
-    const total = (m.duration || 1) * 1000;
+    const rate = fun.vfxOf(m.vfx)[2];
+    const total = (m.duration || 1) * 1000 / rate;
     if (m.src) {
       p.audio = new Audio(m.src);
+      if (rate !== 1) { p.audio.preservesPitch = false; p.audio.webkitPreservesPitch = false; p.audio.playbackRate = rate; }
       p.audio.play().catch(() => {});
       p.audio.onended = stopPlay;
     }
@@ -994,6 +996,12 @@ function ChatScreen(chatId) {
     'att-vcall': () => { closePanel(); startCall(chatId, true); },
     'rec-cancel': () => stopRec(false),
     'rec-send': () => stopRec(true),
+    'rec-fx': t => {
+      if (!rec) return;
+      const i = (fun.VOICE_FX.findIndex(v => v[0] === (rec.vfx || null)) + 1) % fun.VOICE_FX.length;
+      rec.vfx = fun.VOICE_FX[i][0]; t.textContent = fun.VOICE_FX[i][1]; t.classList.toggle('on', !!rec.vfx); vibrate(6);
+    },
+    'att-style': () => { closePanel(); fun.styleSheet(ta.value, s => { ta.value = s; autosize(); ta.focus(); }); },
     'cancel-reply': () => setReply(null),
     'view-img': t => {
       const all = api.images(chatId);

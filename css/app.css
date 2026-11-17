@@ -1581,3 +1581,13 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .dbl-heart { position: absolute; left: 50%; top: 50%; font-size: 46px; font-style: normal; pointer-events: none; transform: translate(-50%, -50%) scale(0); animation: dblHeart .85s var(--ease) forwards; filter: drop-shadow(0 4px 10px rgba(255,61,110,.4)); z-index: 3; }
 @keyframes dblHeart { 25% { transform: translate(-50%, -50%) scale(1.25); } 45% { transform: translate(-50%, -50%) scale(.95); } 70% { opacity: 1; transform: translate(-50%, -60%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -110%) scale(.8); } }
 .bubble.scratch:has(canvas:not([data-on])) .txt { visibility: hidden; }
+
+/* ============ D2-3: gaya teks & efek suara ============ */
+.ts-list { display: flex; flex-direction: column; gap: 6px; max-height: 56vh; overflow-y: auto; }
+.ts-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 14px; border-radius: 16px; background: var(--surface-2); text-align: left; }
+.ts-item small { font-size: 11px; font-weight: 700; color: var(--text-3); }
+.ts-item span { font-size: 17px; word-break: break-word; }
+.ts-item:active { transform: scale(.98); }
+.rec-fx { width: 40px; height: 40px; border-radius: 50%; font-size: 22px; background: var(--surface-2); margin-right: 6px; transition: transform .15s var(--ease); }
+.rec-fx.on { background: rgba(var(--accent-rgb), .18); transform: scale(1.08); }
+.vfx-tag { font-size: 15px; margin-left: 2px; }

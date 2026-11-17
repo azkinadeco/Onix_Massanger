@@ -5,7 +5,7 @@ import { icon } from './icons.js';
 import { router, bindActs, navbar, sheet, toast } from './ui.js';
 
 // item tambahan di menu + : [aksi, ikon, label, warna]
-export const FUN_ITEMS = [['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4']];
+export const FUN_ITEMS = [['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4'], ['spin', 'refresh', 'Roda putar', '#B05CFF'], ['who', 'users', 'Siapa paling', '#E1A100']];
 
 /* ============ MODE KALEM ============
    Pesan yang kelihatan lagi emosi -> ditawarin tahan dulu sebelum kekirim */
@@ -749,4 +749,80 @@ export function catchUp(chatId, since) {
   const K = { image: 'foto', video: 'video', voice: 'voice', poll: 'polling', event: 'event', pay: 'Pay', location: 'lokasi', file: 'file' };
   for (const [k, l] of Object.entries(K)) if (kinds[k]) bits.push(`${kinds[k]} ${l}`);
   return { n: list.length, first: list[0].id, mentions, sub: bits.slice(0, 4).join(' · ') };
+}
+
+/* ============ RODA PUTAR ============
+   Bingung milih? Roda diputar sekali di HP pengirim, hasilnya sama di semua HP */
+const WHEEL_COL = ['#7C5CFF', '#FF3D81', '#FFB020', '#10B26C', '#2E7BFF', '#FF7A1A', '#14B8C4', '#B05CFF'];
+export function spinHtml(m) {
+  const o = m.opts || [], n = o.length || 1, seg = 360 / n;
+  const grad = o.map((_, i) => `${WHEEL_COL[i % WHEEL_COL.length]} ${i * seg}deg ${(i + 1) * seg}deg`).join(',');
+  const labels = o.map((t, i) => `<em class="sp-lb" style="transform:translate(-50%,-50%) rotate(${(i + .5) * seg - 90}deg) translateX(50px)">${esc(t.slice(0, 12))}</em>`).join('');
+  return `<div class="bubble spinmsg">${m.q ? `<b class="sp-q">${esc(m.q)}</b>` : ''}
+    <div class="sp-box"><i class="sp-ptr"></i><div class="sp-wheel" data-spin="${m.id}" style="background:conic-gradient(${grad})">${labels}</div><i class="sp-hub"></i></div>
+    <div class="sp-res">🎯 ${esc(o[m.pick] || '')}</div></div>`;
+}
+const spun = new Set();
+export function initSpins(root, getMsg) {
+  root.querySelectorAll('.sp-wheel:not([data-on])').forEach(w => {
+    const m = getMsg(w.dataset.spin);
+    if (!m?.opts?.length) return;
+    w.dataset.on = 1;
+    const seg = 360 / m.opts.length;
+    const final = 360 * 6 + (360 - (m.pick + .5) * seg) + (m.jit || 0) * seg * .35;
+    const res = w.closest('.spinmsg').querySelector('.sp-res');
+    if (!spun.has(m.id) && Date.now() - m.ts < 20e3) {
+      spun.add(m.id);
+      res.classList.add('wait');
+      w.style.transform = 'rotate(0deg)';
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        w.style.transition = 'transform 3.6s cubic-bezier(.17,.67,.12,1)';
+        w.style.transform = `rotate(${final}deg)`;
+      }));
+      setTimeout(() => { res.classList.remove('wait'); res.classList.add('pop'); buzz([10, 30, 10]); }, 3700);
+    } else w.style.transform = `rotate(${final}deg)`;
+  });
+}
+export function spinSheet(chatId) {
+  composeSheet({
+    head: '🎡 <b>Roda putar</b><small>Satu pilihan per baris</small>',
+    ph: 'Bakso\nSeblak\nMie ayam',
+    go: 'Putar!',
+    extra: `<input class="fc-in sp-qin" maxlength="50" placeholder="Pertanyaannya? (mis. Makan di mana?)">`,
+    bind: s => {
+      s._ok = v => {
+        const opts = [...new Set(v.split('\n').map(x => x.trim()).filter(Boolean))].slice(0, 8);
+        if (opts.length < 2) { toast('Minimal 2 pilihan'); return false; }
+        api.send(chatId, { type: 'spin', q: s.querySelector('.sp-qin').value.trim(), opts, pick: Math.floor(Math.random() * opts.length), jit: +(Math.random() * 2 - 1).toFixed(2) });
+        buzz(10);
+      };
+    },
+  });
+}
+
+/* ============ SIAPA PALING…? ============
+   Polling yang pilihannya otomatis anggota chat */
+const WHO_Q = ['sering telat', 'receh', 'bucin', 'tidur mulu', 'jago masak', 'boros', 'galak', 'bakal kaya duluan'];
+export function whoSheet(chatId) {
+  const ch = api.chat(chatId);
+  sheet({
+    top: `<div class="fun-compose">
+      <div class="fc-h">🤔 <b>Siapa paling…?</b><small>Pilihannya otomatis semua anggota</small></div>
+      <div class="fc-chips">${WHO_Q.map(q => `<button data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>
+      <div class="who-in"><span>Siapa paling</span><input class="fc-in" maxlength="40" placeholder="…"></div>
+      <button class="btn primary wide" data-go>Kirim</button>
+    </div>`,
+    onMount: (s, close) => {
+      const inp = s.querySelector('.fc-in');
+      s.querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); inp.value = b.dataset.q; s.querySelectorAll('[data-q]').forEach(x => x.classList.toggle('on', x === b)); }));
+      s.querySelector('[data-go]').addEventListener('click', e => {
+        e.stopPropagation();
+        const q = inp.value.trim().replace(/\?+$/, '');
+        if (!q) { inp.focus(); return toast('Paling apa nih?'); }
+        const names = ch.members.map(id => id === ME ? api.me().name : api.user(id)?.name).filter(Boolean).slice(0, 12);
+        api.createPoll(chatId, `🤔 Siapa paling ${q}?`, names);
+        buzz(10); close();
+      });
+    },
+  });
 }

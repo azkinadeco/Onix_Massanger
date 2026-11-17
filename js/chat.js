@@ -357,6 +357,8 @@ function ChatScreen(chatId) {
       body = p
         ? `<button class="bubble postmsg" data-act="open-post" data-pid="${p.id}">${img ? `<img src="${img}" alt="">` : ''}<span class="pm-txt"><span class="pm-who">${avatar(pu, 20)}<b>${esc(pu?.name || '')}</b></span>${p.text ? `<span class="pm-body">${esc(p.text.slice(0, 120))}</span>` : ''}<small>${icon('voom', 'tiny')} VOOM${p.images?.length > 1 ? ` · ${p.images.length} foto` : ''}</small></span></button>`
         : `<div class="bubble unsent">${icon('voom', 'tiny')} Post udah dihapus</div>`;
+    } else if (m.type === 'spin') {
+      bare = true; body = fun.spinHtml(m);
     } else if (m.type === 'checkin') {
       body = fun.checkinHtml(m, chatId);
     } else if (m.type === 'quiz') {
@@ -443,6 +445,7 @@ function ChatScreen(chatId) {
     fun.initScratch(inner, mid => api.setLocal(chatId, mid, { scratched: true }));
     renderIce();
     fun.initDoodles(inner, msgById);
+    fun.initSpins(inner, msgById);
     if (firstRender || stick || (newLast && lm.from === ME)) { scrollBottom(); }
     else if (newLast) { newCount++; showJump(); }
     lastId = lm?.id;
@@ -610,7 +613,7 @@ function ChatScreen(chatId) {
     }
     editing = null;
     const u = api.user(m.from);
-    const text = m.type === 'text' ? m.text : m.type === 'poll' ? '📊 ' + m.poll.q : { sticker: 'Sticker ' + m.sticker, image: '📷 Foto', voice: '🎤 Voice note', location: '📍 Lokasi', video: '🎬 Video', file: '📎 ' + m.name, doodle: '🖍️ Coretan', checkin: '💭 Cek kabar', quiz: '🎯 Kuis', countdown: '⏱️ ' + (m.title || 'Hitung mundur'), capsule: '⏳ Kapsul waktu', scratch: '🫣 Pesan gosok' }[m.type];
+    const text = m.type === 'text' ? m.text : m.type === 'poll' ? '📊 ' + m.poll.q : { sticker: 'Sticker ' + m.sticker, image: '📷 Foto', voice: '🎤 Voice note', location: '📍 Lokasi', video: '🎬 Video', file: '📎 ' + m.name, doodle: '🖍️ Coretan', spin: '🎡 Roda putar', checkin: '💭 Cek kabar', quiz: '🎯 Kuis', countdown: '⏱️ ' + (m.title || 'Hitung mundur'), capsule: '⏳ Kapsul waktu', scratch: '🫣 Pesan gosok' }[m.type];
     replyTo = { id: m.id, name: m.from === ME ? 'Kamu' : u?.name, text: (text || '').slice(0, 120) };
     replyBar.innerHTML = `<div class="rb-line"></div><div class="rb-txt"><b>${esc(replyTo.name)}</b><span>${esc(replyTo.text)}</span></div><button class="icon-btn sm" data-act="cancel-reply">${icon('x')}</button>`;
     replyBar.hidden = false;
@@ -968,6 +971,8 @@ function ChatScreen(chatId) {
     'cu-first': () => { bindGoto(cu.first); catchBar.hidden = true; },
     'cu-at': () => { bindGoto(cu.mentions[cuAt++ % cu.mentions.length]); },
     'cu-x': () => { catchBar.hidden = true; },
+    'att-spin': () => { closePanel(); fun.spinSheet(chatId); },
+    'att-who': () => { closePanel(); fun.whoSheet(chatId); },
     'att-checkin': () => { closePanel(); fun.checkinSheet(chatId); },
     'ck-ans': t => fun.answerCheckin(chatId, t.dataset.mid, +t.dataset.v),
     'att-quiz': () => { closePanel(); router.push(fun.QuizComposeScreen(chatId)); },
@@ -1074,7 +1079,7 @@ function ChatScreen(chatId) {
       if (line) { const hrt = h('<i class="dbl-heart">❤️</i>'); line.appendChild(hrt); setTimeout(() => hrt.remove(), 900); }
     } else lastTap = { mid, t: now };
   });
-  onLongPress(inner, '.msg-row .bubble, .msg-row .sticker, .msg-row .photo, .msg-row .jumbo, .msg-row .doodle-msg', b => msgMenu(b.closest('.msg-row')));
+  onLongPress(inner, '.msg-row .bubble, .msg-row .spinmsg, .msg-row .sticker, .msg-row .photo, .msg-row .jumbo, .msg-row .doodle-msg', b => msgMenu(b.closest('.msg-row')));
 
   /* ---------- lifecycle ---------- */
   const offs = [

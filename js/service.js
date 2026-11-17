@@ -130,6 +130,7 @@ const BOT = ['Ini akun resmi (dummy) Onix 🤖 Coba chat teman kamu ya!', 'Fitur
 
 function replyFor(msg) {
   if (msg.type === 'nudge') return Math.random() < 0.4 ? { type: 'nudge' } : { text: pick(['apaa 😆', 'iyaa kenapaa', 'hadir 🙋', 'jangan colek colek ih']) };
+  if (msg.type === 'spin') return { text: pick(['yaudah fix ' + (msg.opts?.[msg.pick] || '') + ' 🤝', 'takdir berkata lain wkwk', 'oke deal!', 'puter ulang dong 😭']) };
   if (msg.type === 'checkin') return { type: 'checkans', ref: msg.id, v: 1 + Math.floor(Math.random() * 4) };
   if (msg.type === 'quiz') { const n = msg.quiz?.qs?.length || 0; return { type: 'quizres', ref: msg.id, total: n, score: Math.floor(Math.random() * (n + 1)) }; }
   if (msg.type === 'countdown') return { text: pick(['gak sabar!! 🤩', 'yeay dikit lagi', 'catet 📌']) };

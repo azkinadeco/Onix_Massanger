@@ -5,7 +5,7 @@ import { router, bindActs, onLongPress, toast, sheet, confirmBox, banner, initVi
 import { userAvatar, chatAvatar, chatRow, userRow, postCard, empty, preview } from './views.js';
 import { openChat, startCall } from './chat.js';
 import { clearMedia } from './media.js';
-import { OnlineScreen } from './online.js';
+import { OnlineScreen, handleJoinLink } from './online.js';
 import * as backend from './backend.js';
 import { KeepScreen, ArchivedScreen, setupPasscode, lockApp, StickerStoreScreen, ActivityScreen, hideChat, openHiddenChats, StorageScreen, moodRow, setMoodSheet, viewMoodSheet, WalletScreen, BackupScreen } from './features.js';
 import {
@@ -438,8 +438,9 @@ function startApp() {
   applyTheme();
   router.setRoot(TabsScreen());
   lockApp();
-  backend.init();
+  backend.init().then(() => setTimeout(handleJoinLink, 500));
 }
+window.addEventListener('hashchange', () => { if (api.ready && /join=/.test(location.hash)) handleJoinLink(); });
 
 bus.on('settings', applyTheme);
 bus.on('notify', ({ chat, msg, mention }) => {

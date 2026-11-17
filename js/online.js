@@ -7,6 +7,19 @@ import { empty } from './views.js';
 import { openChat } from './chat.js';
 import * as be from './backend.js';
 
+// buka link undangan (#join=KODE)
+export async function handleJoinLink() {
+  const m = location.hash.match(/join=([a-z0-9]+)/i);
+  const code = m?.[1] || sessionStorage.getItem('onix:join');
+  if (!code) return;
+  if (m) { history.replaceState(history.state, '', location.pathname); sessionStorage.setItem('onix:join', code); }
+  if (!api.remote.state()) { toast('Masuk Onix Online dulu buat gabung grup 🌐'); return; }
+  sessionStorage.removeItem('onix:join');
+  if (!(await confirmBox({ title: 'Gabung grup?', text: 'Kamu diundang lewat link.', ok: 'Gabung' }))) return;
+  try { const id = await be.joinGroup(code); toast('Kamu gabung 🎉'); openChat(id); }
+  catch (e) { toast(e?.response?.message || be.errText(e)); }
+}
+
 export function OnlineScreen() {
   const el = h(`<div class="sub-screen">${navbar('Onix Online')}<div class="content on-body"></div></div>`);
   const body = $('.on-body', el);
@@ -63,6 +76,7 @@ export function OnlineScreen() {
       try {
         mode === 'up' ? await be.signUp({ handle, password, url }) : await be.signIn({ handle, password, url });
         vibrate(10); toast('Kamu online 🌐');
+        setTimeout(handleJoinLink, 600);
       } catch (e) { toast(be.errText(e)); }
       busy = false; render();
     },

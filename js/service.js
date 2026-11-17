@@ -437,6 +437,8 @@ const remote = {
     db.posts.sort((a, b) => b.ts - a.ts);
     save(); bus.emit('posts');
   },
+  chatGone(ids) { let ch = false; for (const c of Object.values(db.chats)) if (c.remote && !c.left && !ids.includes(c.id)) { c.left = true; ch = true; } if (ch) { save(); bus.emit('chats'); } },
+  isAdmin(chatId, uid = ME) { const c = db.chats[chatId]; return !!c && (c.type === 'direct' || !c.owner || c.owner === uid || (c.admins || []).includes(uid)); },
   setHasMore(chatId, v) { const c = db.chats[chatId]; if (c && c.hasMore !== v) { c.hasMore = v; save(); } },
   postSaved(localId, rid) { const p = db.posts.find(x => x.id === localId); if (p) { p.rid = rid; p.id = rid; save(); bus.emit('posts'); } },
   storySaved(itemId, rid) { const it = db.myStory?.items.find(i => i.id === itemId); if (it) { it.rid = rid; save(); } },
@@ -476,7 +478,8 @@ const remote = {
   chat(r) {
     const t = Date.parse(r.created) || Date.now();
     const c = db.chats[r.id] ||= { id: r.id, pinned: false, muted: false, unread: 0, draft: '', createdAt: t, updatedAt: t };
-    Object.assign(c, { type: r.type, members: (r.members || []).map(remote.mapId), name: r.name || '', hue: r.hue ?? c.hue, emoji: r.emoji || c.emoji, remote: true, left: false });
+    Object.assign(c, { type: r.type, members: (r.members || []).map(remote.mapId), name: r.name || '', hue: r.hue ?? c.hue, emoji: r.emoji || c.emoji, remote: true, left: false,
+      owner: r.owner ? remote.mapId(r.owner) : null, admins: (r.admins || []).map(remote.mapId), invite: r.invite || '' });
     db.messages[r.id] ||= [];
     return c;
   },

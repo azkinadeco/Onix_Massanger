@@ -1409,3 +1409,10 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .call.has-remote.live .call-center { opacity: 1; justify-content: flex-start; padding-top: calc(var(--sat) + 8px); pointer-events: none; }
 .call.has-remote.live .call-av, .call.has-remote.live .call-center h2 { display: none; }
 .call.has-remote.live .call-status { padding: 4px 12px; border-radius: 99px; background: rgba(0,0,0,.35); font-size: 13px; font-weight: 700; }
+
+/* ============ admin grup & undangan ============ */
+.gi-role { margin-left: 6px; background: rgba(var(--accent-rgb), .14); color: var(--accent); }
+.inv-box { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 0 14px; }
+.inv-ic { width: 56px; height: 56px; border-radius: 18px; display: grid; place-items: center; background: rgba(var(--accent-rgb), .14); color: var(--accent); }
+.inv-ic .ic { width: 26px; height: 26px; }
+.inv-link { font-size: 12.5px; padding: 8px 12px; border-radius: 12px; background: var(--surface-2); word-break: break-all; text-align: center; max-width: 100%; }

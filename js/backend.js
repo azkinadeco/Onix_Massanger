@@ -195,7 +195,7 @@ async function systemMsg(chatId, text) {
   try { await pb.collection('messages').create({ chat: chatId, sender: myId(), cid: 'sys' + Date.now().toString(36), type: 'system', text, data: {} }); } catch { /* */ }
 }
 export async function createGroup(name, ids, emoji) {
-  const rec = await pb.collection('chats').create({ type: 'group', name, emoji, hue: Math.floor(Math.random() * 360), members: [myId(), ...ids] }, { expand: 'members' });
+  const rec = await pb.collection('chats').create({ type: 'group', name, emoji, hue: Math.floor(Math.random() * 360), members: [myId(), ...ids], owner: myId(), admins: [myId()] }, { expand: 'members' });
   const c = ingestChat(rec);
   api.remote.done();
   await systemMsg(rec.id, `${api.me().name} membuat grup "${name}"`);
@@ -214,6 +214,32 @@ api.remote.hooks.addMembers = async (chatId, ids) => {
 api.remote.hooks.leave = async chatId => {
   try { await systemMsg(chatId, `${api.me().name} keluar dari grup`); await pb.collection('chats').update(chatId, { 'members-': [myId()] }); } catch (e) { console.warn(e); }
 };
+
+/* ---------- admin grup & undangan ---------- */
+const nm = id => api.user(id)?.name?.split(' ')[0] || 'seseorang';
+export async function setAdmin(chatId, uid, on) {
+  await pb.collection('chats').update(chatId, { [on ? 'admins+' : 'admins-']: [uid] });
+  await systemMsg(chatId, `${api.me().name} ${on ? 'menjadikan' : 'mencabut admin'} ${nm(uid)}${on ? ' admin' : ''}`);
+}
+export async function kick(chatId, uid) {
+  await pb.collection('chats').update(chatId, { 'members-': [uid], 'admins-': [uid] });
+  await systemMsg(chatId, `${api.me().name} mengeluarkan ${nm(uid)}`);
+}
+export async function inviteCode(chatId, reset = false) {
+  const c = api.chat(chatId);
+  if (c?.invite && !reset) return c.invite;
+  const code = Array.from(crypto.getRandomValues(new Uint8Array(8)), b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
+  const r = await pb.collection('chats').update(chatId, { invite: code }, { expand: 'members' });
+  ingestChat(r); api.remote.done();
+  return code;
+}
+export const inviteLink = code => `${location.origin}${location.pathname}#join=${code}`;
+export async function joinGroup(code) {
+  const r = await pb.send('/api/onix/join/' + encodeURIComponent(code), { method: 'POST' });
+  await sync();
+  await systemMsg(r.id, `${api.me().name} gabung lewat link undangan`);
+  return r.id;
+}
 
 /* ---------- presence (heartbeat) ---------- */
 let beatT = null;
@@ -431,6 +457,7 @@ export function sync() {
     try {
       const chats = await pb.collection('chats').getFullList({ expand: 'members', sort: '-updated' });
       chats.forEach(ingestChat);
+      api.remote.chatGone(chats.map(c => c.id));
       for (const c of chats) {
         const res = await pb.collection('messages').getList(1, 300, { filter: pb.filter('chat = {:c}', { c: c.id }), sort: '-created' });
         res.items.reverse().forEach(r => api.remote.message(withFile(r), false));

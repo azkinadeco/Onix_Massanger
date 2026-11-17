@@ -455,10 +455,45 @@ export function GroupInfoScreen(chatId) {
       <div class="list-item slim" data-act="notes"><span class="round-ic">${icon('note')}</span><div class="li-main"><div class="li-name">Catatan</div></div><span class="count">${api.notes(chatId).length || ''}</span>${icon('chevronRight', 'tiny')}</div>
       <div class="section-h">Anggota</div>
       <div class="list-item" data-act="add-members"><span class="round-ic">${icon('userPlus')}</span><div class="li-main"><div class="li-name accent-txt">Tambah anggota</div></div></div>
-      ${c.members.map(id => { const u = api.user(id); return id === ME ? `<div class="list-item">${avatar(u, 44)}<div class="li-main"><div class="li-name">${esc(u.name)} <span class="pill">Kamu</span></div></div></div>` : userRow(u, { sub: presence(u) }); }).join('')}
+      ${c.remote ? `<div class="list-item slim" data-act="invite"><span class="round-ic">${icon('link')}</span><div class="li-main"><div class="li-name">Link undangan</div></div>${icon('chevronRight', 'tiny')}</div>` : ''}
+      ${c.members.map(id => {
+        const u = api.user(id);
+        const badge = c.remote ? (c.owner === id ? '<span class="pill gi-role">Pemilik</span>' : (c.admins || []).includes(id) ? '<span class="pill gi-role">Admin</span>' : '') : '';
+        if (id === ME) return `<div class="list-item">${avatar(u, 44)}<div class="li-main"><div class="li-name">${esc(u.name)} <span class="pill">Kamu</span>${badge}</div></div></div>`;
+        if (c.remote) return `<div class="list-item" data-act="member" data-id="${id}">${avatar(u, 44)}<div class="li-main"><div class="li-name">${esc(u?.name || '')}${badge}</div><div class="li-sub">${esc(presence(u))}</div></div></div>`;
+        return userRow(u, { sub: presence(u) });
+      }).join('')}
       <div class="pad"><button class="btn danger-ghost wide" data-act="leave">${icon('logout')} Keluar dari grup</button></div>`;
   }
   bindActs(el, {
+    member: t => {
+      const id = t.dataset.id, c = api.chat(chatId), u = api.user(id);
+      const acts = [{ label: 'Lihat profil', icon: 'user', run: () => router.push(ProfileScreen(id)) }];
+      if (api.isAdmin(chatId) && c.owner !== id) {
+        const isAd = (c.admins || []).includes(id);
+        acts.push({ label: isAd ? 'Cabut admin' : 'Jadikan admin', icon: 'star', run: async () => { const be = await import('./backend.js'); try { await be.setAdmin(chatId, id, !isAd); toast(isAd ? 'Admin dicabut' : 'Jadi admin ⭐'); } catch (e) { toast(be.errText(e)); } } });
+        acts.push({ label: 'Keluarkan', icon: 'logout', danger: true, run: async () => {
+          if (!(await confirmBox({ title: `Keluarkan ${firstName(u?.name || '')}?`, ok: 'Keluarkan', danger: true }))) return;
+          const be = await import('./backend.js'); try { await be.kick(chatId, id); toast('Dikeluarkan'); } catch (e) { toast(be.errText(e)); }
+        } });
+      }
+      sheet({ title: u?.name, actions: acts });
+    },
+    invite: async () => {
+      const be = await import('./backend.js');
+      if (!api.isAdmin(chatId) && !api.chat(chatId).invite) return toast('Cuma admin yang bisa bikin link');
+      let code;
+      try { code = await be.inviteCode(chatId); } catch (e) { return toast(be.errText(e)); }
+      const link = be.inviteLink(code);
+      sheet({
+        top: `<div class="inv-box"><div class="inv-ic">${icon('link')}</div><b>${esc(api.chat(chatId).name)}</b><code class="inv-link">${esc(link)}</code></div>`,
+        actions: [
+          { label: 'Salin link', icon: 'copy', run: async () => { await copyText(link); toast('Link disalin'); } },
+          { label: 'Bagikan', icon: 'share', run: () => shareText(`Gabung grup "${api.chat(chatId).name}" di Onix: ${link}`) },
+          ...(api.isAdmin(chatId) ? [{ label: 'Reset link', icon: 'undo', danger: true, run: async () => { await be.inviteCode(chatId, true); toast('Link lama nggak berlaku lagi'); } }] : []),
+        ],
+      });
+    },
     rename: async () => { const v = await promptBox({ title: 'Ganti nama grup', value: api.chat(chatId).name, max: 40 }); if (v) api.renameGroup(chatId, v); },
     call: () => startCall(chatId, false),
     video: () => startCall(chatId, true),

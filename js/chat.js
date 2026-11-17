@@ -197,6 +197,7 @@ function ChatScreen(chatId) {
       <div class="ice-bar" hidden></div>
       <div class="mention-list" hidden></div>
       <button class="sched-bar" data-act="sched-list" hidden></button>
+      <div class="wait-bar" hidden></div>
       <div class="reply-bar" hidden></div>
       <div class="rec-bar" hidden></div>
       <div class="composer">
@@ -504,13 +505,20 @@ function ChatScreen(chatId) {
       held = true; vibrate(12);
       const text = ta.value.trim();
       scheduleSheet(at => { api.schedule(chatId, withReply({ type: 'text', text }), at); ta.value = ''; autosize(); },
-        fx => { api.send(chatId, withReply({ type: 'text', text, effect: fx })); ta.value = ''; autosize(); vibrate(10); });
+        fx => { api.send(chatId, withReply({ type: 'text', text, effect: fx })); ta.value = ''; autosize(); vibrate(10); },
+        canWait() ? () => { api.waitOnline(chatId, withReply({ type: 'text', text })); ta.value = ''; autosize(); toast(`Nanti kekirim pas ${firstName(api.peerOf(c()).name)} online 🟢`); } : null);
     }, 450);
   });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => sendBtn.addEventListener(ev, () => clearTimeout(holdT)));
   sendBtn.addEventListener('click', e => { if (held) { e.stopImmediatePropagation(); held = false; } }, true);
   sendBtn.addEventListener('contextmenu', e => e.preventDefault());
-  const schedBar = $('.sched-bar', el);
+  const schedBar = $('.sched-bar', el), waitBar = $('.wait-bar', el);
+  function canWait() { const ch = c(), p = api.peerOf(ch); return ch.type === 'direct' && p && !p.official && !p.online && api.seenVisible(p.id); }
+  function renderWaits() {
+    const list = api.waits().filter(w => w.chatId === chatId);
+    waitBar.hidden = !list.length;
+    if (list.length) waitBar.innerHTML = `<span>🟢 ${list.length} pesan nunggu ${esc(firstName(api.peerOf(c())?.name || ''))} online</span><button class="text-btn" data-act="wait-cancel">Batal</button>`;
+  }
   function renderSched() {
     const list = api.scheduledIn(chatId);
     schedBar.hidden = !list.length;
@@ -972,9 +980,11 @@ function ChatScreen(chatId) {
     'ice-topic': t => { ta.value = t.dataset.t; autosize(); ta.focus(); iceBar.hidden = true; },
     'ice-more': () => renderIce(true),
     'ice-x': () => { iceOff.add(fun.icebreaker(chatId)?.key); iceBar.hidden = true; },
+    'wait-cancel': () => { api.waits().filter(w => w.chatId === chatId).forEach(w => api.cancelWait(w.id)); toast('Dibatalin'); },
     'cu-first': () => { bindGoto(cu.first); catchBar.hidden = true; },
     'cu-at': () => { bindGoto(cu.mentions[cuAt++ % cu.mentions.length]); },
     'cu-x': () => { catchBar.hidden = true; },
+    'att-tsticker': () => { closePanel(); fun.textStickerSheet(chatId); },
     'att-todo': () => { closePanel(); fun.todoSheet(chatId); },
     'att-story': () => { closePanel(); fun.storySheet(chatId); },
     'att-guess': () => { closePanel(); ta.blur(); fun.doodleEditor(chatId, { guess: true }); },
@@ -1099,6 +1109,7 @@ function ChatScreen(chatId) {
     bus.on('presence', renderHeader),
     bus.on('wallpaper', id => id === chatId && renderHeader()),
     bus.on('scheduled', renderSched),
+    bus.on('waits', renderWaits),
     bus.on('packs', () => panelMode === 'stickers' && renderPanel()),
   ];
   const onVis = () => { if (!document.hidden) api.markRead(chatId); };
@@ -1110,6 +1121,7 @@ function ChatScreen(chatId) {
   renderMsgs();
   renderTyping();
   renderSched();
+  renderWaits();
 
   return {
     el, chatId, goto: bindGoto,

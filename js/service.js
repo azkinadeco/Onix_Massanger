@@ -847,6 +847,20 @@ export const api = {
   },
   // simulasi teman (mode demo)
   funActAs(chatId, mid, uid, value) { const m = db.messages[chatId]?.find(x => x.id === mid); if (m && !db.chats[chatId].remote) { (m.acts ||= {})[uid] = value; emitChat(chatId); } },
+  /* kirim pas dia online: pesan nunggu sampai teman online */
+  waits() { return db.waits ||= []; },
+  waitOnline(chatId, payload) { api.waits().push({ id: uid('wo'), chatId, payload, ts: Date.now() }); save(); bus.emit('waits'); },
+  cancelWait(id) { db.waits = api.waits().filter(w => w.id !== id); save(); bus.emit('waits'); },
+  flushWaits() {
+    const sent = [];
+    for (const w of api.waits().slice()) {
+      const c = db.chats[w.chatId], peer = c && api.peerOf(c);
+      if (!c || c.left) { api.cancelWait(w.id); continue; }
+      if (peer?.online) { db.waits = api.waits().filter(x => x.id !== w.id); api.send(w.chatId, w.payload); sent.push(peer); }
+    }
+    if (sent.length) { save(); bus.emit('waits'); }
+    return sent;
+  },
   // status lokal (nggak dikirim ke server), mis. kapsul udah dibuka / pesan udah digosok
   setLocal(chatId, mid, patch) { const m = db.messages[chatId]?.find(x => x.id === mid); if (m) { Object.assign(m, patch); emitChat(chatId); } },
   cancelHold(chatId, mid) {

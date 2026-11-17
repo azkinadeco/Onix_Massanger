@@ -5,7 +5,7 @@ import { icon } from './icons.js';
 import { router, bindActs, navbar, sheet, toast } from './ui.js';
 
 // item tambahan di menu + : [aksi, ikon, label, warna]
-export const FUN_ITEMS = [['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4'], ['spin', 'refresh', 'Roda putar', '#B05CFF'], ['todo', 'checks', 'Checklist', '#0FB46C'], ['story', 'note', 'Cerita', '#7C5CFF'], ['guess', 'brush', 'Tebak gambar', '#FF5C8A'], ['who', 'users', 'Siapa paling', '#E1A100']];
+export const FUN_ITEMS = [['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4'], ['spin', 'refresh', 'Roda putar', '#B05CFF'], ['todo', 'checks', 'Checklist', '#0FB46C'], ['story', 'note', 'Cerita', '#7C5CFF'], ['guess', 'brush', 'Tebak gambar', '#FF5C8A'], ['tsticker', 'sticker', 'Stiker teks', '#FF7A1A'], ['who', 'users', 'Siapa paling', '#E1A100']];
 
 /* ============ MODE KALEM ============
    Pesan yang kelihatan lagi emosi -> ditawarin tahan dulu sebelum kekirim */
@@ -939,4 +939,74 @@ export async function guess(chatId, m) {
   const prev = m.acts?.[ME] || { n: 0 };
   api.funAct(chatId, m.id, { ok, n: (prev.n || 0) + (ok ? 0 : 1), g: g.slice(0, 30), ts: Date.now() });
   if (ok) { toast('BENER! 🎉'); buzz([10, 40, 10, 40, 10]); } else { toast('Salah, coba lagi 😆'); buzz([30, 50, 30]); }
+}
+
+/* ============ STIKER DARI TEKS ============ */
+const TS_STYLES = [
+  { bg: null, fill: ['#FF3D81', '#7C5CFF'], stroke: '#fff', sw: 18, shadow: 'rgba(0,0,0,.25)' },
+  { bg: '#FFD23F', fill: ['#15151C', '#15151C'], stroke: null, pill: true },
+  { bg: null, fill: ['#2EE6FF', '#B06CFF'], stroke: '#15151C', sw: 10, glow: '#2EE6FF' },
+  { bg: null, fill: ['#FFB020', '#FF5C38'], stroke: '#15151C', sw: 12, retro: true },
+];
+function wrapLines(x, text, maxW) {
+  const words = text.split(/\s+/), lines = [];
+  let cur = '';
+  for (const w of words) { const t = cur ? cur + ' ' + w : w; if (x.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; }
+  if (cur) lines.push(cur);
+  return lines.slice(0, 4);
+}
+export function textSticker(text, si, size = 360) {
+  const st = TS_STYLES[si], cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const x = cv.getContext('2d'), F = '900 {s}px -apple-system, "SF Pro Rounded", system-ui, sans-serif';
+  let fs = 92, lines;
+  do { x.font = F.replace('{s}', fs); lines = wrapLines(x, text, size * .82); fs -= 4; }
+  while (fs > 26 && (lines.length * fs * 1.1 > size * .78 || lines.some(l => x.measureText(l).width > size * .86)));
+  fs += 4;
+  x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
+  const lh = fs * 1.08, y0 = size / 2 - (lines.length - 1) * lh / 2;
+  x.save(); x.translate(size / 2, size / 2); x.rotate(-.06); x.translate(-size / 2, -size / 2);
+  if (st.pill) {
+    const w = Math.max(...lines.map(l => x.measureText(l).width)) + 50, hh = lines.length * lh + 36;
+    x.fillStyle = st.bg; x.shadowColor = 'rgba(0,0,0,.2)'; x.shadowBlur = 14; x.shadowOffsetY = 6;
+    x.beginPath(); x.roundRect((size - w) / 2, (size - hh) / 2, w, hh, 30); x.fill();
+    x.shadowColor = 'transparent';
+  }
+  lines.forEach((l, i) => {
+    const y = y0 + i * lh;
+    if (st.retro) { x.fillStyle = '#15151C'; x.fillText(l, size / 2 + 7, y + 7); }
+    if (st.stroke) { x.strokeStyle = st.stroke; x.lineWidth = st.sw; if (st.shadow) { x.shadowColor = st.shadow; x.shadowBlur = 10; x.shadowOffsetY = 4; } x.strokeText(l, size / 2, y); x.shadowColor = 'transparent'; }
+    const g = x.createLinearGradient(0, y - fs / 2, 0, y + fs / 2);
+    g.addColorStop(0, st.fill[0]); g.addColorStop(1, st.fill[1]);
+    if (st.glow) { x.shadowColor = st.glow; x.shadowBlur = 24; }
+    x.fillStyle = g; x.fillText(l, size / 2, y);
+    x.shadowColor = 'transparent';
+  });
+  x.restore();
+  return cv.toDataURL('image/png');
+}
+export function textStickerSheet(chatId, onSent) {
+  sheet({
+    top: `<div class="fun-compose">
+      <div class="fc-h">💬 <b>Stiker teks</b><small>Ketik, pilih gaya, langsung jadi stiker</small></div>
+      <input class="fc-in" maxlength="40" placeholder="GAS!! / otw / makasih bestie" value="GAS!!">
+      <div class="tsk-grid">${TS_STYLES.map((_, i) => `<button data-st="${i}"><img alt=""></button>`).join('')}</div>
+      <label class="tsk-save"><input type="checkbox" checked> Simpan ke stiker buatanku</label>
+    </div>`,
+    onMount: (s, close) => {
+      const inp = s.querySelector('.fc-in'), imgs = [...s.querySelectorAll('.tsk-grid img')];
+      const draw = () => { const t = inp.value.trim() || '…'; imgs.forEach((im, i) => { im.src = textSticker(t, i, 200); }); };
+      let tm; inp.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(draw, 120); });
+      draw();
+      s.querySelectorAll('[data-st]').forEach(b => b.addEventListener('click', e => {
+        e.stopPropagation();
+        const t = inp.value.trim();
+        if (!t) return inp.focus();
+        const src = textSticker(t, +b.dataset.st);
+        if (s.querySelector('.tsk-save input').checked) api.addMySticker(src);
+        api.send(chatId, { type: 'sticker', sticker: '💬', img: src });
+        buzz(10); close(); onSent?.();
+      }));
+    },
+  });
 }

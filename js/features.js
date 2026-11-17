@@ -275,7 +275,7 @@ export function fmtWhen(ts) {
 const toLocalInput = ts => { const d = new Date(ts - new Date().getTimezoneOffset() * 60e3); return d.toISOString().slice(0, 16); };
 
 /* ================= PESAN TERJADWAL ================= */
-export function scheduleSheet(onPick, onEffect) {
+export function scheduleSheet(onPick, onEffect, onOnline) {
   const FX = [['confetti', '🎉'], ['hearts', '💖'], ['fireworks', '🎆'], ['balloons', '🎈'], ['snow', '❄️']];
   const now = Date.now();
   const tomorrow8 = new Date(); tomorrow8.setDate(tomorrow8.getDate() + 1); tomorrow8.setHours(8, 0, 0, 0);
@@ -285,10 +285,12 @@ export function scheduleSheet(onPick, onEffect) {
       ${onEffect ? `<div class="sp-head">${icon('sparkle')} Efek</div><div class="sp-fx">${FX.map(([k, e]) => `<button data-fx="${k}">${e}</button>`).join('')}</div>` : ''}
       <div class="sp-head">${icon('clock')} Kirim nanti</div>
       <div class="sp-opts">${opts.map(([l, t], i) => `<button data-i="${i}" class="sp-opt">${l}</button>`).join('')}</div>
+      ${onOnline ? `<button class="sp-online" data-online>🟢 Kirim pas dia online</button>` : ''}
       <div class="sp-custom"><input type="datetime-local" class="field" min="${toLocalInput(now)}" value="${toLocalInput(now + 30 * 60e3)}"><button class="btn primary sm" data-custom>${icon('check')}</button></div>
     </div>`,
     onMount: (s, close) => {
       s.querySelectorAll('[data-fx]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); close(); onEffect(b.dataset.fx); }));
+      s.querySelector('[data-online]')?.addEventListener('click', e => { e.stopPropagation(); close(); onOnline(); });
       s.querySelectorAll('.sp-opt').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); onPick(opts[+b.dataset.i][1]); close(); toast('Dijadwalkan ⏰'); }));
       s.querySelector('[data-custom]').addEventListener('click', e => {
         e.stopPropagation();

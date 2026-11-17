@@ -505,6 +505,9 @@ setInterval(checkReminders, 15e3);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReminders(); });
 
 setInterval(() => api.ready && api.endFocusIfDone(), 15e3);
+// kirim pas dia online
+const flushWaits = () => { if (!api.ready || !api.waits().length) return; for (const u of api.flushWaits()) toast(`Kekirim, ${firstName(u.name)} udah online 🟢`); };
+bus.on('presence', flushWaits); bus.on('chats', () => setTimeout(flushWaits, 0)); setInterval(flushWaits, 20e3);
 bus.on('notify', ({ chat, msg, mention }) => {
   if (api.focus() && !mention) return; // lagi fokus: diem
   const s = api.settings();

@@ -55,6 +55,7 @@ function migrate(d) {
   d.notes ||= {};
   d.scheduled ||= [];
   d.packs ||= DEFAULT_PACKS.slice();
+  d.wallet ||= { balance: 250000, tx: [{ id: 'tx0', type: 'topup', amount: 250000, ts: Date.now() - 2 * 864e5 }] };
   if (!d.moods) {
     const t = Date.now();
     const seed = [['☕', 'butuh kopi'], ['🎧', 'lagi denger NIKI'], ['📚', 'deadline mode'], ['🏃‍♀️', 'otw gym'], ['😴', 'ngantuk parah']];
@@ -139,6 +140,7 @@ function replyFor(msg) {
     if (msg.game === 'dice') return Math.random() < .6 ? { type: 'game', game: 'dice', result: 1 + Math.floor(Math.random() * 6) } : { text: msg.result >= 5 ? pick(['hoki bgt 😭', 'curang ih', 'wih gede']) : pick(['wkwk kecil', 'aku menang pasti', 'lagi lagi!']) };
     if (msg.game === 'coin') return { text: pick(['yaudah fix', 'best of 3?', 'wkwk takdir', 'oke deal 🤝']) };
   }
+  if (msg.type === 'pay') return { text: msg.kind === 'send' ? pick(['makasih banyak!! 🥹', 'wih udah masuk, thx 💸', 'aaa makasih 🫶']) : pick(['oke bentar ya', 'siap', 'otw bayar']) };
   if (msg.type === 'post') return { text: pick(['wkwk iya liat', 'LUCU 😭', 'udah aku like 💖', 'ih bener bgt']) };
   if (msg.type === 'poll') return { text: pick(['udah aku vote ya ✅', 'vote done 🗳️', 'aku pilih yg kedua wkwk']) };
   if (/@\w/.test(msg.text || '') && Math.random() < 0.5) return { text: pick(['kenapa manggil aku? 👀', 'iyaa kenapa?', 'hadir! 🙋']) };
@@ -192,6 +194,13 @@ export function suitResult(a, b) {
   if (a === b) return 0;
   return (a === 'rock' && b === 'scissors') || (a === 'paper' && b === 'rock') || (a === 'scissors' && b === 'paper') ? 1 : -1;
 }
+
+function addTx(t) {
+  db.wallet.tx.unshift({ id: uid('tx'), ts: Date.now(), ...t });
+  db.wallet.tx = db.wallet.tx.slice(0, 200);
+  save(); bus.emit('wallet');
+}
+export const rupiah = n => 'Rp' + Math.round(n || 0).toLocaleString('id-ID');
 
 function readAll(chatId, userId) {
   const list = db.messages[chatId] || [];
@@ -328,6 +337,54 @@ export const api = {
     i >= 0 ? db.favorites.splice(i, 1) : db.favorites.push(id);
     save(); bus.emit('friends');
   },
+  /* Onix Pay (dummy) */
+  wallet() { return db.wallet; },
+  topUp(amount) { db.wallet.balance += amount; addTx({ type: 'topup', amount }); },
+  paySend(chatId, amount, note = '') {
+    if (amount > db.wallet.balance) return null;
+    const c = db.chats[chatId];
+    const to = c.type === 'direct' ? c.members.find(id => id !== ME) : null;
+    db.wallet.balance -= amount;
+    addTx({ type: 'out', amount, userId: to, chatId, note });
+    const m = api.send(chatId, { type: 'pay', kind: 'send', amount, note, to });
+    return m;
+  },
+  payRequest(chatId, amount, note = '') {
+    const c = db.chats[chatId];
+    const others = c.members.filter(id => id !== ME && db.users[id] && !db.users[id].official);
+    const split = c.type === 'group';
+    const per = split ? Math.ceil(amount / (others.length + 1) / 100) * 100 : amount;
+    const m = api.send(chatId, { type: 'pay', kind: split ? 'split' : 'request', amount, per, note, from: ME, members: others, paid: [] });
+    others.forEach((id, i) => {
+      if (split && Math.random() < .25) return; // ada yang belum bayar
+      setTimeout(() => {
+        if (m.paid.includes(id)) return;
+        m.paid.push(id);
+        db.wallet.balance += per;
+        addTx({ type: 'in', amount: per, userId: id, chatId, note });
+        emitChat(chatId);
+        if (i === 0) setTimeout(() => receive(chatId, id, { text: pick(['udah aku tf ya 💸', 'lunas! 🙏', 'done bayar', 'sip udah']) }), 900);
+      }, 3500 + i * rand(2000, 4500));
+    });
+    return m;
+  },
+  payIncoming(chatId, mid) {
+    const m = db.messages[chatId]?.find(x => x.id === mid);
+    if (!m || m.kind !== 'request' || m.from === ME || m.paid.includes(ME)) return false;
+    if (m.per > db.wallet.balance) return null;
+    db.wallet.balance -= m.per;
+    m.paid.push(ME);
+    addTx({ type: 'out', amount: m.per, userId: m.from, chatId, note: m.note });
+    emitChat(chatId);
+    return true;
+  },
+  simulatePayRequest() {
+    const id = pick(db.friends.filter(f => !db.users[f]?.official));
+    const c = api.directWith(id);
+    const amount = pick([15000, 25000, 35000, 50000]);
+    receive(c.id, id, { type: 'pay', kind: 'request', amount, per: amount, note: pick(['patungan kopi ☕', 'bayar ojol tadi', 'tiket nonton 🎬', 'pizza kemarin 🍕']), from: id, members: [ME], paid: [] });
+  },
+
   /* status mood (24 jam) */
   moods() {
     const now = Date.now(), out = [];

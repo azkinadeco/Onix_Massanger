@@ -1,5 +1,5 @@
 // Fitur tambahan: teruskan pesan, Keep, polling, arsip, wallpaper, kunci PIN
-import { api, bus, ME, firstName } from './service.js';
+import { api, bus, ME, firstName, rupiah } from './service.js';
 import { $, $$, h, esc, avatar, ago, listTime, vibrate, pickFile, compressImage, copyText } from './util.js';
 import { icon } from './icons.js';
 import { router, bindActs, navbar, toast, sheet, confirmBox, promptBox, onLongPress } from './ui.js';
@@ -579,4 +579,71 @@ export function viewMoodSheet(userId) {
       inp.addEventListener('keydown', e => { if (e.key === 'Enter') go(inp.value.trim()); });
     },
   });
+}
+
+/* ================= ONIX PAY ================= */
+export function PayScreen(chatId) {
+  const c = api.chat(chatId), group = c.type === 'group';
+  let mode = group ? 'request' : 'send', val = '';
+  const el = h(`<div class="sub-screen pay-screen">
+    ${navbar('Onix Pay')}
+    <div class="content pay-body">
+      <div class="pay-to">${chatAvatar(c, 44, { online: false })}<b>${esc(api.chatTitle(c))}</b></div>
+      ${group ? '' : `<div class="seg pay-mode"><button data-act="mode" data-v="send">Kirim</button><button data-act="mode" data-v="request">Minta</button></div>`}
+      <div class="pay-amt"><span class="pa-rp">Rp</span><span class="pa-val">0</span></div>
+      <div class="pay-hint"></div>
+      <div class="pay-quick">${[10000, 25000, 50000, 100000].map(v => `<button data-act="quick" data-v="${v}">${v / 1000}rb</button>`).join('')}</div>
+      <input class="field pay-note" maxlength="40" placeholder="Catatan">
+      <div class="numpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9, '000', 0].map(n => `<button data-act="num" data-v="${n}">${n}</button>`).join('')}<button data-act="del" aria-label="Hapus">${icon('back')}</button></div>
+      <button class="btn primary wide pay-go" data-act="go" disabled></button>
+    </div></div>`);
+  const amt = () => +val || 0;
+  function paint() {
+    const a = amt(), bal = api.wallet().balance;
+    $('.pa-val', el).textContent = a.toLocaleString('id-ID');
+    el.querySelectorAll('[data-act=mode]').forEach(b => b.classList.toggle('on', b.dataset.v === mode));
+    const others = c.members.filter(id => id !== ME && !api.user(id)?.official).length;
+    const over = mode === 'send' && a > bal;
+    $('.pay-hint', el).innerHTML = over ? `<span class="danger-txt">Saldo kurang</span>` : mode === 'send' ? `Saldo ${rupiah(bal)}` : group ? `${others + 1} orang · ${rupiah(Math.ceil(a / (others + 1) / 100) * 100)}/org` : '';
+    const go = $('.pay-go', el);
+    go.disabled = a < 1000 || over;
+    go.textContent = mode === 'send' ? 'Kirim' : group ? 'Bikin patungan' : 'Minta';
+    $('.pay-amt', el).classList.toggle('empty', !a);
+  }
+  bindActs(el, {
+    mode: t => { mode = t.dataset.v; vibrate(4); paint(); },
+    num: t => { const n = val + t.dataset.v; if (+n <= 10000000 && !(val === '' && /^0/.test(t.dataset.v))) { val = n; vibrate(3); paint(); } },
+    del: () => { val = val.slice(0, -1); paint(); },
+    quick: t => { val = t.dataset.v; vibrate(4); paint(); },
+    go: async () => {
+      const a = amt(), note = $('.pay-note', el).value.trim();
+      if (mode === 'send') {
+        if (api.settings().passcode && !(await askPin('PIN buat kirim'))) return;
+        if (!api.paySend(chatId, a, note)) return toast('Saldo kurang 🥲');
+      } else api.payRequest(chatId, a, note);
+      vibrate(12);
+      router.back();
+    },
+  });
+  paint();
+  return { el };
+}
+
+export function WalletScreen() {
+  const el = h(`<div class="sub-screen">${navbar('Onix Pay')}<div class="content wl-body"></div></div>`);
+  const body = $('.wl-body', el);
+  const TX = { topup: ['plus', 'Isi saldo'], in: ['download', 'Masuk'], out: ['send', 'Keluar'] };
+  function render() {
+    const w = api.wallet();
+    body.innerHTML = `<div class="wl-card"><small>Saldo</small><b>${rupiah(w.balance)}</b><div class="wl-btns"><button data-act="topup">${icon('plus')}Isi</button><button data-act="req-demo">${icon('wallet')}Tagihan</button></div><span class="wl-logo">onix<i>pay</i></span></div>
+      <div class="section-h">Riwayat</div>
+      ${w.tx.length ? w.tx.map(t => { const u = t.userId && api.user(t.userId); const [ic, l] = TX[t.type]; return `<div class="list-item tx">${u ? avatar(u, 42) : `<span class="round-ic">${icon(ic)}</span>`}<div class="li-main"><div class="li-name">${esc(u ? u.name : l)}</div><div class="li-sub">${esc(t.note || l)} · ${ago(t.ts)}</div></div><b class="tx-amt ${t.type === 'out' ? 'neg' : 'pos'}">${t.type === 'out' ? '−' : '+'}${rupiah(t.amount)}</b></div>`; }).join('') : empty('🧾', 'Belum ada transaksi')}`;
+  }
+  bindActs(el, {
+    topup: () => sheet({ title: 'Isi saldo', actions: [50000, 100000, 250000, 500000].map(v => ({ label: rupiah(v), icon: 'plus', run: () => { api.topUp(v); toast('Saldo masuk 💰'); } })) }),
+    'req-demo': () => { api.simulatePayRequest(); toast('Ada tagihan masuk di chat 👀'); },
+  });
+  const off = bus.on('wallet', render);
+  render();
+  return { el, destroy: off };
 }

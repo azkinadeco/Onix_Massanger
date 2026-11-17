@@ -1291,3 +1291,48 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .mood-item, .mood-item:has(.add) { padding-top: 0; justify-content: flex-end; }
 .mood-bub, .mood-bub.add { position: relative; top: auto; left: auto; transform: none; margin-bottom: 4px; }
 .mood-bub.add { margin-bottom: 4px; }
+
+/* ============ B13: Onix Pay ============ */
+.paycard { width: 236px; padding: 14px 16px; border-radius: 22px; color: #fff; background: linear-gradient(140deg, #0FB46C, #08876F); box-shadow: 0 8px 22px rgba(8,135,111,.25); display: flex; flex-direction: column; gap: 4px; }
+.paycard.request { background: linear-gradient(140deg, #7C5CFF, #5B3DE0); box-shadow: 0 8px 22px rgba(91,61,224,.25); }
+.paycard.split { background: linear-gradient(140deg, #FF7A1A, #FF3D6E); box-shadow: 0 8px 22px rgba(255,61,110,.25); }
+.py-top { display: flex; align-items: center; gap: 6px; opacity: .9; }
+.py-top .ic { width: 16px; height: 16px; }
+.py-top small { font-size: 12.5px; font-weight: 700; }
+.py-amt { font-size: 26px; font-weight: 800; letter-spacing: -.03em; }
+.py-note { font-size: 13.5px; opacity: .9; }
+.py-st { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 99px; background: rgba(255,255,255,.2); align-self: flex-start; }
+.py-st .ic { width: 12px; height: 12px; }
+.py-btn { margin-top: 8px; height: 40px; border-radius: 14px; background: #fff; color: #5B3DE0; font-weight: 800; font-size: 14px; }
+.py-btn:active { transform: scale(.97); }
+.py-split { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 700; }
+.py-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.25); overflow: hidden; }
+.py-bar i { display: block; height: 100%; background: #fff; border-radius: 3px; transition: width .5s var(--ease); }
+.py-avs { display: flex; gap: 4px; }
+.py-avs span { opacity: .4; filter: grayscale(1); transition: opacity .3s, filter .3s; }
+.py-avs span.on { opacity: 1; filter: none; }
+.pay-body { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 8px 20px calc(var(--sab) + 16px); }
+.pay-to { display: flex; align-items: center; gap: 10px; }
+.pay-mode { width: 200px; }
+.pay-amt { display: flex; align-items: baseline; gap: 6px; margin-top: 6px; }
+.pa-rp { font-size: 22px; font-weight: 700; color: var(--text-2); }
+.pa-val { font-size: 48px; font-weight: 800; letter-spacing: -.04em; }
+.pay-amt.empty .pa-val { color: var(--text-2); opacity: .5; }
+.pay-hint { font-size: 13px; color: var(--text-2); min-height: 18px; }
+.danger-txt { color: var(--danger); font-weight: 700; }
+.pay-quick { display: flex; gap: 8px; }
+.pay-quick button { padding: 8px 14px; border-radius: 99px; background: var(--surface-2); font-weight: 700; font-size: 13px; }
+.pay-note { width: 100%; text-align: center; }
+.numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: 100%; }
+.numpad button { height: 52px; border-radius: 16px; font-size: 22px; font-weight: 600; display: grid; place-items: center; transition: background .15s; }
+.numpad button:active { background: var(--surface-2); }
+.wl-card { position: relative; margin: 6px 16px 10px; padding: 20px; border-radius: 24px; color: #fff; background: linear-gradient(140deg, #0FB46C, #08876F 60%, #065C55); overflow: hidden; display: flex; flex-direction: column; gap: 2px; }
+.wl-card small { opacity: .8; font-size: 13px; font-weight: 600; }
+.wl-card > b { font-size: 34px; font-weight: 800; letter-spacing: -.04em; }
+.wl-btns { display: flex; gap: 8px; margin-top: 14px; }
+.wl-btns button { display: flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 99px; background: rgba(255,255,255,.2); color: #fff; font-weight: 700; font-size: 13.5px; }
+.wl-btns .ic { width: 16px; height: 16px; }
+.wl-logo { position: absolute; top: 16px; right: 18px; font-weight: 800; font-size: 15px; opacity: .85; }
+.wl-logo i { font-style: normal; opacity: .7; }
+.tx-amt { font-size: 14px; white-space: nowrap; }
+.tx-amt.pos { color: #0B9A5B; }

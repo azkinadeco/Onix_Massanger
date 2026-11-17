@@ -5,7 +5,7 @@ import { router, bindActs, onLongPress, toast, sheet, confirmBox, banner, initVi
 import { userAvatar, chatAvatar, chatRow, userRow, postCard, empty, preview } from './views.js';
 import { openChat, startCall } from './chat.js';
 import { clearMedia } from './media.js';
-import { KeepScreen, ArchivedScreen, setupPasscode, lockApp, StickerStoreScreen, ActivityScreen, hideChat, openHiddenChats, StorageScreen, moodRow, setMoodSheet, viewMoodSheet } from './features.js';
+import { KeepScreen, ArchivedScreen, setupPasscode, lockApp, StickerStoreScreen, ActivityScreen, hideChat, openHiddenChats, StorageScreen, moodRow, setMoodSheet, viewMoodSheet, WalletScreen } from './features.js';
 import {
   OnboardingScreen, ProfileScreen, EditProfileScreen, AddFriendScreen, NewGroupScreen, FriendPicker,
   PostComposeScreen, postActions, openStories, addStoryFlow,
@@ -171,6 +171,7 @@ function TabsScreen() {
             <div class="seg sm fs">${[['s', 13], ['m', 16], ['l', 19]].map(([k, px]) => `<button class="${s.fontSize === k ? 'on' : ''}" data-act="font" data-v="${k}" style="font-size:${px}px">A</button>`).join('')}</div></div>
         </div>
         <div class="set-group">
+          ${link('wallet', 'wallet', 'Onix Pay', `<span class="count">${(api.wallet().balance / 1000).toLocaleString('id-ID')}rb</span>`)}
           ${link('keep', 'bookmark', 'Keep', `<span class="count">${api.keep().length || ''}</span>`)}
           ${link('archived', 'archive', 'Arsip', `<span class="count">${api.archived().length || ''}</span>`)}
           ${s.passcode ? link('hidden-chats', 'lock', 'Tersembunyi', '') : ''}
@@ -221,9 +222,9 @@ function TabsScreen() {
     chats: ['chats', 'presence', 'moods'],
     voom: ['posts', 'me'],
     calls: ['calls', 'friends'],
-    me: ['me', 'settings', 'keep', 'chats', 'packs'],
+    me: ['me', 'settings', 'keep', 'chats', 'packs', 'wallet'],
   };
-  const offs = ['friends', 'chats', 'stories', 'me', 'presence', 'posts', 'calls', 'settings', 'keep', 'packs', 'activity', 'moods'].map(ev => bus.on(ev, () => {
+  const offs = ['friends', 'chats', 'stories', 'me', 'presence', 'posts', 'calls', 'settings', 'keep', 'packs', 'activity', 'moods', 'wallet'].map(ev => bus.on(ev, () => {
     if (ev === 'chats') renderBadges();
     if (watch[cur].includes(ev)) schedule();
     if (ev === 'me' && (cur === 'home' || cur === 'voom')) renderHead();
@@ -288,6 +289,7 @@ function TabsScreen() {
     feed: t => { if (st.feed === t.dataset.v) return; st.feed = t.dataset.v; renderBody(); body.scrollTo({ top: 0 }); },
     'hidden-chats': () => openHiddenChats(),
     storage: () => router.push(StorageScreen()),
+    wallet: () => router.push(WalletScreen()),
     activity: () => router.push(ActivityScreen()),
     store: () => router.push(StickerStoreScreen()),
     wish: t => {

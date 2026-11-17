@@ -1,4 +1,4 @@
-import { TTL_OPTS, ttlLabel, suitResult } from './service.js';
+import { TTL_OPTS, ttlLabel, suitResult, rupiah } from './service.js';
 import { api, bus, ME, firstName, mentionRe } from './service.js';
 import { $, h, esc, linkify, avatar, hm, dayLabel, isSameDay, dur, hash, vibrate, pickFile, pickFiles, compressImage, copyText, isJumbo } from './util.js';
 import { icon } from './icons.js';
@@ -87,6 +87,25 @@ export function playEffect(fx, host = document.body) {
 }
 
 const ttlShort = s => s >= 86400 ? Math.round(s / 86400) + 'h' : s >= 3600 ? Math.round(s / 3600) + 'j' : s >= 60 ? Math.round(s / 60) + 'm' : s + 'd';
+
+/* ---------- Onix Pay ---------- */
+function payHtml(m, group) {
+  const mine = m.from === ME;
+  const title = m.kind === 'send' ? (mine ? 'Kamu kirim' : 'Kamu terima') : m.kind === 'split' ? 'Patungan' : (mine ? 'Kamu minta' : 'Minta bayar');
+  let foot = '';
+  if (m.kind === 'send') foot = `<span class="py-st ok">${icon('check', 'tiny')} Berhasil</span>`;
+  else if (m.kind === 'request') {
+    const done = m.paid?.length > 0;
+    foot = done ? `<span class="py-st ok">${icon('check', 'tiny')} Lunas</span>`
+      : mine ? `<span class="py-st wait">${icon('clock', 'tiny')} Menunggu</span>`
+      : `<button class="py-btn" data-act="pay-now" data-mid="${m.id}">Bayar ${rupiah(m.per)}</button>`;
+  } else {
+    const n = m.members.length, k = m.paid.length;
+    foot = `<div class="py-split"><div class="py-bar"><i style="width:${n ? k / n * 100 : 0}%"></i></div><span>${k}/${n} bayar · ${rupiah(m.per)}/org</span>
+      <div class="py-avs">${m.members.map(id => `<span class="${m.paid.includes(id) ? 'on' : ''}">${avatar(api.user(id), 22)}</span>`).join('')}</div></div>`;
+  }
+  return `<div class="paycard ${m.kind}"><div class="py-top">${icon('wallet')}<small>${title}</small></div><b class="py-amt">${rupiah(m.amount)}</b>${m.note ? `<div class="py-note">${esc(m.note)}</div>` : ''}${foot}</div>`;
+}
 
 /* ---------- mini game ---------- */
 const SUIT = [['rock', '✊'], ['paper', '✋'], ['scissors', '✌️']];
@@ -302,6 +321,8 @@ function ChatScreen(chatId) {
       body = `<div class="bubble voice" data-act="play" data-mid="${m.id}"><span class="vplay">${icon('play')}</span><span class="wave">${waveBars(m.id)}</span><span class="vdur">${dur(m.duration || 0)}</span></div>`;
     } else if (m.type === 'location') {
       body = `<div class="bubble loc" data-act="loc" data-mid="${m.id}"><div class="map"><span class="map-pin">${icon('location')}</span></div><div class="loc-txt"><b>${esc(m.title)}</b><small>${esc(m.address)}</small></div></div>`;
+    } else if (m.type === 'pay') {
+      bare = true; body = payHtml(m, group);
     } else if (m.type === 'game') {
       bare = true; body = gameHtml(m);
     } else if (m.type === 'post') {
@@ -523,7 +544,7 @@ function ChatScreen(chatId) {
   }
   function renderPanel() {
     if (panelMode === 'plus') {
-      const items = [['photo', 'image', 'Foto', '#7C5CFF'], ['camera', 'camera', 'Kamera', '#FF3D81'], ['video', 'film', 'Video', '#14B8C4'], ['file', 'file', 'File', '#5B6CFF'], ['location', 'location', 'Lokasi', '#10B26C'], ['voice', 'mic', 'Voice', '#FF7A1A'], ['poll', 'poll', 'Polling', '#E1A100'], ['event', 'calendar', 'Event', '#2E7BFF'], ['game', 'dice', 'Game', '#FF3D6E']];
+      const items = [['photo', 'image', 'Foto', '#7C5CFF'], ['camera', 'camera', 'Kamera', '#FF3D81'], ['video', 'film', 'Video', '#14B8C4'], ['file', 'file', 'File', '#5B6CFF'], ['location', 'location', 'Lokasi', '#10B26C'], ['voice', 'mic', 'Voice', '#FF7A1A'], ['poll', 'poll', 'Polling', '#E1A100'], ['event', 'calendar', 'Event', '#2E7BFF'], ['game', 'dice', 'Game', '#FF3D6E'], ['pay', 'wallet', 'Pay', '#0FB46C']];
       panel.innerHTML = `<div class="attach-grid">${items.map(([a, ic, label, col]) => `<button data-act="att-${a}"><span style="--c:${col}">${icon(ic)}</span><small>${label}</small></button>`).join('')}</div>`;
     } else if (panelMode === 'stickers') {
       const owned = api.packs();
@@ -831,6 +852,14 @@ function ChatScreen(chatId) {
       ta.value = before + ta.value.slice(pos);
       ta.setSelectionRange(before.length, before.length);
       hideMentions(); autosize(); ta.focus();
+    },
+    'att-pay': async () => { closePanel(); const { PayScreen } = await import('./features.js'); router.push(PayScreen(chatId)); },
+    'pay-now': async t => {
+      const m = msgById(t.dataset.mid);
+      const { askPin } = await import('./features.js');
+      if (api.settings().passcode && !(await askPin('PIN buat bayar'))) return;
+      const r = api.payIncoming(chatId, t.dataset.mid);
+      if (r === null) toast('Saldo kurang 🥲'); else if (r) { toast(`Dibayar ${rupiah(m.per)} ✅`); vibrate(10); }
     },
     'att-game': () => { closePanel(); gameSheet(); },
     'att-poll': () => { closePanel(); router.push(PollComposeScreen(chatId)); },

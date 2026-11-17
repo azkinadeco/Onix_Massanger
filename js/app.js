@@ -453,6 +453,7 @@ bus.on('notify', ({ chat, msg, mention }) => {
 });
 bus.on('incoming-call', ({ chatId, video }) => startCall(chatId, video, true));
 bus.on('storage-full', () => toast('Memori penuh'));
+bus.on('toast', t => toast(t));
 
 initViewport();
 history.replaceState({ depth: 1 }, '');

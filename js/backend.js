@@ -2,6 +2,7 @@
 // Data server dipetakan ke struktur lokal lewat api.remote (lihat service.js).
 import PocketBase from './vendor/pocketbase.es.mjs';
 import { api, bus, ME } from './service.js';
+import { getMediaBlob } from './media.js';
 
 export let pb = null;
 let started = false, connected = false;
@@ -63,6 +64,30 @@ api.remote.hooks.typing = chatId => {
 api.remote.hooks.update = async (chatId, m, patch) => {
   try { await pb.collection('messages').update(m.rid, patch); } catch (e) { console.warn('update gagal', e); }
 };
+
+/* ---------- aksi interaktif (vote, rsvp, bayar, suit) ---------- */
+const actionIds = new Map(); // msgRid|kind -> record id
+const pendingActions = [];
+function applyAction(r) {
+  if (r.user === myId()) actionIds.set(r.msg + '|' + r.kind, r.id);
+  if (!api.remote.applyAction(r)) pendingActions.push(r); // pesannya belum ada, coba lagi nanti
+}
+function flushPendingActions() { pendingActions.splice(0).forEach(applyAction); }
+api.remote.hooks.action = async (chatId, m, kind, value) => {
+  const key = m.rid + '|' + kind, id = actionIds.get(key);
+  try {
+    if (id) return await pb.collection('msg_actions').update(id, { value });
+    const rec = await pb.collection('msg_actions').create({ msg: m.rid, chat: chatId, user: myId(), kind, value });
+    actionIds.set(key, rec.id);
+  } catch (e) {
+    try {
+      const r = await pb.collection('msg_actions').getFirstListItem(pb.filter('msg = {:m} && user = {:u} && kind = {:k}', { m: m.rid, u: myId(), k: kind }));
+      actionIds.set(key, r.id);
+      await pb.collection('msg_actions').update(r.id, { value });
+    } catch { console.warn('aksi gagal', e); }
+  }
+};
+const withFile = r => { if (r.file) r._fileUrl = pb.files.getURL(r, r.file); return r; };
 
 /* ---------- grup ---------- */
 async function systemMsg(chatId, text) {
@@ -162,6 +187,7 @@ async function start() {
   await sync();
   await pb.collection('messages').subscribe('*', e => { if (e.action === 'create') onMessage(e.record); else if (e.action === 'update') api.remote.applyUpdate(e.record); });
   await pb.collection('chat_state').subscribe('*', e => { if (e.action !== 'delete') applyState(e.record); });
+  await pb.collection('msg_actions').subscribe('*', e => { if (e.action !== 'delete') applyAction(e.record); });
   await pb.collection('chats').subscribe('*', e => { if (e.action !== 'delete') { ingestChat(e.record); api.remote.done(); } }, { expand: 'members' });
   let first = true;
   await pb.realtime.subscribe('PB_CONNECT', () => { setConn(true); if (!first) sync(); first = false; });
@@ -179,10 +205,11 @@ export function sync() {
       chats.forEach(ingestChat);
       for (const c of chats) {
         const res = await pb.collection('messages').getList(1, 300, { filter: pb.filter('chat = {:c}', { c: c.id }), sort: '-created' });
-        res.items.reverse().forEach(r => api.remote.message(r, false));
+        res.items.reverse().forEach(r => api.remote.message(withFile(r), false));
       }
       api.remote.done();
       (await pb.collection('chat_state').getFullList()).forEach(applyState);
+      (await pb.collection('msg_actions').getFullList()).forEach(applyAction);
     } catch (e) { console.warn('sync gagal', e); }
     finally { syncing = null; }
   })();
@@ -193,17 +220,21 @@ async function onMessage(r) {
   if (!api.chat(r.chat)) {
     try { ingestChat(await pb.collection('chats').getOne(r.chat, { expand: 'members' })); api.remote.done(); } catch { return; }
   }
-  api.remote.message(r, true);
+  api.remote.message(withFile(r), true);
+  if (pendingActions.length) flushPendingActions();
 }
 
 async function sendRemote(chatId, m) {
-  let type = m.type, text = m.text || '', data = api.remote.payloadOf(m);
-  if (m.mediaId) { // video & file belum diupload ke server
-    type = 'text'; data = {};
-    text = m.type === 'video' ? '🎬 Video (belum bisa dikirim online)' : `📎 ${m.name || 'File'} (belum bisa dikirim online)`;
+  const type = m.type, text = m.text || '', data = api.remote.payloadOf(m);
+  const body = { chat: chatId, sender: myId(), cid: m.id, type, text, data };
+  if (m.mediaId) { // video & file: upload ke server
+    const blob = await getMediaBlob(m.mediaId);
+    if (!blob) return api.remote.failed(chatId, m.id);
+    if (blob.size > 50 * 1048576) { bus.emit('toast', 'File maks 50 MB'); return api.remote.failed(chatId, m.id); }
+    body.file = new File([blob], m.name || (m.type === 'video' ? 'video.mp4' : 'file'), { type: m.mime || blob.type || 'application/octet-stream' });
   }
   try {
-    const rec = await pb.collection('messages').create({ chat: chatId, sender: myId(), cid: m.id, type, text, data });
+    const rec = await pb.collection('messages').create(body);
     api.remote.sent(chatId, m.id, rec.id);
     if (typingSent.get(chatId)) { typingSent.set(chatId, 0); upsertState(chatId, { typingAt: 0 }); }
   } catch (e) {

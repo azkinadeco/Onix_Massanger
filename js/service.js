@@ -305,7 +305,19 @@ setInterval(() => {
 /* ---------- jembatan ke server (PocketBase) ---------- */
 let remoteSend = null;
 const hooks = {}; // diisi backend.js: read, typing, update, rename, addMembers, leave
-const SKIP_KEYS = ['id', 'chatId', 'from', 'ts', 'status', 'reactions', 'readBy', 'rid', 'expires', 'type', 'text', 'unsent', 'edited'];
+const SKIP_KEYS = ['id', 'chatId', 'from', 'ts', 'status', 'reactions', 'readBy', 'rid', 'expires', 'type', 'text', 'unsent', 'edited', 'mediaId', 'fileUrl', 'credited'];
+// ganti id 'me' <-> id server di field yang menyimpan id orang
+function mapPayloadIds(p, fn) {
+  const arr = a => (Array.isArray(a) ? a.map(fn) : a);
+  if (p.to) p.to = fn(p.to);
+  if (p.opp) p.opp = fn(p.opp);
+  if (p.members) p.members = arr(p.members);
+  if (p.paid) p.paid = arr(p.paid);
+  if (p.picks) { const o = {}; for (const [k, v] of Object.entries(p.picks)) o[fn(k)] = v; p.picks = o; }
+  if (p.poll?.options) p.poll = { ...p.poll, options: p.poll.options.map(o => ({ ...o, votes: arr(o.votes || []) })) };
+  if (p.event) p.event = { ...p.event, going: arr(p.event.going || []), notGoing: arr(p.event.notGoing || []) };
+  return p;
+}
 const mapReacts = (r, fn) => { const o = {}; for (const [k, v] of Object.entries(r || {})) { const a = (v || []).map(fn).filter(Boolean); if (a.length) o[k] = a; } return o; };
 const remote = {
   hooks,
@@ -318,6 +330,31 @@ const remote = {
     else if (rec.edited && rec.text !== m.text) Object.assign(m, { text: rec.text, edited: true });
     m.reactions = mapReacts(rec.reactions, remote.mapId);
     emitChat(rec.chat);
+  },
+  applyAction(rec) {
+    const list = db.messages[rec.chat];
+    const m = list?.find(x => x.rid === rec.msg);
+    if (!m) return false;
+    const uid = remote.mapId(rec.user), v = rec.value;
+    if (rec.kind === 'vote' && m.poll) {
+      const chosen = Array.isArray(v) ? v : [];
+      m.poll.options.forEach(o => { o.votes = (o.votes || []).filter(x => x !== uid); if (chosen.includes(o.id)) o.votes.push(uid); });
+    } else if (rec.kind === 'rsvp' && m.event) {
+      const e = m.event;
+      e.going = e.going.filter(x => x !== uid); e.notGoing = e.notGoing.filter(x => x !== uid);
+      if (v === 1) e.going.push(uid); else if (v === 0) e.notGoing.push(uid);
+    } else if (rec.kind === 'pay' && m.type === 'pay') {
+      m.paid ||= [];
+      if (v && !m.paid.includes(uid)) {
+        m.paid.push(uid);
+        if (m.from === ME && uid !== ME) { db.wallet.balance += m.per || 0; addTx({ type: 'in', amount: m.per || 0, userId: uid, chatId: rec.chat, note: m.note }); }
+      }
+    } else if (rec.kind === 'suit' && m.game === 'suit') {
+      m.picks ||= {};
+      if (!m.opp || m.opp === uid) { m.picks[uid] = v; m.opp = uid; }
+    } else return false;
+    emitChat(rec.chat);
+    return true;
   },
   applyRead(chatId, uid, readAt) {
     const list = db.messages[chatId];
@@ -347,7 +384,7 @@ const remote = {
     const p = {};
     for (const k in m) if (!SKIP_KEYS.includes(k) && m[k] !== undefined) p[k] = m[k];
     if (p.replyTo?.name === 'Kamu') p.replyTo = { ...p.replyTo, name: db.me.name };
-    return p;
+    return mapPayloadIds(JSON.parse(JSON.stringify(p)), id => (id === ME ? db.remote?.uid : id));
   },
   user(r, avatarUrl) {
     if (!r || r.id === db.remote?.uid) return;
@@ -369,7 +406,8 @@ const remote = {
     const ex = list.find(m => m.id === cid || m.rid === rec.id);
     if (ex) { if (ex.status !== 'sent') { ex.status = 'sent'; ex.rid = rec.id; if (live) emitChat(chatId); } return; }
     const from = remote.mapId(rec.sender);
-    const payload = { ...(rec.data || {}), type: rec.type || 'text', id: cid, rid: rec.id, ts: Date.parse(rec.created) || Date.now() };
+    const payload = { ...mapPayloadIds(JSON.parse(JSON.stringify(rec.data || {})), remote.mapId), type: rec.type || 'text', id: cid, rid: rec.id, ts: Date.parse(rec.created) || Date.now() };
+    if (rec._fileUrl) payload.fileUrl = rec._fileUrl;
     if (rec.text) payload.text = rec.text;
     if (rec.unsent) Object.assign(payload, { unsent: true, text: '' });
     if (rec.edited) payload.edited = true;
@@ -377,6 +415,11 @@ const remote = {
     if (payload.type === 'system' && payload.text?.startsWith(db.me.name + ' ')) payload.text = 'Kamu ' + payload.text.slice(db.me.name.length + 1);
     if (payload.replyTo && payload.replyTo.name === db.me.name) payload.replyTo = { ...payload.replyTo, name: 'Kamu' };
     if (db.users[from]) db.users[from].lastSeen = Math.max(db.users[from].lastSeen || 0, payload.ts);
+    if (payload.type === 'pay' && payload.kind === 'send' && payload.to === ME && from !== ME) {
+      payload.credited = true;
+      db.wallet.balance += payload.amount || 0;
+      addTx({ type: 'in', amount: payload.amount || 0, userId: from, chatId, note: payload.note });
+    }
     if (live && from !== ME) { receive(chatId, from, payload); return; }
     const m = newMsg(chatId, from, { ...payload, status: 'sent' });
     delete m.expires;
@@ -478,12 +521,14 @@ export const api = {
   },
   payIncoming(chatId, mid) {
     const m = db.messages[chatId]?.find(x => x.id === mid);
-    if (!m || m.kind !== 'request' || m.from === ME || m.paid.includes(ME)) return false;
+    if (!m || !['request', 'split'].includes(m.kind) || m.from === ME || m.paid.includes(ME)) return false;
+    if (m.kind === 'split' && !m.members?.includes(ME)) return false;
     if (m.per > db.wallet.balance) return null;
     db.wallet.balance -= m.per;
     m.paid.push(ME);
     addTx({ type: 'out', amount: m.per, userId: m.from, chatId, note: m.note });
     emitChat(chatId);
+    if (db.chats[chatId].remote && m.rid) hooks.action?.(chatId, m, 'pay', true);
     return true;
   },
   simulatePayRequest() {
@@ -632,6 +677,13 @@ export const api = {
     scheduleResponses(chatId, m);
     return m;
   },
+  suitPick(chatId, mid, val) {
+    const m = db.messages[chatId]?.find(x => x.id === mid);
+    if (!m || m.game !== 'suit' || m.from === ME || (m.opp && m.opp !== ME)) return;
+    m.picks ||= {}; m.picks[ME] = val; m.opp = ME;
+    emitChat(chatId);
+    if (db.chats[chatId].remote && m.rid) hooks.action?.(chatId, m, 'suit', val);
+  },
   /* mini game */
   playGame(chatId, game, pickVal) {
     if (game === 'dice') return api.send(chatId, { type: 'game', game, result: 1 + Math.floor(Math.random() * 6) });
@@ -734,7 +786,7 @@ export const api = {
   },
   createPoll(chatId, q, options, multi = false) {
     const m = api.send(chatId, { type: 'poll', poll: { q, multi, options: options.map((t, i) => ({ id: 'o' + i, text: t, votes: [] })) } });
-    const others = db.chats[chatId].members.filter(id => id !== ME && db.users[id] && !db.users[id].official);
+    const others = db.chats[chatId].remote ? [] : db.chats[chatId].members.filter(id => id !== ME && db.users[id] && !db.users[id].official);
     others.forEach(id => {
       if (Math.random() < 0.15) return;
       setTimeout(() => {
@@ -754,6 +806,7 @@ export const api = {
     else o.votes = o.votes.filter(v => v !== ME);
     if (!had) o.votes.push(ME);
     emitChat(chatId);
+    if (db.chats[chatId].remote && m.rid) hooks.action?.(chatId, m, 'vote', m.poll.options.filter(x => x.votes.includes(ME)).map(x => x.id));
   },
 
   /* Aktivitas / notifikasi */
@@ -769,7 +822,7 @@ export const api = {
   /* Event */
   createEvent(chatId, { title, at, place }) {
     const m = api.send(chatId, { type: 'event', event: { title, at, place, going: [ME], notGoing: [] } });
-    db.chats[chatId].members.filter(id => id !== ME && db.users[id] && !db.users[id].official).forEach(id => {
+    if (!db.chats[chatId].remote) db.chats[chatId].members.filter(id => id !== ME && db.users[id] && !db.users[id].official).forEach(id => {
       if (Math.random() < 0.15) return;
       setTimeout(() => { (Math.random() < 0.75 ? m.event.going : m.event.notGoing).push(id); emitChat(chatId); }, rand(2500, 10000));
     });
@@ -784,6 +837,7 @@ export const api = {
     if (yes && !wasYes) e.going.push(ME);
     if (!yes && !wasNo) e.notGoing.push(ME);
     emitChat(chatId);
+    if (db.chats[chatId].remote && m.rid) hooks.action?.(chatId, m, 'rsvp', e.going.includes(ME) ? 1 : e.notGoing.includes(ME) ? 0 : null);
   },
 
   /* Pesan terjadwal */

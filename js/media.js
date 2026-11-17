@@ -35,6 +35,7 @@ export async function mediaURL(id) {
   urls.set(id, u);
   return u;
 }
+export async function getMediaBlob(id) { try { return await tx('readonly', s => s.get(id)); } catch { return null; } }
 export async function mediaUsage() {
   const out = {};
   try {

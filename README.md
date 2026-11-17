@@ -20,7 +20,8 @@ bash server/tunnel.sh     # (opsional) link HTTPS gratis via Cloudflare, buat iP
 - Skema ada di `server/pb_migrations/`, data di `server/pb_data/` (tidak ikut git)
 - Yang sudah online: akun, cari teman, chat personal & **grup** realtime (teks, sticker, foto, voice, lokasi, dll), riwayat tersinkron,
   **centang dibaca**, **lagi ngetik…**, **status online**, **reaksi / edit / tarik pesan**, ganti nama grup, tambah anggota, keluar grup.
-  Belum: video & file, polling/event/pay/game yang interaktif (tampil, tapi tombolnya masih lokal), panggilan suara/video.
+  **Video & file** (upload ke server, maks 50 MB), **polling, event, Onix Pay (kirim/minta/patungan), suit** interaktif lintas HP.
+  Belum: panggilan suara/video.
 
 ## Fitur
 - **Chat**: personal & grup, sticker, emoji, foto/kamera, voice note, lokasi, balas (reply), reaksi,

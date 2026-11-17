@@ -1391,3 +1391,10 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .on-loading { margin: 18px auto; width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid rgba(var(--accent-rgb), .25); border-top-color: var(--accent); animation: spin .8s linear infinite; }
 .on-pill { font-size: 12.5px; font-weight: 700; color: #0B9A5B; background: rgba(15,180,108,.12); padding: 3px 8px; border-radius: 99px; }
 .meta .failed { width: 17px; height: 17px; border-radius: 50%; background: var(--danger); color: #fff; font-size: 11px; font-weight: 900; display: inline-grid; place-items: center; margin-right: 3px; }
+
+/* ============ Online tahap 3 ============ */
+.suit-wrap.pick .sw-q { animation: none; opacity: .5; }
+.sw-pick { flex-basis: 100%; display: flex; justify-content: center; gap: 8px; }
+.sw-pick button { width: 52px; height: 52px; border-radius: 16px; background: var(--surface-2); font-size: 28px; display: grid; place-items: center; transition: transform .15s var(--ease); }
+.sw-pick button:active { transform: scale(1.2); }
+.py-split + .py-btn, .py-btn + .py-split { margin-top: 8px; }

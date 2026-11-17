@@ -101,7 +101,8 @@ function payHtml(m, group) {
       : `<button class="py-btn" data-act="pay-now" data-mid="${m.id}">Bayar ${rupiah(m.per)}</button>`;
   } else {
     const n = m.members.length, k = m.paid.length;
-    foot = `<div class="py-split"><div class="py-bar"><i style="width:${n ? k / n * 100 : 0}%"></i></div><span>${k}/${n} bayar · ${rupiah(m.per)}/org</span>
+    const canPay = !mine && m.members.includes(ME) && !m.paid.includes(ME);
+    foot = `${canPay ? `<button class="py-btn" data-act="pay-now" data-mid="${m.id}">Bayar ${rupiah(m.per)}</button>` : ''}<div class="py-split"><div class="py-bar"><i style="width:${n ? k / n * 100 : 0}%"></i></div><span>${k}/${n} bayar · ${rupiah(m.per)}/org</span>
       <div class="py-avs">${m.members.map(id => `<span class="${m.paid.includes(id) ? 'on' : ''}">${avatar(api.user(id), 22)}</span>`).join('')}</div></div>`;
   }
   return `<div class="paycard ${m.kind}"><div class="py-top">${icon('wallet')}<small>${title}</small></div><b class="py-amt">${rupiah(m.amount)}</b>${m.note ? `<div class="py-note">${esc(m.note)}</div>` : ''}${foot}</div>`;
@@ -121,7 +122,10 @@ function gameHtml(m) {
   const me = m.picks?.[ME], oppId = m.opp || Object.keys(m.picks || {}).find(k => k !== m.from);
   const mineMsg = m.from === ME;
   const a = m.picks?.[m.from], b = oppId ? m.picks[oppId] : null;
-  if (!b) return `<div class="game suit-wrap wait"><span class="sw-me">${suitEmo(a)}</span><span class="sw-vs">vs</span><span class="sw-q">❔</span></div>`;
+  if (!b) {
+    if (!mineMsg) return `<div class="game suit-wrap wait pick"><span class="sw-q">❔</span><span class="sw-vs">vs</span><span class="sw-q">❔</span><div class="sw-pick">${SUIT.map(([k, e]) => `<button data-act="suit-pick" data-mid="${m.id}" data-v="${k}">${e}</button>`).join('')}</div></div>`;
+    return `<div class="game suit-wrap wait"><span class="sw-me">${suitEmo(a)}</span><span class="sw-vs">vs</span><span class="sw-q">❔</span></div>`;
+  }
   const r = suitResult(mineMsg ? a : b, mineMsg ? b : a);
   const label = r === 1 ? 'Menang! 🎉' : r === -1 ? 'Kalah 😭' : 'Seri 🤝';
   return `<div class="game suit-wrap done ${r === 1 ? 'win' : r === -1 ? 'lose' : 'draw'}"><span class="sw-me">${suitEmo(a)}</span><span class="sw-vs">vs</span><span class="sw-opp">${suitEmo(b)}</span><b class="g-res">${label}</b></div>`;
@@ -690,7 +694,7 @@ function ChatScreen(chatId) {
     } catch { toast('File gagal dikirim'); }
   }
   async function openMediaMsg(m) {
-    const url = m.mediaId && await mediaURL(m.mediaId);
+    const url = m.fileUrl || (m.mediaId && await mediaURL(m.mediaId));
     if (!url) return toast(m.type === 'video' ? 'Video demo, belum ada file' : 'File nggak tersedia');
     if (m.type === 'video') return openVideo(url);
     const a = document.createElement('a');
@@ -866,6 +870,7 @@ function ChatScreen(chatId) {
       if (r === null) toast('Saldo kurang 🥲'); else if (r) { toast(`Dibayar ${rupiah(m.per)} ✅`); vibrate(10); }
     },
     retry: t => api.remote.retry(chatId, t.dataset.mid),
+    'suit-pick': t => { api.suitPick(chatId, t.dataset.mid, t.dataset.v); vibrate(10); },
     'att-game': () => { closePanel(); gameSheet(); },
     'att-poll': () => { closePanel(); router.push(PollComposeScreen(chatId)); },
     'att-event': () => { closePanel(); router.push(EventComposeScreen(chatId)); },

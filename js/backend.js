@@ -267,6 +267,39 @@ export async function signIn({ handle, password, url }) {
   await start();
 }
 
+/* ---------- story ---------- */
+const storyRow = r => ({ rid: r.id, user: r.user, ts: Date.parse(r.created) || Date.now(), text: r.text, bg: r.bg, font: r.font, image: r.image ? pb.files.getURL(r, r.image) : null });
+async function syncStories() {
+  try {
+    const now = Date.now();
+    const list = await pb.collection('stories').getFullList({ filter: pb.filter('expires > {:n}', { n: now }), sort: 'created' });
+    const mine = list.filter(r => r.user === myId()).map(storyRow);
+    api.remote.storiesIn(list.filter(r => r.user !== myId()).map(storyRow), mine);
+    await syncViews();
+  } catch (e) { console.warn('story gagal', e); }
+}
+async function syncViews() {
+  const vs = await pb.collection('story_views').getFullList({ filter: pb.filter('story.user = {:me}', { me: myId() }) });
+  api.remote.storyViewers(vs.map(v => ({ story: v.story, user: v.user, ts: Date.parse(v.created) || Date.now(), react: v.react })));
+}
+api.remote.hooks.story = async it => {
+  const body = { user: myId(), text: it.text || '', bg: it.bg ?? null, font: it.font || '', expires: Date.now() + 864e5 };
+  if (it.image?.startsWith('data:')) body.image = new File([dataURLtoBlob(it.image)], 'story.jpg', { type: 'image/jpeg' });
+  try { const r = await pb.collection('stories').create(body); api.remote.storySaved(it.id, r.id); } catch (e) { console.warn('upload story gagal', e); }
+};
+api.remote.hooks.storyDelete = rids => rids.forEach(id => pb.collection('stories').delete(id).catch(() => {}));
+const viewIds = new Map();
+api.remote.hooks.storyView = async (rid, react) => {
+  try {
+    const id = viewIds.get(rid);
+    if (id) return await pb.collection('story_views').update(id, { react });
+    const r = await pb.collection('story_views').create({ story: rid, user: myId(), react });
+    viewIds.set(rid, r.id);
+  } catch {
+    try { const r = await pb.collection('story_views').getFirstListItem(pb.filter('story = {:s} && user = {:u}', { s: rid, u: myId() })); viewIds.set(rid, r.id); if (react !== undefined) await pb.collection('story_views').update(r.id, { react }); } catch { /* */ }
+  }
+};
+
 /* ---------- profil ---------- */
 api.remote.hooks.profile = async patch => {
   if (!pb?.authStore.isValid) return;
@@ -301,6 +334,9 @@ async function start() {
   await pb.collection('chat_state').subscribe('*', e => { if (e.action !== 'delete') applyState(e.record); });
   await pb.collection('msg_actions').subscribe('*', e => { if (e.action !== 'delete') applyAction(e.record); });
   await pb.collection('call_signals').subscribe('*', e => { if (e.action === 'create') onSignal(e.record); });
+  let stT = null;
+  await pb.collection('stories').subscribe('*', () => { clearTimeout(stT); stT = setTimeout(syncStories, 400); });
+  await pb.collection('story_views').subscribe('*', () => { clearTimeout(stT); stT = setTimeout(syncStories, 400); });
   await pb.collection('chats').subscribe('*', e => { if (e.action !== 'delete') { ingestChat(e.record); api.remote.done(); } }, { expand: 'members' });
   let first = true;
   await pb.realtime.subscribe('PB_CONNECT', () => { setConn(true); if (!first) sync(); first = false; });
@@ -323,6 +359,7 @@ export function sync() {
       api.remote.done();
       (await pb.collection('chat_state').getFullList()).forEach(applyState);
       (await pb.collection('msg_actions').getFullList()).forEach(applyAction);
+      await syncStories();
     } catch (e) { console.warn('sync gagal', e); }
     finally { syncing = null; }
   })();

@@ -379,6 +379,37 @@ const remote = {
   setSender(fn) { remoteSend = fn; },
   state() { return db?.remote || null; },
   setState(s) { db.remote = s; save(); bus.emit('remote'); },
+  // story teman dari server: list = [{rid, user, ts, text, bg, font, image}]
+  storiesIn(list, mine) {
+    const old = new Map(db.stories.filter(s => s.remote).flatMap(s => s.items.map(i => [i.rid, i])));
+    db.stories = db.stories.filter(s => !s.remote);
+    const by = {};
+    for (const r of list) {
+      if (r.user === db.remote?.uid || !db.users[r.user]) continue;
+      const prev = old.get(r.rid);
+      (by[r.user] ||= []).push({ id: r.rid, rid: r.rid, ts: r.ts, text: r.text, bg: r.bg, font: r.font, image: r.image, viewed: prev?.viewed, myReact: prev?.myReact });
+    }
+    for (const [userId, items] of Object.entries(by)) db.stories.push({ userId, remote: true, seen: items.every(i => i.viewed), items: items.sort((a, b) => a.ts - b.ts) });
+    // story sendiri yang belum ada di HP ini (login di HP baru)
+    if (mine?.length) {
+      db.myStory ||= { userId: ME, seen: true, items: [], views: 0 };
+      for (const r of mine) if (!db.myStory.items.some(i => i.rid === r.rid)) db.myStory.items.push({ id: r.rid, rid: r.rid, ts: r.ts, text: r.text, bg: r.bg, font: r.font, image: r.image, viewers: [] });
+      db.myStory.items.sort((a, b) => a.ts - b.ts);
+    }
+    save(); bus.emit('stories');
+  },
+  storySaved(itemId, rid) { const it = db.myStory?.items.find(i => i.id === itemId); if (it) { it.rid = rid; save(); } },
+  storyViewers(views) { // views: [{story, user, ts, react}]
+    if (!db.myStory) return;
+    for (const it of db.myStory.items) {
+      if (!it.rid) continue;
+      const vs = views.filter(v => v.story === it.rid && v.user !== db.remote?.uid);
+      const local = (it.viewers || []).filter(v => !db.users[v.id]?.remote);
+      it.viewers = [...local, ...vs.map(v => ({ id: v.user, ts: v.ts, react: v.react || null }))];
+    }
+    db.myStory.views = new Set(db.myStory.items.flatMap(x => (x.viewers || []).map(v => v.id))).size;
+    save(); bus.emit('stories');
+  },
   applyMe(r, avatarUrl) {
     Object.assign(db.me, { name: r.name || db.me.name, status: r.status ?? db.me.status, hue: r.hue ?? db.me.hue, ...(avatarUrl ? { avatar: avatarUrl } : {}) });
     if (r.mood?.ts) (db.moods ||= {})[ME] = r.mood;
@@ -965,14 +996,19 @@ export const api = {
   },
 
   /* stories */
-  stories() { return db.stories.filter(s => db.users[s.userId] && !db.blocked.includes(s.userId)).sort((a, b) => a.seen - b.seen); },
+  stories() { return db.stories.filter(s => db.users[s.userId] && !db.blocked.includes(s.userId)).sort((a, b) => (a.seen - b.seen) || ((b.remote ? 1 : 0) - (a.remote ? 1 : 0)) || ((b.items.at(-1)?.ts || 0) - (a.items.at(-1)?.ts || 0))); },
   storyOf(userId) { return userId === ME ? db.myStory : db.stories.find(s => s.userId === userId); },
-  markStorySeen(userId) { const s = db.stories.find(x => x.userId === userId); if (s && !s.seen) { s.seen = true; save(); bus.emit('stories'); } },
+  markStorySeen(userId) {
+    const s = db.stories.find(x => x.userId === userId);
+    if (s?.remote) s.items.forEach(it => { if (it.rid && !it.viewed) { it.viewed = true; hooks.storyView?.(it.rid, it.myReact || ''); } });
+    if (s && !s.seen) { s.seen = true; save(); bus.emit('stories'); }
+  },
   addMyStory(item) {
     db.myStory ||= { userId: ME, seen: true, items: [], views: 0 };
     const it = { id: uid('st'), ts: Date.now(), viewers: [], ...item };
     db.myStory.items.push(it);
     save(); bus.emit('stories');
+    if (db.remote) { hooks.story?.(it); return; }
     // simulasi: teman-teman lihat & kasih reaksi
     const who = db.friends.filter(id => db.users[id] && !db.users[id].official).sort(() => Math.random() - .5).slice(0, rand(3, 7));
     who.forEach((id, i) => setTimeout(() => {
@@ -989,9 +1025,10 @@ export const api = {
     if (!it) return;
     it.myReact = it.myReact === emoji ? null : emoji;
     save(); bus.emit('stories');
+    if (it.rid && s.remote) hooks.storyView?.(it.rid, it.myReact || '');
     return it.myReact;
   },
-  deleteMyStory() { db.myStory = null; save(); bus.emit('stories'); },
+  deleteMyStory() { const rids = (db.myStory?.items || []).map(i => i.rid).filter(Boolean); db.myStory = null; save(); bus.emit('stories'); if (rids.length) hooks.storyDelete?.(rids); },
 
   /* calls */
   calls() { return db.calls.slice().sort((a, b) => b.ts - a.ts); },

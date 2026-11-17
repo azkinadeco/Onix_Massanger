@@ -1575,3 +1575,9 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .dd-sizes i { border-radius: 50%; background: var(--text); }
 .dd-send { max-width: 420px; margin-top: auto; }
 .dd-send .ic { width: 17px; height: 17px; vertical-align: -3px; }
+
+/* ============ D1: ketuk 2x ============ */
+.bubble-line { position: relative; }
+.dbl-heart { position: absolute; left: 50%; top: 50%; font-size: 46px; font-style: normal; pointer-events: none; transform: translate(-50%, -50%) scale(0); animation: dblHeart .85s var(--ease) forwards; filter: drop-shadow(0 4px 10px rgba(255,61,110,.4)); z-index: 3; }
+@keyframes dblHeart { 25% { transform: translate(-50%, -50%) scale(1.25); } 45% { transform: translate(-50%, -50%) scale(.95); } 70% { opacity: 1; transform: translate(-50%, -60%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -110%) scale(.8); } }
+.bubble.scratch:has(canvas:not([data-on])) .txt { visibility: hidden; }

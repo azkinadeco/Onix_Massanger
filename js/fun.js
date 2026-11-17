@@ -138,7 +138,7 @@ export function scratchSheet(chatId) {
 export function initScratch(root, onDone) {
   root.querySelectorAll('canvas.scratch-cv:not([data-on])').forEach(cv => {
     const box = cv.parentElement, r = box.getBoundingClientRect();
-    if (!r.width) return;
+    if (!r.width) { clearTimeout(root._scT); root._scT = setTimeout(() => initScratch(root, onDone), 250); return; }
     cv.dataset.on = 1;
     const dpr = devicePixelRatio || 1;
     cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);

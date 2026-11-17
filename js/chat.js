@@ -1011,6 +1011,22 @@ function ChatScreen(chatId) {
       sheet({ top: `<div class="sheet-list">${rows}</div>` });
     },
   });
+  // ketuk 2x = ❤️
+  let lastTap = { mid: null, t: 0 };
+  inner.addEventListener('click', e => {
+    const b = e.target.closest('.msg-row .bubble, .msg-row .sticker, .msg-row .jumbo, .msg-row .doodle-msg');
+    if (!b || e.target.closest('a, canvas.scratch-cv') || (e.target.closest('[data-act]') && !b.classList.contains('doodle-msg') && !b.classList.contains('has-fx'))) return;
+    const row = b.closest('.msg-row'), mid = row.dataset.mid, now = Date.now();
+    if (lastTap.mid === mid && now - lastTap.t < 320) {
+      lastTap = { mid: null, t: 0 };
+      const m = msgById(mid);
+      if (!m || m.unsent || m.type === 'system') return;
+      if (!(m.reactions?.['❤️'] || []).includes(ME)) api.react(chatId, mid, '❤️');
+      vibrate(10);
+      const line = inner.querySelector(`.msg-row[data-mid="${mid}"] .bubble-line`);
+      if (line) { const hrt = h('<i class="dbl-heart">❤️</i>'); line.appendChild(hrt); setTimeout(() => hrt.remove(), 900); }
+    } else lastTap = { mid, t: now };
+  });
   onLongPress(inner, '.msg-row .bubble, .msg-row .sticker, .msg-row .photo, .msg-row .jumbo, .msg-row .doodle-msg', b => msgMenu(b.closest('.msg-row')));
 
   /* ---------- lifecycle ---------- */

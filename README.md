@@ -21,7 +21,8 @@ bash server/tunnel.sh     # (opsional) link HTTPS gratis via Cloudflare, buat iP
 - Yang sudah online: akun, cari teman, chat personal & **grup** realtime (teks, sticker, foto, voice, lokasi, dll), riwayat tersinkron,
   **centang dibaca**, **lagi ngetik…**, **status online**, **reaksi / edit / tarik pesan**, ganti nama grup, tambah anggota, keluar grup.
   **Video & file** (upload ke server, maks 50 MB), **polling, event, Onix Pay (kirim/minta/patungan), suit** interaktif lintas HP.
-  Belum: panggilan suara/video.
+  **Telepon & video call** personal (WebRTC, sinyal lewat PocketBase). Mic/kamera di iPhone butuh HTTPS → pakai `server/tunnel.sh`.
+  Catatan: call antar jaringan seluler kadang butuh server TURN (berbayar); di Wi-Fi yang sama / kebanyakan jaringan rumah biasanya lancar. Call grup online belum ada.
 
 ## Fitur
 - **Chat**: personal & grup, sticker, emoji, foto/kamera, voice note, lokasi, balas (reply), reaksi,

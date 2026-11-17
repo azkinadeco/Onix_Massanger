@@ -89,6 +89,100 @@ api.remote.hooks.action = async (chatId, m, kind, value) => {
 };
 const withFile = r => { if (r.file) r._fileUrl = pb.files.getURL(r, r.file); return r; };
 
+/* ---------- panggilan WebRTC ---------- */
+const ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }, { urls: 'stun:stun.cloudflare.com:3478' }];
+const sessions = new Map(), earlyIce = new Map();
+export const canCall = () => !!navigator.mediaDevices?.getUserMedia && !!window.RTCPeerConnection;
+const signal = (s, kind, data = {}) => pb.collection('call_signals').create({ chat: s.chatId, sender: myId(), target: s.peer, call: s.id, kind, data });
+
+function makeSession({ chatId, peer, video, id, incoming, offer }) {
+  const s = { id, chatId, peer, video, incoming, pc: null, local: null, ended: false, handlers: {}, pending: earlyIce.get(id) || [], offerSent: false, outIce: [] };
+  earlyIce.delete(id);
+  const emit = (ev, x) => s.handlers[ev]?.(x);
+  s.on = (ev, fn) => { s.handlers[ev] = fn; if (ev === 'local' && s.local) fn(s.local); };
+  async function media() {
+    s.local = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: video ? { facingMode: 'user', width: { ideal: 720 } } : false });
+    emit('local', s.local);
+  }
+  function makePc() {
+    const pc = s.pc = new RTCPeerConnection({ iceServers: ICE });
+    s.local.getTracks().forEach(t => pc.addTrack(t, s.local));
+    pc.onicecandidate = e => {
+      if (!e.candidate) return;
+      const c = e.candidate.toJSON();
+      if (s.incoming || s.offerSent) signal(s, 'ice', c).catch(() => {}); else s.outIce.push(c);
+    };
+    pc.ontrack = e => emit('remote', e.streams[0] || new MediaStream([e.track]));
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') emit('connected');
+      if (pc.connectionState === 'failed') s.fail('failed');
+    };
+  }
+  async function flushIce() { for (const c of s.pending.splice(0)) await s.pc.addIceCandidate(c).catch(() => {}); }
+  function cleanup() {
+    if (s.ended) return;
+    s.ended = true;
+    try { s.pc?.close(); } catch { /* */ }
+    s.local?.getTracks().forEach(t => t.stop());
+    sessions.delete(s.id);
+  }
+  s.fail = r => { if (s.ended) return; cleanup(); emit('ended', r); };
+  s.start = async () => {
+    try { await media(); } catch { return s.fail('nomedia'); }
+    if (s.ended) return cleanup();
+    makePc();
+    const o = await s.pc.createOffer();
+    await s.pc.setLocalDescription(o);
+    try { await signal(s, 'offer', { sdp: { type: o.type, sdp: o.sdp }, video }); } catch { return s.fail('failed'); }
+    s.offerSent = true;
+    s.outIce.splice(0).forEach(c => signal(s, 'ice', c).catch(() => {}));
+  };
+  s.accept = async () => {
+    try { await media(); } catch { signal(s, 'reject').catch(() => {}); return s.fail('nomedia'); }
+    makePc();
+    await s.pc.setRemoteDescription(offer);
+    await flushIce();
+    const a = await s.pc.createAnswer();
+    await s.pc.setLocalDescription(a);
+    await signal(s, 'answer', { sdp: { type: a.type, sdp: a.sdp } }).catch(() => s.fail('failed'));
+  };
+  s.onSignal = async (kind, data) => {
+    if (s.ended) return;
+    if (kind === 'answer') { await s.pc.setRemoteDescription(data.sdp); await flushIce(); }
+    else if (kind === 'ice') { if (s.pc?.remoteDescription) await s.pc.addIceCandidate(data).catch(() => {}); else s.pending.push(data); }
+    else if (kind === 'end' || kind === 'reject' || kind === 'busy') { cleanup(); emit('ended', kind); }
+  };
+  s.hangup = () => { if (!s.ended) signal(s, 'end').catch(() => {}); cleanup(); };
+  s.reject = () => { if (!s.ended) signal(s, 'reject').catch(() => {}); cleanup(); };
+  s.setMute = m => s.local?.getAudioTracks().forEach(t => { t.enabled = !m; });
+  s.setCam = on => s.local?.getVideoTracks().forEach(t => { t.enabled = on; });
+  s.hasVideo = () => !!s.local?.getVideoTracks().length;
+  sessions.set(id, s);
+  return s;
+}
+
+export function callSession(chatId, video) {
+  const c = api.chat(chatId);
+  const peer = c?.members.find(x => x !== ME);
+  if (!peer) return null;
+  return makeSession({ chatId, peer, video, id: 'call' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), incoming: false });
+}
+
+async function onSignal(r) {
+  if (r.target !== myId() || r.sender === myId()) return;
+  if (r.kind === 'offer') {
+    if (Date.now() - Date.parse(r.created) > 45000) return;
+    if (sessions.size) { pb.collection('call_signals').create({ chat: r.chat, sender: myId(), target: r.sender, call: r.call, kind: 'busy', data: {} }).catch(() => {}); return; }
+    if (!api.chat(r.chat)) { try { ingestChat(await pb.collection('chats').getOne(r.chat, { expand: 'members' })); api.remote.done(); } catch { return; } }
+    const s = makeSession({ chatId: r.chat, peer: r.sender, video: !!r.data?.video, id: r.call, incoming: true, offer: r.data.sdp });
+    bus.emit('incoming-call', { chatId: r.chat, video: !!r.data?.video, rtc: s });
+    return;
+  }
+  const s = sessions.get(r.call);
+  if (s) s.onSignal(r.kind, r.data);
+  else if (r.kind === 'ice') { const a = earlyIce.get(r.call) || []; a.push(r.data); earlyIce.set(r.call, a); setTimeout(() => earlyIce.delete(r.call), 60000); }
+}
+
 /* ---------- grup ---------- */
 async function systemMsg(chatId, text) {
   try { await pb.collection('messages').create({ chat: chatId, sender: myId(), cid: 'sys' + Date.now().toString(36), type: 'system', text, data: {} }); } catch { /* */ }
@@ -188,6 +282,7 @@ async function start() {
   await pb.collection('messages').subscribe('*', e => { if (e.action === 'create') onMessage(e.record); else if (e.action === 'update') api.remote.applyUpdate(e.record); });
   await pb.collection('chat_state').subscribe('*', e => { if (e.action !== 'delete') applyState(e.record); });
   await pb.collection('msg_actions').subscribe('*', e => { if (e.action !== 'delete') applyAction(e.record); });
+  await pb.collection('call_signals').subscribe('*', e => { if (e.action === 'create') onSignal(e.record); });
   await pb.collection('chats').subscribe('*', e => { if (e.action !== 'delete') { ingestChat(e.record); api.remote.done(); } }, { expand: 'members' });
   let first = true;
   await pb.realtime.subscribe('PB_CONNECT', () => { setConn(true); if (!first) sync(); first = false; });

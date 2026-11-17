@@ -1,4 +1,5 @@
 import { TTL_OPTS, ttlLabel, suitResult, rupiah } from './service.js';
+import { canCall, callSession } from './backend.js';
 import { api, bus, ME, firstName, mentionRe } from './service.js';
 import { $, h, esc, linkify, avatar, hm, dayLabel, isSameDay, dur, hash, vibrate, pickFile, pickFiles, compressImage, copyText, isJumbo } from './util.js';
 import { icon } from './icons.js';
@@ -980,10 +981,16 @@ function openVideo(url) {
 
 /* ================= CALL ================= */
 let callOpen = false;
-export function startCall(chatId, video = false, incoming = false) {
-  if (callOpen) return;
+export function startCall(chatId, video = false, incoming = false, rtc = null) {
+  if (callOpen) { rtc?.reject?.(); return; }
   const ch = api.chat(chatId);
   if (!ch) return;
+  if (ch.remote && !incoming) {
+    if (ch.type !== 'direct') return toast('Call grup online belum ada');
+    if (!canCall()) return toast('Telepon butuh HTTPS 🔒');
+    rtc = callSession(chatId, video);
+    if (!rtc) return;
+  }
   callOpen = true;
   const title = api.chatTitle(ch);
   const hue = ch.type === 'group' ? ch.hue : api.peerOf(ch)?.hue;
@@ -996,6 +1003,7 @@ export function startCall(chatId, video = false, incoming = false) {
   const statusTxt = incoming ? (video ? 'Video call…' : 'Panggilan masuk…') : 'Memanggil…';
   const el = h(`<div class="call ${video ? 'is-video' : ''} ${incoming ? 'is-incoming' : ''} ${isGroup ? 'is-group' : ''}" style="--h:${hue ?? 260}">
     <div class="call-bg"></div>
+    <video class="remote-cam" playsinline autoplay hidden></video>
     <video class="self-cam" playsinline autoplay muted hidden></video>
     <div class="call-top"><span class="enc">${icon('lock', 'tiny')}</span></div>
     ${isGroup ? `<div class="call-center gc">
@@ -1009,6 +1017,7 @@ export function startCall(chatId, video = false, incoming = false) {
     <div class="call-controls"></div>
   </div>`);
   document.getElementById('app').appendChild(el);
+  el.addEventListener('scroll', () => { el.scrollTop = 0; el.scrollLeft = 0; });
   requestAnimationFrame(() => el.classList.add('show'));
   vibrate([20, 60, 20]);
 
@@ -1026,7 +1035,24 @@ export function startCall(chatId, video = false, incoming = false) {
     if (state === 'calling') connect();
   }
 
+  const remoteV = $('.remote-cam', el);
+  if (rtc) {
+    rtc.on('local', s => { if (s.getVideoTracks().length) { cam.srcObject = s; cam.hidden = !camOn; } });
+    rtc.on('remote', s => {
+      remoteV.srcObject = s; remoteV.hidden = !s.getVideoTracks().length;
+      el.classList.toggle('has-remote', !remoteV.hidden);
+      remoteV.play?.().catch(() => {});
+    });
+    rtc.on('connected', () => { if (state !== 'live') connect(); });
+    rtc.on('ended', r => {
+      if (r === 'nomedia') toast('Mic/kamera nggak bisa dipakai 🔒');
+      if (r === 'busy') toast('Lagi di panggilan lain');
+      end(state === 'live' ? undefined : r === 'reject' ? 'declined' : r === 'busy' ? 'noanswer' : r === 'end' && incoming ? 'missed' : undefined, true);
+    });
+  }
+
   async function camera(on) {
+    if (rtc) return;
     if (on) {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
@@ -1067,10 +1093,12 @@ export function startCall(chatId, video = false, incoming = false) {
     }
   }
 
-  function end(st) {
+  function end(st, fromRemote) {
     if (state === 'ended') return;
     const was = state;
     state = 'ended';
+    if (rtc && !fromRemote) (st === 'declined' ? rtc.reject() : rtc.hangup());
+    if (remoteV) { remoteV.srcObject = null; }
     clearInterval(timer); clearTimeout(ringT); clearInterval(talkT); joinTimers.forEach(clearTimeout);
     camera(false);
     let logStatus;
@@ -1091,13 +1119,26 @@ export function startCall(chatId, video = false, incoming = false) {
     const a = b.dataset.c;
     if (a === 'end') end();
     else if (a === 'decline') end('declined');
-    else if (a === 'accept') { connect(); if (camOn) camera(true); }
-    else if (a === 'mute') { muted = !muted; controls(); }
+    else if (a === 'accept') {
+      if (rtc) { if (!canCall()) { toast('Telepon butuh HTTPS 🔒'); return end('declined'); } state = 'connecting'; status.textContent = 'Menyambungkan…'; ctr.innerHTML = `<button class="cbtn end" data-c="end" aria-label="Akhiri">${icon('phoneOff')}</button>`; rtc.accept(); return; }
+      connect(); if (camOn) camera(true);
+    }
+    else if (a === 'mute') { muted = !muted; rtc?.setMute(muted); controls(); }
     else if (a === 'speaker') { speaker = !speaker; controls(); }
-    else if (a === 'cam') { camOn = !camOn; el.classList.toggle('is-video', camOn); camera(camOn); controls(); }
+    else if (a === 'cam') {
+      if (rtc && !rtc.hasVideo()) return toast('Kamera cuma di video call');
+      camOn = !camOn; el.classList.toggle('is-video', camOn);
+      if (rtc) { rtc.setCam(camOn); cam.hidden = !camOn; } else camera(camOn);
+      controls();
+    }
   });
 
   controls();
+  if (rtc) {
+    if (!incoming) { rtc.start(); ringT = setTimeout(() => { if (state === 'calling') end('noanswer'); }, 35000); }
+    else ringT = setTimeout(() => { if (state === 'ringing') end('missed'); }, 35000);
+    return;
+  }
   if (camOn && !incoming) camera(true);
   if (!incoming && isGroup) {
     others.forEach((id, i) => { if (i === 0 || Math.random() < 0.8) joinTimers.push(setTimeout(() => join(id), 1800 + i * (900 + Math.random() * 1800))); });

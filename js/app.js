@@ -451,7 +451,7 @@ bus.on('notify', ({ chat, msg, mention }) => {
   const text = msg.type === 'system' ? msg.text : (chat.type === 'group' ? firstName(u?.name) + ': ' : '') + preview(msg, chat).replace(/^Kamu: /, '');
   banner({ title, text, avatarHtml: chatAvatar(chat, 40, { online: false }), onTap: () => openChat(chat.id) });
 });
-bus.on('incoming-call', ({ chatId, video }) => startCall(chatId, video, true));
+bus.on('incoming-call', ({ chatId, video, rtc }) => startCall(chatId, video, true, rtc));
 bus.on('storage-full', () => toast('Memori penuh'));
 bus.on('toast', t => toast(t));
 

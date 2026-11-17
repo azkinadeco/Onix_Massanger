@@ -178,7 +178,7 @@ export function callSession(chatId, video) {
 async function onSignal(r) {
   if (r.target !== myId() || r.sender === myId()) return;
   if (r.kind === 'offer') {
-    if (Date.now() - Date.parse(r.created) > 45000) return;
+    if (Date.now() - Date.parse(r.created) > 45000 || api.isBlocked(r.sender)) return;
     if (sessions.size) { pb.collection('call_signals').create({ chat: r.chat, sender: myId(), target: r.sender, call: r.call, kind: 'busy', data: {} }).catch(() => {}); return; }
     if (!api.chat(r.chat)) { try { ingestChat(await pb.collection('chats').getOne(r.chat, { expand: 'members' })); api.remote.done(); } catch { return; } }
     const s = makeSession({ chatId: r.chat, peer: r.sender, video: !!r.data?.video, id: r.call, incoming: true, offer: r.data.sdp });
@@ -372,6 +372,10 @@ export async function searchMessages(q) {
   } catch { return 0; }
 }
 
+/* ---------- blokir & laporan ---------- */
+api.remote.hooks.blocked = ids => { profileQ = profileQ.then(() => pb.collection('users').update(myId(), { blocked: ids })).catch(e => console.warn('blokir gagal', e)); };
+api.remote.hooks.report = (id, reason) => pb.collection('reports').create({ reporter: myId(), target: id, reason: reason || '' }).catch(e => console.warn('lapor gagal', e));
+
 /* ---------- profil ---------- */
 api.remote.hooks.profile = async patch => {
   if (!pb?.authStore.isValid) return;
@@ -474,7 +478,7 @@ export async function findUsers(q) {
   q = q.trim().toLowerCase().replace(/^@/, '');
   if (q.length < 2) return [];
   const res = await pb.collection('users').getList(1, 20, { filter: pb.filter('id != {:me} && (handle ~ {:q} || name ~ {:q})', { me: myId(), q }) });
-  return res.items.map(u => ({ id: u.id, handle: u.handle, name: u.name || u.handle, hue: u.hue, avatar: avatarUrl(u), _rec: u }));
+  return res.items.filter(u => !api.isBlocked(u.id)).map(u => ({ id: u.id, handle: u.handle, name: u.name || u.handle, hue: u.hue, avatar: avatarUrl(u), _rec: u }));
 }
 
 export async function startChatWith(u) {

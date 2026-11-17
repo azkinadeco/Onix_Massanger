@@ -454,6 +454,7 @@ const remote = {
   applyMe(r, avatarUrl) {
     Object.assign(db.me, { name: r.name || db.me.name, status: r.status ?? db.me.status, hue: r.hue ?? db.me.hue, ...(avatarUrl ? { avatar: avatarUrl } : {}) });
     if (r.mood?.ts) (db.moods ||= {})[ME] = r.mood;
+    for (const b of r.blocked || []) if (!db.blocked.includes(b)) db.blocked.push(b);
     save(); bus.emit('me'); bus.emit('moods'); bus.emit('chats');
   },
   mapId(pid) { return pid === db.remote?.uid ? ME : pid; },
@@ -488,6 +489,7 @@ const remote = {
     const ex = list.find(m => m.id === cid || m.rid === rec.id);
     if (ex) { if (ex.status !== 'sent') { ex.status = 'sent'; ex.rid = rec.id; if (live) emitChat(chatId); } return; }
     const from = remote.mapId(rec.sender);
+    if (from !== ME && db.blocked.includes(from)) return;
     const payload = { ...mapPayloadIds(JSON.parse(JSON.stringify(rec.data || {})), remote.mapId), type: rec.type || 'text', id: cid, rid: rec.id, ts: Date.parse(rec.created) || Date.now() };
     if (rec._fileUrl) payload.fileUrl = rec._fileUrl;
     if (rec.text) payload.text = rec.text;
@@ -670,9 +672,14 @@ export const api = {
   block(id) {
     if (!db.blocked.includes(id)) db.blocked.push(id);
     db.favorites = db.favorites.filter(x => x !== id);
-    save(); bus.emit('friends'); bus.emit('chats');
+    save(); bus.emit('friends'); bus.emit('chats'); bus.emit('stories'); bus.emit('posts'); bus.emit('moods');
+    if (db.users[id]?.remote) hooks.blocked?.(db.blocked.filter(x => db.users[x]?.remote));
   },
-  unblock(id) { db.blocked = db.blocked.filter(x => x !== id); save(); bus.emit('friends'); },
+  unblock(id) {
+    db.blocked = db.blocked.filter(x => x !== id); save(); bus.emit('friends'); bus.emit('chats'); bus.emit('stories'); bus.emit('posts');
+    if (db.users[id]?.remote) hooks.blocked?.(db.blocked.filter(x => db.users[x]?.remote));
+  },
+  report(id, reason) { if (db.users[id]?.remote) hooks.report?.(id, reason); },
 
   /* chats */
   chats() {

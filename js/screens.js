@@ -177,6 +177,7 @@ export function ProfileScreen(uid) {
       const u = api.user(uid);
       const acts = [{ label: 'Bagikan kontak', icon: 'share', run: () => shareText(`Add ${u.name} di Onix: @${u.id}`) }];
       if (api.isFriend(uid)) acts.push({ label: 'Hapus teman', icon: 'trash', danger: true, run: async () => { if (await confirmBox({ title: `Hapus ${firstName(u.name)}?`, ok: 'Hapus', danger: true })) { api.removeFriend(uid); toast('Teman dihapus'); } } });
+      if (u.remote) acts.push({ label: 'Laporkan', icon: 'info', run: async () => { const r = await promptBox({ title: `Laporkan ${firstName(u.name)}`, placeholder: 'Alasan (spam, kasar, dll)', ok: 'Kirim', max: 200 }); if (r !== null && r !== undefined) { api.report(uid, r); toast('Laporan terkirim 🙏'); } } });
       if (!u.official && !api.isBlocked(uid)) acts.push({ label: 'Blokir', icon: 'block', danger: true, run: async () => { if (await confirmBox({ title: `Blokir ${firstName(u.name)}?`, text: 'Kamu nggak bakal nerima pesan dari dia.', ok: 'Blokir', danger: true })) { api.block(uid); toast('Diblokir'); } } });
       sheet({ title: u.name, actions: acts });
     },
@@ -678,7 +679,7 @@ export function postActions(extra = {}) {
       const p = api.post(t.dataset.id);
       const acts = p.userId === ME
         ? [{ label: 'Hapus post', icon: 'trash', danger: true, run: async () => { if (await confirmBox({ title: 'Hapus post ini?', ok: 'Hapus', danger: true })) { api.deletePost(p.id); if (router.top()?.el.querySelector('.pd-body')) router.back(); } } }]
-        : [{ label: 'Lihat profil', icon: 'user', run: () => router.push(ProfileScreen(p.userId)) }, { label: 'Laporkan', icon: 'info', run: () => toast('Makasih, laporan diterima (demo)') }];
+        : [{ label: 'Lihat profil', icon: 'user', run: () => router.push(ProfileScreen(p.userId)) }, { label: 'Laporkan', icon: 'info', run: () => { api.report(p.userId, 'post: ' + (p.text || '').slice(0, 200)); toast('Makasih, laporan diterima 🙏'); } }];
       sheet({ actions: acts });
     },
     ...extra,

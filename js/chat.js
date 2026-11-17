@@ -219,6 +219,7 @@ function ChatScreen(chatId) {
   const replyBar = $('.reply-bar', el), recBar = $('.rec-bar', el), typingRow = $('.typing-row', el);
   let nodes = new Map(), lastId = null, firstRender = true, stick = true, newCount = 0;
   const animated = new Set();
+  const bombT = new Map();
   function gameSheet() {
     sheet({
       top: `<div class="game-pick">
@@ -358,6 +359,10 @@ function ChatScreen(chatId) {
       body = p
         ? `<button class="bubble postmsg" data-act="open-post" data-pid="${p.id}">${img ? `<img src="${img}" alt="">` : ''}<span class="pm-txt"><span class="pm-who">${avatar(pu, 20)}<b>${esc(pu?.name || '')}</b></span>${p.text ? `<span class="pm-body">${esc(p.text.slice(0, 120))}</span>` : ''}<small>${icon('voom', 'tiny')} VOOM${p.images?.length > 1 ? ` · ${p.images.length} foto` : ''}</small></span></button>`
         : `<div class="bubble unsent">${icon('voom', 'tiny')} Post udah dihapus</div>`;
+    } else if (m.type === 'when') {
+      body = fun.whenHtml(m);
+    } else if (m.type === 'bomb') {
+      body = fun.bombHtml(m);
     } else if (m.type === 'todo') {
       body = fun.todoHtml(m);
     } else if (m.type === 'story') {
@@ -452,6 +457,9 @@ function ChatScreen(chatId) {
     renderIce();
     fun.initDoodles(inner, msgById);
     fun.initSpins(inner, msgById);
+    for (const m of list) if (m.type === 'bomb' && m.endAt > Date.now() && !bombT.has(m.id)) {
+      bombT.set(m.id, setTimeout(() => { renderMsgs(); if (fun.bombState(m).holder === ME) { fun.shake(el, true); } }, m.endAt - Date.now() + 50));
+    }
     if (firstRender || stick || (newLast && lm.from === ME)) { scrollBottom(); }
     else if (newLast) { newCount++; showJump(); }
     lastId = lm?.id;
@@ -626,7 +634,7 @@ function ChatScreen(chatId) {
     }
     editing = null;
     const u = api.user(m.from);
-    const text = m.type === 'text' ? m.text : m.type === 'poll' ? '📊 ' + m.poll.q : { sticker: 'Sticker ' + m.sticker, image: '📷 Foto', voice: '🎤 Voice note', location: '📍 Lokasi', video: '🎬 Video', file: '📎 ' + m.name, doodle: m.word ? '🤔 Tebak gambar' : '🖍️ Coretan', todo: '☑️ ' + (m.title || 'Checklist'), story: '📖 Cerita bareng', spin: '🎡 Roda putar', checkin: '💭 Cek kabar', quiz: '🎯 Kuis', countdown: '⏱️ ' + (m.title || 'Hitung mundur'), capsule: '⏳ Kapsul waktu', scratch: '🫣 Pesan gosok' }[m.type];
+    const text = m.type === 'text' ? m.text : m.type === 'poll' ? '📊 ' + m.poll.q : { sticker: 'Sticker ' + m.sticker, image: '📷 Foto', voice: '🎤 Voice note', location: '📍 Lokasi', video: '🎬 Video', file: '📎 ' + m.name, when: '📅 ' + (m.title || 'Kapan bisa?'), bomb: '💣 Bom waktu', doodle: m.word ? '🤔 Tebak gambar' : '🖍️ Coretan', todo: '☑️ ' + (m.title || 'Checklist'), story: '📖 Cerita bareng', spin: '🎡 Roda putar', checkin: '💭 Cek kabar', quiz: '🎯 Kuis', countdown: '⏱️ ' + (m.title || 'Hitung mundur'), capsule: '⏳ Kapsul waktu', scratch: '🫣 Pesan gosok' }[m.type];
     replyTo = { id: m.id, name: m.from === ME ? 'Kamu' : u?.name, text: (text || '').slice(0, 120) };
     replyBar.innerHTML = `<div class="rb-line"></div><div class="rb-txt"><b>${esc(replyTo.name)}</b><span>${esc(replyTo.text)}</span></div><button class="icon-btn sm" data-act="cancel-reply">${icon('x')}</button>`;
     replyBar.hidden = false;
@@ -993,6 +1001,10 @@ function ChatScreen(chatId) {
     'cu-x': () => { catchBar.hidden = true; },
     'att-sopan': () => { closePanel(); fun.sopanSheet(ta.value, s => { ta.value = s; autosize(); ta.focus(); }); },
     'att-tsticker': () => { closePanel(); fun.textStickerSheet(chatId); },
+    'att-when': () => { closePanel(); fun.whenSheet(chatId); },
+    'att-bomb': () => { closePanel(); fun.bombSend(chatId); },
+    'when-tick': t => { const m = msgById(t.dataset.mid); if (m) fun.whenTick(chatId, m, t.dataset.d); },
+    'bomb-pass': t => { const m = msgById(t.dataset.mid); if (m) fun.bombPass(chatId, m); },
     'att-todo': () => { closePanel(); fun.todoSheet(chatId); },
     'att-story': () => { closePanel(); fun.storySheet(chatId); },
     'att-guess': () => { closePanel(); ta.blur(); fun.doodleEditor(chatId, { guess: true }); },
@@ -1138,6 +1150,7 @@ function ChatScreen(chatId) {
       offs.forEach(f => f());
       document.removeEventListener('visibilitychange', onVis);
       clearInterval(capT);
+      bombT.forEach(t => clearTimeout(t));
       stopPlay();
       if (rec) stopRec(false);
       api.setDraft(chatId, ta.value.trim());

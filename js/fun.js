@@ -5,7 +5,7 @@ import { icon } from './icons.js';
 import { router, bindActs, navbar, sheet, toast } from './ui.js';
 
 // item tambahan di menu + : [aksi, ikon, label, warna]
-export const FUN_ITEMS = [['sopan', 'sparkle', 'Sopanin', '#3B2E7A'], ['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4'], ['spin', 'refresh', 'Roda putar', '#B05CFF'], ['todo', 'checks', 'Checklist', '#0FB46C'], ['story', 'note', 'Cerita', '#7C5CFF'], ['guess', 'brush', 'Tebak gambar', '#FF5C8A'], ['tsticker', 'sticker', 'Stiker teks', '#FF7A1A'], ['who', 'users', 'Siapa paling', '#E1A100']];
+export const FUN_ITEMS = [['sopan', 'sparkle', 'Sopanin', '#3B2E7A'], ['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4'], ['spin', 'refresh', 'Roda putar', '#B05CFF'], ['todo', 'checks', 'Checklist', '#0FB46C'], ['story', 'note', 'Cerita', '#7C5CFF'], ['guess', 'brush', 'Tebak gambar', '#FF5C8A'], ['tsticker', 'sticker', 'Stiker teks', '#FF7A1A'], ['when', 'calendar', 'Kapan bisa', '#2E7BFF'], ['bomb', 'sparkle', 'Bom waktu', '#15151C'], ['who', 'users', 'Siapa paling', '#E1A100']];
 
 /* ============ MODE KALEM ============
    Pesan yang kelihatan lagi emosi -> ditawarin tahan dulu sebelum kekirim */
@@ -61,7 +61,7 @@ const dateTxt = ts => new Date(ts).toLocaleDateString('id-ID', { day: 'numeric',
 const txt = s => esc(s || '').replace(/\n/g, '<br>');
 const buzz = p => { try { navigator.vibrate?.(p); } catch { /* */ } };
 // tipe pesan yang isinya rahasia (jangan diteruskan / disalin / di-keep)
-export const SECRET_TYPES = ['capsule', 'scratch', 'nudge', 'quiz', 'quizres', 'checkin', 'checkans', 'todo', 'story'];
+export const SECRET_TYPES = ['capsule', 'scratch', 'nudge', 'quiz', 'quizres', 'checkin', 'checkans', 'todo', 'story', 'when', 'bomb'];
 
 /* sheet nulis pesan khusus: judul, placeholder, opsi tambahan */
 async function composeSheet({ head, ph, extra = '', go, bind }) {
@@ -1078,4 +1078,86 @@ export function sopanSheet(text, onUse) {
       s.querySelector('[data-go]').addEventListener('click', e => { e.stopPropagation(); onUse(out.textContent); close(); buzz(8); });
     },
   });
+}
+
+/* ============ KAPAN BISA? ============
+   Cari hari ketemuan: tiap orang centang hari yang bisa, hari terbaik ditandai 👑 */
+const dKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const dLabel = k => new Date(k + 'T12:00').toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
+export function whenHtml(m) {
+  const votes = {};
+  for (const [u, v] of actsOf(m)) for (const d of (Array.isArray(v) ? v : [])) (votes[d] ||= []).push(u);
+  const best = Math.max(0, ...(m.days || []).map(d => (votes[d] || []).length));
+  const n = actsOf(m).length;
+  return `<div class="bubble when"><div class="wh-h"><b>📅 ${esc(m.title || 'Kapan bisa?')}</b><small>${n} orang ngisi</small></div>
+    ${(m.days || []).map(d => { const vs = votes[d] || [], on = vs.includes(ME); return `<button class="wh-row ${on ? 'on' : ''} ${best && vs.length === best ? 'best' : ''}" data-act="when-tick" data-mid="${m.id}" data-d="${d}">
+      <span class="wh-chk">${icon('check')}</span><span class="wh-d">${dLabel(d)}${best && vs.length === best ? ' 👑' : ''}</span>
+      <span class="wh-av">${vs.slice(0, 4).map(u => avatar(u === ME ? api.me() : api.user(u), 20)).join('')}</span><b>${vs.length || ''}</b></button>`; }).join('')}</div>`;
+}
+export function whenTick(chatId, m, d) {
+  const mine = Array.isArray(m.acts?.[ME]) ? m.acts[ME] : [];
+  api.funAct(chatId, m.id, mine.includes(d) ? mine.filter(x => x !== d) : [...mine, d]);
+  buzz(6);
+}
+export function whenSheet(chatId) {
+  const days = [...Array(14)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() + i + 1); return dKey(d); });
+  const picked = new Set(days.slice(0, 7).filter(k => [5, 6, 0].includes(new Date(k + 'T12:00').getDay())));
+  sheet({
+    top: `<div class="fun-compose">
+      <div class="fc-h">📅 <b>Kapan bisa?</b><small>Pilih hari-hari pilihan, teman centang yang bisa</small></div>
+      <input class="fc-in" maxlength="40" placeholder="Acara apa? (mis. Nonton bareng)">
+      <div class="wh-pick">${days.map(k => `<button class="${picked.has(k) ? 'on' : ''}" data-k="${k}"><small>${new Date(k + 'T12:00').toLocaleDateString('id-ID', { weekday: 'short' })}</small><b>${+k.slice(8)}</b></button>`).join('')}</div>
+      <button class="btn primary wide" data-go>Kirim</button>
+    </div>`,
+    onMount: (s, close) => {
+      s.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const k = b.dataset.k; picked.has(k) ? picked.delete(k) : picked.add(k); b.classList.toggle('on'); buzz(4); }));
+      s.querySelector('[data-go]').addEventListener('click', e => {
+        e.stopPropagation();
+        if (picked.size < 2) return toast('Pilih minimal 2 hari');
+        const ds = [...picked].sort();
+        const m = api.send(chatId, { type: 'when', title: s.querySelector('.fc-in').value.trim() || 'Kapan bisa?', days: ds });
+        demoPeer(chatId, m.id, p => api.funActAs(chatId, m.id, p, ds.filter(() => Math.random() < .6)), 3000);
+        buzz(10); close();
+      });
+    },
+  });
+}
+
+/* ============ BOM WAKTU ============
+   Bom dioper-oper. Sumbunya rahasia (20-45 detik). Yang megang pas meledak, kalah! */
+export function bombState(m) {
+  const passes = [];
+  const map = id => api.remote?.mapId ? api.remote.mapId(id) : id;
+  for (const [u, v] of actsOf(m)) for (const p of (Array.isArray(v) ? v : [])) passes.push({ by: u, to: map(p.to), ts: p.ts });
+  passes.sort((a, b) => a.ts - b.ts);
+  let holder = m.from, n = 0;
+  for (const p of passes) if (p.by === holder && p.ts < m.endAt) { holder = p.to; n++; }
+  return { holder, n, done: Date.now() >= m.endAt };
+}
+export function bombHtml(m) {
+  const s = bombState(m), who = nm(s.holder);
+  if (s.done) return `<div class="bubble bomb boom"><div class="bm-ic">💥</div><b>BOOM!</b><small>${s.holder === ME ? 'Kamu kena 😭' : esc(who) + ' kena 😂'} · ${s.n}x dioper</small></div>`;
+  const mine = s.holder === ME;
+  return `<div class="bubble bomb ${mine ? 'hot' : ''}"><div class="bm-ic">💣</div><b>${mine ? 'Bomnya di KAMU!' : `Bom di ${esc(who)}`}</b><small>Sumbunya rahasia… · ${s.n}x dioper</small>
+    ${mine ? `<button data-act="bomb-pass" data-mid="${m.id}">Oper! 👉</button>` : ''}</div>`;
+}
+export function bombPass(chatId, m) {
+  const s = bombState(m);
+  if (s.done || s.holder !== ME) return;
+  const ch = api.chat(chatId), others = ch.members.filter(id => id !== ME && !api.user(id)?.official);
+  if (!others.length) return;
+  const go = to => {
+    const mine = Array.isArray(m.acts?.[ME]) ? m.acts[ME] : [];
+    api.funAct(chatId, m.id, [...mine, { to, ts: Date.now() }].slice(-30));
+    buzz(12);
+    // mode demo: teman oper balik
+    demoPeer(chatId, m.id, p => { if (bombState(m).holder === to && !bombState(m).done) { const cur = Array.isArray(m.acts?.[to]) ? m.acts[to] : []; api.funActAs(chatId, m.id, to, [...cur, { to: ME, ts: Date.now() }]); } }, 1500 + Math.random() * 2500);
+  };
+  if (others.length === 1) return go(others[0]);
+  sheet({ title: 'Oper ke siapa?', actions: others.map(id => ({ label: api.user(id)?.name || '?', run: () => go(id) })) });
+}
+export function bombSend(chatId) {
+  const m = api.send(chatId, { type: 'bomb', endAt: Date.now() + (20 + Math.random() * 25) * 1000 });
+  buzz([20, 40, 20]);
+  return m;
 }

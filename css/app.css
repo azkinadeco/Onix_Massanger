@@ -1786,3 +1786,38 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 /* ============ F2: sopanin ============ */
 .sop-old { padding: 10px 14px; border-radius: 16px; background: var(--surface-2); color: var(--text-3); font-size: 14px; text-decoration: line-through; text-decoration-color: rgba(255,59,92,.5); white-space: pre-wrap; }
 .sop-new { padding: 12px 14px; border-radius: 16px; background: rgba(var(--accent-rgb), .1); font-size: 15px; line-height: 1.45; white-space: pre-wrap; animation: pop .35s var(--ease); }
+
+/* ============ F3: kapan bisa ============ */
+.bubble.when { min-width: 250px; display: flex; flex-direction: column; gap: 4px; background: var(--surface); color: var(--text); }
+.msg-row.me .bubble.when, .msg-row.me .bubble.bomb { color: var(--text); }
+.msg-row.me .bubble.when { background: var(--surface); }
+.wh-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.wh-h small { color: var(--text-2); font-weight: 600; }
+.wh-row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 12px; text-align: left; }
+.wh-row.best { background: rgba(255, 176, 32, .14); }
+.wh-chk { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--surface-3); display: grid; place-items: center; color: transparent; flex-shrink: 0; }
+.wh-chk .ic { width: 13px; height: 13px; stroke-width: 3.2; }
+.wh-row.on .wh-chk { background: var(--accent); border-color: var(--accent); color: #fff; }
+.wh-d { flex: 1; font-size: 14.5px; font-weight: 600; }
+.wh-av { display: flex; }
+.wh-av .av { margin-left: -6px; box-shadow: 0 0 0 2px var(--surface); }
+.wh-row b { min-width: 14px; text-align: right; font-size: 13px; color: var(--text-2); }
+.wh-pick { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.wh-pick button { display: flex; flex-direction: column; align-items: center; padding: 6px 0; border-radius: 12px; background: var(--surface-2); }
+.wh-pick small { font-size: 10.5px; color: var(--text-2); }
+.wh-pick b { font-size: 16px; }
+.wh-pick button.on { background: var(--accent); color: #fff; }
+.wh-pick button.on small { color: rgba(255,255,255,.8); }
+
+/* ============ F4: bom waktu ============ */
+.bubble.bomb { min-width: 200px; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; background: linear-gradient(160deg, #2A2A35, #15151C); color: #fff !important; }
+.msg-row.me .bubble.bomb { background: linear-gradient(160deg, #2A2A35, #15151C); }
+.bm-ic { font-size: 44px; animation: bombTick 1s ease-in-out infinite; }
+.bomb.hot { background: linear-gradient(160deg, #FF3D3D, #B3122E) !important; }
+.bomb.hot .bm-ic { animation-duration: .35s; }
+@keyframes bombTick { 0%, 100% { transform: rotate(-6deg) scale(1); } 50% { transform: rotate(6deg) scale(1.08); } }
+.bubble.bomb small { opacity: .8; font-size: 12px; }
+.bubble.bomb button { margin-top: 6px; height: 38px; padding: 0 22px; border-radius: 19px; background: #fff; color: #E0203F; font-weight: 900; font-size: 15px; animation: pop .5s var(--ease) infinite alternate; }
+.bomb.boom { background: linear-gradient(160deg, #FFB020, #FF5C38) !important; }
+.bomb.boom .bm-ic { animation: pop .5s var(--ease); font-size: 54px; }
+.bomb.boom b { font-size: 22px; font-weight: 900; }

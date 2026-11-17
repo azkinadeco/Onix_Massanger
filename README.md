@@ -48,6 +48,13 @@ Semua ada di tombol **+** di chat → bagian *Khas Onix*, dan ikut tersinkron on
 - **Mode fokus** (Kamu): notif diem, chat personal dibales otomatis sekali, teman lihat 🎧 + jam selesainya
 - **Gaya teks** (tebal, sambung, spongebob, kecil, bulet, terbalik, alay) & **efek suara** voice note (cempreng 🐿️ / berat 🐻)
 - **Ketuk 2x** pesan = ❤️
+- **Roda putar** buat ambil keputusan (hasil & animasinya sama di semua HP)
+- **Siapa paling…?** polling yang pilihannya otomatis semua anggota
+- **Checklist bareng** (semua bisa centang, kelihatan siapa), **Lanjutin cerita** (estafet, gantian), **Tebak gambar** (coretan + kata rahasia)
+- **Kirim pas dia online**: tahan tombol kirim → pesan nunggu sampai teman online
+- **Stiker teks**: ketik → 4 gaya → jadi stiker
+- **Ringkasan belum dibaca**: buka chat rame → jumlah pesan, siapa paling rame, loncat ke awal / ke mention
+- Menu **+** ngurutin fitur Khas Onix dari yang paling sering kamu pakai
 
 Catatan: isi kapsul waktu, pesan gosok, kuis & cek kabar cuma disembunyikan di tampilan (tidak dienkripsi).
 Pengingat, mode fokus & balas otomatis jalan selama app hidup.

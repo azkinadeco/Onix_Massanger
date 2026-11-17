@@ -1678,3 +1678,24 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 @keyframes breathe2 { 50% { transform: scale(1.08); } }
 .fc-sh > b { font-size: 18px; }
 .fc-sh > small { color: var(--text-2); font-size: 13px; max-width: 290px; margin-bottom: 6px; }
+
+/* ============ D9: cek kabar ============ */
+.bubble.checkin { min-width: 230px; display: flex; flex-direction: column; gap: 8px; color: #fff; background: linear-gradient(140deg, #14B8C4, #2E7BFF); }
+.ck-h { display: flex; align-items: center; gap: 8px; }
+.ck-h span { font-size: 24px; }
+.ck-h b { font-size: 16px; }
+.ck-lock { font-size: 12.5px; opacity: .9; }
+.ck-pick { display: flex; justify-content: space-between; gap: 4px; }
+.ck-pick button { width: 38px; height: 38px; border-radius: 50%; font-size: 22px; background: rgba(255,255,255,.22); transition: transform .15s var(--ease); }
+.ck-pick button:active { transform: scale(1.25); }
+.ck-pick.big button { width: 54px; height: 54px; font-size: 30px; background: var(--surface-2); }
+.ck-pick.big button.on { background: rgba(var(--accent-rgb), .18); box-shadow: inset 0 0 0 2px var(--accent); transform: scale(1.1); }
+.ck-list { display: flex; flex-direction: column; gap: 6px; }
+.ck-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 14px; background: rgba(255,255,255,.18); animation: pop .4s var(--ease) both; }
+.ck-row:nth-child(2) { animation-delay: .12s; } .ck-row:nth-child(3) { animation-delay: .24s; }
+.ck-e { font-size: 26px; }
+.ck-t { display: flex; flex-direction: column; min-width: 0; }
+.ck-t b { font-size: 13.5px; }
+.ck-t small { font-size: 12.5px; opacity: .9; }
+.sys.checkans span { background: rgba(20, 184, 196, .14); color: #0E8F99; font-weight: 600; }
+[data-theme=dark] .sys.checkans span { color: #5FE0E8; }

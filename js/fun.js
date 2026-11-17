@@ -5,7 +5,7 @@ import { icon } from './icons.js';
 import { router, bindActs, navbar, sheet, toast } from './ui.js';
 
 // item tambahan di menu + : [aksi, ikon, label, warna]
-export const FUN_ITEMS = [['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Hitung mundur', '#FF7A1A']];
+export const FUN_ITEMS = [['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Hitung mundur', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4']];
 
 /* ============ MODE KALEM ============
    Pesan yang kelihatan lagi emosi -> ditawarin tahan dulu sebelum kekirim */
@@ -61,7 +61,7 @@ const dateTxt = ts => new Date(ts).toLocaleDateString('id-ID', { day: 'numeric',
 const txt = s => esc(s || '').replace(/\n/g, '<br>');
 const buzz = p => { try { navigator.vibrate?.(p); } catch { /* */ } };
 // tipe pesan yang isinya rahasia (jangan diteruskan / disalin / di-keep)
-export const SECRET_TYPES = ['capsule', 'scratch', 'nudge', 'quiz', 'quizres'];
+export const SECRET_TYPES = ['capsule', 'scratch', 'nudge', 'quiz', 'quizres', 'checkin', 'checkans'];
 
 /* sheet nulis pesan khusus: judul, placeholder, opsi tambahan */
 async function composeSheet({ head, ph, extra = '', go, bind }) {
@@ -682,4 +682,48 @@ export function focusSheet() {
       toast('Mode fokus nyala 🎧'); buzz(10); close();
     }),
   });
+}
+
+/* ============ CEK KABAR ============
+   "Gimana harimu?" — jawaban orang lain baru kebuka setelah kamu ikut jawab */
+export const FEELS = ['😫', '😕', '😐', '🙂', '🤩'];
+const FEEL_TXT = ['Berat', 'Kurang', 'Biasa', 'Oke', 'Mantap'];
+const ansFor = (chatId, mid) => api.messages(chatId).filter(x => x.type === 'checkans' && x.ref === mid);
+export function checkinHtml(m, chatId) {
+  const all = [{ from: m.from, v: m.v, note: m.note }, ...ansFor(chatId, m.id)];
+  const answered = all.some(a => a.from === ME);
+  const name = id => id === ME ? 'Kamu' : esc(firstName(api.user(id)?.name || '?'));
+  const head = `<div class="ck-h"><span>💭</span><b>Gimana harimu?</b></div>`;
+  if (!answered) return `<div class="bubble checkin">${head}
+    <small class="ck-lock">🔒 ${all.length} jawaban nunggu kamu</small>
+    <div class="ck-pick">${FEELS.map((e, i) => `<button data-act="ck-ans" data-mid="${m.id}" data-v="${i}">${e}</button>`).join('')}</div></div>`;
+  return `<div class="bubble checkin open">${head}<div class="ck-list">${all.map(a => `<div class="ck-row"><span class="ck-e">${FEELS[a.v] || '🙂'}</span><span class="ck-t"><b>${name(a.from)}</b><small>${esc(a.note || FEEL_TXT[a.v] || '')}</small></span></div>`).join('')}</div></div>`;
+}
+export function checkAnsHtml(m) {
+  const who = m.from === ME ? 'Kamu' : esc(firstName(api.user(m.from)?.name || '?'));
+  return `<div class="sys checkans"><span>💭 ${who} udah jawab cek kabar</span></div>`;
+}
+export function checkinSheet(chatId) {
+  let v = 3;
+  sheet({
+    top: `<div class="fun-compose">
+      <div class="fc-h">💭 <b>Cek kabar</b><small>Jawabanmu kebuka setelah teman ikut jawab</small></div>
+      <div class="ck-pick big">${FEELS.map((e, i) => `<button class="${i === v ? 'on' : ''}" data-v="${i}">${e}</button>`).join('')}</div>
+      <input class="fc-in" maxlength="60" placeholder="Ceritain dikit (opsional)">
+      <button class="btn primary wide" data-go>Kirim</button>
+    </div>`,
+    onMount: (s, close) => {
+      s.querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); v = +b.dataset.v; s.querySelectorAll('[data-v]').forEach(x => x.classList.toggle('on', x === b)); buzz(5); }));
+      s.querySelector('[data-go]').addEventListener('click', e => {
+        e.stopPropagation();
+        api.send(chatId, { type: 'checkin', v, note: s.querySelector('.fc-in').value.trim() });
+        buzz(10); close();
+      });
+    },
+  });
+}
+export function answerCheckin(chatId, mid, v) {
+  if (ansFor(chatId, mid).some(a => a.from === ME)) return;
+  api.send(chatId, { type: 'checkans', ref: mid, v });
+  buzz(10);
 }

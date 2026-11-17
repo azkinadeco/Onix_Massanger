@@ -311,13 +311,14 @@ function ChatScreen(chatId) {
 
   /* ---------- messages ---------- */
   function brk(a, b) {
-    return !a || !b || a.from !== b.from || a.type === 'system' || b.type === 'system' || ['nudge', 'quizres'].includes(a.type) || ['nudge', 'quizres'].includes(b.type) || Math.abs(b.ts - a.ts) > 5 * 60e3 || !isSameDay(a.ts, b.ts);
+    return !a || !b || a.from !== b.from || a.type === 'system' || b.type === 'system' || ['nudge', 'quizres', 'checkans'].includes(a.type) || ['nudge', 'quizres', 'checkans'].includes(b.type) || Math.abs(b.ts - a.ts) > 5 * 60e3 || !isSameDay(a.ts, b.ts);
   }
 
   function msgHtml(m, prev, next, group) {
     if (m.type === 'system') return `<div class="sys"><span>${esc(m.text)}</span></div>`;
     if (m.type === 'nudge') return fun.nudgeHtml(m, c());
     if (m.type === 'quizres') return fun.quizResHtml(m);
+    if (m.type === 'checkans') return fun.checkAnsHtml(m);
     const mine = m.from === ME;
     const u = api.user(m.from) || { name: '?' };
     const first = brk(prev, m), last = brk(m, next);
@@ -353,6 +354,8 @@ function ChatScreen(chatId) {
       body = p
         ? `<button class="bubble postmsg" data-act="open-post" data-pid="${p.id}">${img ? `<img src="${img}" alt="">` : ''}<span class="pm-txt"><span class="pm-who">${avatar(pu, 20)}<b>${esc(pu?.name || '')}</b></span>${p.text ? `<span class="pm-body">${esc(p.text.slice(0, 120))}</span>` : ''}<small>${icon('voom', 'tiny')} VOOM${p.images?.length > 1 ? ` · ${p.images.length} foto` : ''}</small></span></button>`
         : `<div class="bubble unsent">${icon('voom', 'tiny')} Post udah dihapus</div>`;
+    } else if (m.type === 'checkin') {
+      body = fun.checkinHtml(m, chatId);
     } else if (m.type === 'quiz') {
       body = fun.quizHtml(m, chatId);
     } else if (m.type === 'countdown') {
@@ -596,7 +599,7 @@ function ChatScreen(chatId) {
     }
     editing = null;
     const u = api.user(m.from);
-    const text = m.type === 'text' ? m.text : m.type === 'poll' ? '📊 ' + m.poll.q : { sticker: 'Sticker ' + m.sticker, image: '📷 Foto', voice: '🎤 Voice note', location: '📍 Lokasi', video: '🎬 Video', file: '📎 ' + m.name, doodle: '🖍️ Coretan', quiz: '🎯 Kuis', countdown: '⏱️ ' + (m.title || 'Hitung mundur'), capsule: '⏳ Kapsul waktu', scratch: '🫣 Pesan gosok' }[m.type];
+    const text = m.type === 'text' ? m.text : m.type === 'poll' ? '📊 ' + m.poll.q : { sticker: 'Sticker ' + m.sticker, image: '📷 Foto', voice: '🎤 Voice note', location: '📍 Lokasi', video: '🎬 Video', file: '📎 ' + m.name, doodle: '🖍️ Coretan', checkin: '💭 Cek kabar', quiz: '🎯 Kuis', countdown: '⏱️ ' + (m.title || 'Hitung mundur'), capsule: '⏳ Kapsul waktu', scratch: '🫣 Pesan gosok' }[m.type];
     replyTo = { id: m.id, name: m.from === ME ? 'Kamu' : u?.name, text: (text || '').slice(0, 120) };
     replyBar.innerHTML = `<div class="rb-line"></div><div class="rb-txt"><b>${esc(replyTo.name)}</b><span>${esc(replyTo.text)}</span></div><button class="icon-btn sm" data-act="cancel-reply">${icon('x')}</button>`;
     replyBar.hidden = false;
@@ -951,6 +954,8 @@ function ChatScreen(chatId) {
     'ice-topic': t => { ta.value = t.dataset.t; autosize(); ta.focus(); iceBar.hidden = true; },
     'ice-more': () => renderIce(true),
     'ice-x': () => { iceOff.add(fun.icebreaker(chatId)?.key); iceBar.hidden = true; },
+    'att-checkin': () => { closePanel(); fun.checkinSheet(chatId); },
+    'ck-ans': t => fun.answerCheckin(chatId, t.dataset.mid, +t.dataset.v),
     'att-quiz': () => { closePanel(); router.push(fun.QuizComposeScreen(chatId)); },
     'att-countdown': () => { closePanel(); fun.countdownSheet(chatId); },
     'quiz-play': t => { const m = msgById(t.dataset.mid); if (m) fun.playQuiz(chatId, m); },

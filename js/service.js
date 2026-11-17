@@ -304,8 +304,41 @@ setInterval(() => {
 
 /* ---------- jembatan ke server (PocketBase) ---------- */
 let remoteSend = null;
-const SKIP_KEYS = ['id', 'chatId', 'from', 'ts', 'status', 'reactions', 'readBy', 'rid', 'expires', 'type', 'text'];
+const hooks = {}; // diisi backend.js: read, typing, update, rename, addMembers, leave
+const SKIP_KEYS = ['id', 'chatId', 'from', 'ts', 'status', 'reactions', 'readBy', 'rid', 'expires', 'type', 'text', 'unsent', 'edited'];
+const mapReacts = (r, fn) => { const o = {}; for (const [k, v] of Object.entries(r || {})) { const a = (v || []).map(fn).filter(Boolean); if (a.length) o[k] = a; } return o; };
 const remote = {
+  hooks,
+  reactionsOut(m) { return mapReacts(m.reactions, id => (id === ME ? db.remote?.uid : id)); },
+  applyUpdate(rec) {
+    const list = db.messages[rec.chat];
+    const m = list?.find(x => x.rid === rec.id || x.id === rec.cid);
+    if (!m) return;
+    if (rec.unsent) Object.assign(m, { unsent: true, text: '', src: null, sticker: null, img: null, album: null, replyTo: null });
+    else if (rec.edited && rec.text !== m.text) Object.assign(m, { text: rec.text, edited: true });
+    m.reactions = mapReacts(rec.reactions, remote.mapId);
+    emitChat(rec.chat);
+  },
+  applyRead(chatId, uid, readAt) {
+    const list = db.messages[chatId];
+    if (!list || uid === db.remote?.uid) return;
+    let ch = false;
+    for (const m of list) if (m.from === ME && m.ts <= readAt && !(m.readBy ||= []).includes(uid)) { m.readBy.push(uid); ch = true; }
+    if (ch) emitChat(chatId);
+  },
+  typing(chatId, uid, on) { if (db.chats[chatId] && uid !== db.remote?.uid) setTyping(chatId, uid, on); },
+  presence(r) {
+    const u = db.users[r.id];
+    if (!u) return;
+    u.lastSeen = Math.max(u.lastSeen || 0, r.lastActive || 0);
+    u.online = !!r.online && Date.now() - (r.lastActive || 0) < 120e3;
+    bus.emit('presence');
+  },
+  staleCheck() {
+    let ch = false;
+    for (const u of Object.values(db.users)) if (u.remote && u.online && Date.now() - (u.lastSeen || 0) > 120e3) { u.online = false; ch = true; }
+    if (ch) bus.emit('presence');
+  },
   setSender(fn) { remoteSend = fn; },
   state() { return db?.remote || null; },
   setState(s) { db.remote = s; save(); bus.emit('remote'); },
@@ -338,6 +371,10 @@ const remote = {
     const from = remote.mapId(rec.sender);
     const payload = { ...(rec.data || {}), type: rec.type || 'text', id: cid, rid: rec.id, ts: Date.parse(rec.created) || Date.now() };
     if (rec.text) payload.text = rec.text;
+    if (rec.unsent) Object.assign(payload, { unsent: true, text: '' });
+    if (rec.edited) payload.edited = true;
+    if (rec.reactions) payload.reactions = mapReacts(rec.reactions, remote.mapId);
+    if (payload.type === 'system' && payload.text?.startsWith(db.me.name + ' ')) payload.text = 'Kamu ' + payload.text.slice(db.me.name.length + 1);
     if (payload.replyTo && payload.replyTo.name === db.me.name) payload.replyTo = { ...payload.replyTo, name: 'Kamu' };
     if (db.users[from]) db.users[from].lastSeen = Math.max(db.users[from].lastSeen || 0, payload.ts);
     if (live && from !== ME) { receive(chatId, from, payload); return; }
@@ -557,25 +594,29 @@ export const api = {
   renameGroup(chatId, name) {
     const c = db.chats[chatId];
     c.name = name;
+    if (c.remote) { emitChat(chatId); hooks.rename?.(chatId, name); return; }
     db.messages[chatId].push(newMsg(chatId, ME, { type: 'system', text: `Kamu mengganti nama grup jadi "${name}"` }));
     emitChat(chatId);
   },
   addMembers(chatId, ids) {
     const c = db.chats[chatId];
+    if (c.remote) ids = ids.filter(id => db.users[id]?.remote);
     ids.forEach(id => { if (!c.members.includes(id)) c.members.push(id); });
+    if (c.remote) { emitChat(chatId); hooks.addMembers?.(chatId, ids); return; }
     const names = ids.map(id => firstName(db.users[id]?.name)).join(', ');
     db.messages[chatId].push(newMsg(chatId, ME, { type: 'system', text: `Kamu menambahkan ${names}` }));
     c.updatedAt = Date.now();
     emitChat(chatId);
   },
-  leaveGroup(chatId) { db.chats[chatId].left = true; save(); bus.emit('chats'); },
+  leaveGroup(chatId) { const c = db.chats[chatId]; c.left = true; save(); bus.emit('chats'); if (c.remote) hooks.leave?.(chatId); },
 
   messages(chatId) { return db.messages[chatId] || []; },
   lastMessage(chatId) { const l = db.messages[chatId]; return l?.[l.length - 1]; },
+  typingNow(chatId) { if (db.chats[chatId]?.remote) hooks.typing?.(chatId); },
   typingIn(chatId) { return [...(typing[chatId] || [])]; },
   totalUnread(exceptId) { return Object.values(db.chats).filter(c => !c.left && !c.secret && c.id !== exceptId).reduce((s, c) => s + (c.unread || 0), 0); },
   setActive(chatId) { activeChat = chatId; },
-  markRead(chatId) { const c = db.chats[chatId]; if (!c) return; c.readAt = Date.now(); if (c.unread || c.mention) { c.unread = 0; c.mention = false; save(); bus.emit('chats'); } },
+  markRead(chatId) { const c = db.chats[chatId]; if (!c) return; c.readAt = Date.now(); if (c.remote) hooks.read?.(chatId); if (c.unread || c.mention) { c.unread = 0; c.mention = false; save(); bus.emit('chats'); } },
   markUnread(chatId) { const c = db.chats[chatId]; c.unread = Math.max(1, c.unread || 0); save(); bus.emit('chats'); },
   setDraft(chatId, text) { const c = db.chats[chatId]; if (c && c.draft !== text) { c.draft = text; save(); bus.emit('chats'); } },
 
@@ -647,6 +688,7 @@ export const api = {
     Object.keys(m.reactions).forEach(k => { m.reactions[k] = m.reactions[k].filter(x => x !== ME); if (!m.reactions[k].length) delete m.reactions[k]; });
     if (!had) (m.reactions[emoji] ||= []).push(ME);
     emitChat(chatId);
+    if (db.chats[chatId].remote) { if (m.rid) hooks.update?.(chatId, m, { reactions: remote.reactionsOut(m) }); return; }
     // kadang teman ikut react pesan kamu
     if (!had && m.from === ME && Math.random() < 0.4) {
       const other = db.chats[chatId].members.find(x => x !== ME);
@@ -658,6 +700,7 @@ export const api = {
     if (!m) return;
     Object.assign(m, { unsent: true, text: '', src: null, sticker: null, reactions: {}, replyTo: null });
     emitChat(chatId);
+    if (db.chats[chatId].remote && m.rid) hooks.update?.(chatId, m, { unsent: true, text: '', data: {}, reactions: {} });
   },
   deleteMessage(chatId, msgId) {
     db.messages[chatId] = db.messages[chatId].filter(x => x.id !== msgId);
@@ -668,6 +711,7 @@ export const api = {
     if (!m || m.unsent) return;
     m.text = text; m.edited = true;
     emitChat(chatId);
+    if (db.chats[chatId].remote && m.rid) hooks.update?.(chatId, m, { text, edited: true });
   },
   forward(msg, chatIds) {
     const keys = ['type', 'text', 'sticker', 'anim', 'src', 'w', 'h', 'duration', 'title', 'address', 'mediaId', 'thumb', 'name', 'size', 'mime'];

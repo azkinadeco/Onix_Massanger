@@ -18,7 +18,90 @@ function client(url) {
   return pb;
 }
 const avatarUrl = r => (r?.avatar ? pb.files.getURL(r, r.avatar, { thumb: '200x200' }) : null);
-const ingestChat = r => { (r.expand?.members || []).forEach(u => api.remote.user(u, avatarUrl(u))); return api.remote.chat(r); };
+const watched = new Set();
+function ingestUser(u) {
+  api.remote.user(u, avatarUrl(u));
+  api.remote.presence(u);
+  if (u.id !== myId() && !watched.has(u.id)) {
+    watched.add(u.id);
+    pb.collection('users').subscribe(u.id, e => { if (e.action === 'update') { api.remote.user(e.record, avatarUrl(e.record)); api.remote.presence(e.record); } }).catch(() => watched.delete(u.id));
+  }
+}
+const ingestChat = r => { (r.expand?.members || []).forEach(ingestUser); return api.remote.chat(r); };
+
+/* ---------- state per chat: dibaca & ngetik ---------- */
+const myState = new Map(); // chatId -> record id
+const typingOff = new Map();
+function applyState(r) {
+  if (r.user === myId()) { myState.set(r.chat, r.id); return; }
+  if (r.readAt) api.remote.applyRead(r.chat, r.user, r.readAt);
+  const k = r.chat + r.user, left = (r.typingAt || 0) + 6000 - Date.now();
+  clearTimeout(typingOff.get(k));
+  if (left > 0) { api.remote.typing(r.chat, r.user, true); typingOff.set(k, setTimeout(() => api.remote.typing(r.chat, r.user, false), left)); }
+  else api.remote.typing(r.chat, r.user, false);
+}
+async function upsertState(chatId, patch) {
+  const id = myState.get(chatId);
+  try {
+    if (id) return await pb.collection('chat_state').update(id, patch);
+    const rec = await pb.collection('chat_state').create({ chat: chatId, user: myId(), ...patch });
+    myState.set(chatId, rec.id);
+  } catch (e) {
+    if (!id) { // mungkin sudah ada di server
+      try { const r = await pb.collection('chat_state').getFirstListItem(pb.filter('chat = {:c} && user = {:u}', { c: chatId, u: myId() })); myState.set(chatId, r.id); await pb.collection('chat_state').update(r.id, patch); } catch { /* */ }
+    }
+  }
+}
+const readT = new Map(), typingSent = new Map();
+api.remote.hooks.read = chatId => { clearTimeout(readT.get(chatId)); readT.set(chatId, setTimeout(() => upsertState(chatId, { readAt: Date.now() }), 700)); };
+api.remote.hooks.typing = chatId => {
+  const now = Date.now();
+  if (now - (typingSent.get(chatId) || 0) < 3000) return;
+  typingSent.set(chatId, now);
+  upsertState(chatId, { typingAt: now });
+};
+api.remote.hooks.update = async (chatId, m, patch) => {
+  try { await pb.collection('messages').update(m.rid, patch); } catch (e) { console.warn('update gagal', e); }
+};
+
+/* ---------- grup ---------- */
+async function systemMsg(chatId, text) {
+  try { await pb.collection('messages').create({ chat: chatId, sender: myId(), cid: 'sys' + Date.now().toString(36), type: 'system', text, data: {} }); } catch { /* */ }
+}
+export async function createGroup(name, ids, emoji) {
+  const rec = await pb.collection('chats').create({ type: 'group', name, emoji, hue: Math.floor(Math.random() * 360), members: [myId(), ...ids] }, { expand: 'members' });
+  const c = ingestChat(rec);
+  api.remote.done();
+  await systemMsg(rec.id, `${api.me().name} membuat grup "${name}"`);
+  return c;
+}
+api.remote.hooks.rename = async (chatId, name) => {
+  try { await pb.collection('chats').update(chatId, { name }); await systemMsg(chatId, `${api.me().name} mengganti nama grup jadi "${name}"`); } catch (e) { console.warn(e); }
+};
+api.remote.hooks.addMembers = async (chatId, ids) => {
+  if (!ids.length) return;
+  try {
+    await pb.collection('chats').update(chatId, { 'members+': ids });
+    await systemMsg(chatId, `${api.me().name} menambahkan ${ids.map(id => api.user(id)?.name?.split(' ')[0]).join(', ')}`);
+  } catch (e) { console.warn(e); }
+};
+api.remote.hooks.leave = async chatId => {
+  try { await systemMsg(chatId, `${api.me().name} keluar dari grup`); await pb.collection('chats').update(chatId, { 'members-': [myId()] }); } catch (e) { console.warn(e); }
+};
+
+/* ---------- presence (heartbeat) ---------- */
+let beatT = null;
+async function beat(online = !document.hidden) {
+  if (!started || !pb?.authStore.isValid) return;
+  try { await pb.collection('users').update(myId(), { online, lastActive: Date.now() }); } catch { /* */ }
+}
+function startBeat() {
+  clearInterval(beatT);
+  beat();
+  beatT = setInterval(() => { if (!document.hidden) beat(true); api.remote.staleCheck(); }, 45000);
+}
+document.addEventListener('visibilitychange', () => beat(!document.hidden));
+window.addEventListener('pagehide', () => beat(false));
 
 function setConn(v) { if (connected !== v) { connected = v; bus.emit('remote'); } }
 
@@ -64,7 +147,9 @@ export async function signIn({ handle, password, url }) {
 }
 
 export async function signOut() {
-  started = false; setConn(false);
+  await beat(false);
+  clearInterval(beatT);
+  started = false; setConn(false); watched.clear(); myState.clear();
   try { await pb?.realtime.unsubscribe(); } catch { /* */ }
   pb?.authStore.clear();
   api.remote.purge();
@@ -75,12 +160,14 @@ async function start() {
   if (started) return sync();
   started = true;
   await sync();
-  await pb.collection('messages').subscribe('*', e => { if (e.action === 'create' || e.action === 'update') onMessage(e.record); });
+  await pb.collection('messages').subscribe('*', e => { if (e.action === 'create') onMessage(e.record); else if (e.action === 'update') api.remote.applyUpdate(e.record); });
+  await pb.collection('chat_state').subscribe('*', e => { if (e.action !== 'delete') applyState(e.record); });
   await pb.collection('chats').subscribe('*', e => { if (e.action !== 'delete') { ingestChat(e.record); api.remote.done(); } }, { expand: 'members' });
   let first = true;
   await pb.realtime.subscribe('PB_CONNECT', () => { setConn(true); if (!first) sync(); first = false; });
   pb.realtime.onDisconnect = () => setConn(false);
   setConn(true);
+  startBeat();
 }
 
 let syncing = null;
@@ -95,6 +182,7 @@ export function sync() {
         res.items.reverse().forEach(r => api.remote.message(r, false));
       }
       api.remote.done();
+      (await pb.collection('chat_state').getFullList()).forEach(applyState);
     } catch (e) { console.warn('sync gagal', e); }
     finally { syncing = null; }
   })();
@@ -117,6 +205,7 @@ async function sendRemote(chatId, m) {
   try {
     const rec = await pb.collection('messages').create({ chat: chatId, sender: myId(), cid: m.id, type, text, data });
     api.remote.sent(chatId, m.id, rec.id);
+    if (typingSent.get(chatId)) { typingSent.set(chatId, 0); upsertState(chatId, { typingAt: 0 }); }
   } catch (e) {
     console.warn('kirim gagal', e);
     api.remote.failed(chatId, m.id);

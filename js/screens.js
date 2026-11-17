@@ -416,11 +416,16 @@ export function NewGroupScreen() {
   bindActs(el, {
     emo: t => { emoji = EMO[(EMO.indexOf(emoji) + 1) % EMO.length]; t.textContent = emoji; vibrate(5); },
     pick: t => { const id = t.dataset.id; sel.has(id) ? sel.delete(id) : sel.add(id); vibrate(5); render(); },
-    create: () => {
+    create: async () => {
       const n = name.value.trim();
       if (!n || !sel.size) return;
-      const c = api.createGroup(n, [...sel], emoji);
-      
+      const ids = [...sel], online = ids.filter(id => api.user(id)?.remote);
+      let c;
+      if (online.length) {
+        if (online.length !== ids.length) return toast('Grup online cuma bisa isi teman online 🌐');
+        const be = await import('./backend.js');
+        try { c = await be.createGroup(n, ids, emoji); } catch (e) { return toast(be.errText(e)); }
+      } else c = api.createGroup(n, ids, emoji);
       history.back();
       setTimeout(() => openChat(c.id), 380);
     },

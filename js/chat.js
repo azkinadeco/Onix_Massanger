@@ -443,7 +443,7 @@ function ChatScreen(chatId) {
     sendBtn.innerHTML = icon(has ? 'send' : 'mic');
     sendBtn.classList.toggle('active', has);
   }
-  ta.addEventListener('input', () => { autosize(); checkMention(); });
+  ta.addEventListener('input', () => { autosize(); checkMention(); if (ta.value.trim()) api.typingNow(chatId); });
   // tahan tombol kirim = jadwalkan
   let holdT = null, held = false;
   sendBtn.addEventListener('pointerdown', () => {

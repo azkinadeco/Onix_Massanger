@@ -448,7 +448,7 @@ bus.on('notify', ({ chat, msg, mention }) => {
   if (!s.notif) return;
   const u = api.user(msg.from);
   const title = chat.type === 'group' ? `${mention ? '@ ' : ''}${chat.name}` : u?.name;
-  const text = (chat.type === 'group' ? firstName(u?.name) + ': ' : '') + preview(msg, chat).replace(/^Kamu: /, '');
+  const text = msg.type === 'system' ? msg.text : (chat.type === 'group' ? firstName(u?.name) + ': ' : '') + preview(msg, chat).replace(/^Kamu: /, '');
   banner({ title, text, avatarHtml: chatAvatar(chat, 40, { online: false }), onTap: () => openChat(chat.id) });
 });
 bus.on('incoming-call', ({ chatId, video }) => startCall(chatId, video, true));

@@ -688,6 +688,9 @@ export const api = {
 
   /* Sticker */
   packs() { return db.packs; },
+  myStickers() { return db.myStickers ||= []; },
+  addMySticker(src) { (db.myStickers ||= []).unshift({ id: uid('ms'), src, ts: Date.now() }); save(); bus.emit('packs'); },
+  removeMySticker(id) { db.myStickers = (db.myStickers || []).filter(s => s.id !== id); save(); bus.emit('packs'); },
   storePacks() { return STORE_PACKS; },
   ownsPack(id) { return db.packs.includes(id); },
   addPack(id) { if (!db.packs.includes(id)) db.packs.push(id); save(); bus.emit('packs'); },

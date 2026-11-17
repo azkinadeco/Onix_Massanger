@@ -7,7 +7,7 @@ import { chatAvatar, presence, verified } from './views.js';
 import { STICKERS, STICKER_TABS, EMOJIS, ANIM_STICKERS, STORE_PACKS } from './seed.js';
 import { putMedia, mediaURL, videoInfo, fmtSize, fileExt } from './media.js';
 import { ProfileScreen, GroupInfoScreen, AlbumScreen, openImage, openGallery } from './screens.js';
-import { forwardMessage, keepFromMessage, PollComposeScreen, wallpaperSheet, EventComposeScreen, NotesScreen, StickerStoreScreen, scheduleSheet, fmtWhen } from './features.js';
+import { forwardMessage, keepFromMessage, PollComposeScreen, wallpaperSheet, EventComposeScreen, NotesScreen, StickerStoreScreen, scheduleSheet, fmtWhen, openStickerMaker } from './features.js';
 
 const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // jalankan fn hanya di bagian teks (bukan di dalam tag HTML)
@@ -202,6 +202,7 @@ function ChatScreen(chatId) {
 
   const sc = $('.msgs', el), inner = $('.msgs-inner', el), ta = $('textarea', el);
   const sendBtn = $('.send-btn', el), panel = $('.panel', el), jump = $('.jump', el);
+  onLongPress(panel, '.my-st', async n => { if (await confirmBox({ title: 'Hapus sticker ini?', ok: 'Hapus', danger: true })) api.removeMySticker(n.dataset.id); });
   const replyBar = $('.reply-bar', el), recBar = $('.rec-bar', el), typingRow = $('.typing-row', el);
   let nodes = new Map(), lastId = null, firstRender = true, stick = true, newCount = 0;
   const animated = new Set();
@@ -304,7 +305,7 @@ function ChatScreen(chatId) {
     if (m.unsent) {
       body = `<div class="bubble unsent">${icon('undo', 'tiny')} Pesan ditarik</div>`;
     } else if (m.type === 'sticker') {
-      bare = true; body = `<div class="sticker">${m.anim ? `<span class="anim-${m.anim}">${m.sticker}</span>` : m.sticker}</div>`;
+      bare = true; body = m.img ? `<div class="sticker"><img class="sticker-img" src="${m.img}" alt="sticker"></div>` : `<div class="sticker">${m.anim ? `<span class="anim-${m.anim}">${m.sticker}</span>` : m.sticker}</div>`;
     } else if (m.type === 'video') {
       bare = true; body = `<button class="photo vid" data-act="open-video" data-mid="${m.id}">${m.thumb ? `<img src="${m.thumb}" style="aspect-ratio:${m.w || 16}/${m.h || 9}" alt="video">` : `<span class="vid-ph" style="aspect-ratio:${m.w || 16}/${m.h || 9}"></span>`}<span class="vid-play">${icon('play')}</span><span class="vid-dur">${dur(m.duration || 0)}</span></button>`;
     } else if (m.type === 'file') {
@@ -548,13 +549,15 @@ function ChatScreen(chatId) {
       panel.innerHTML = `<div class="attach-grid">${items.map(([a, ic, label, col]) => `<button data-act="att-${a}"><span style="--c:${col}">${icon(ic)}</span><small>${label}</small></button>`).join('')}</div>`;
     } else if (panelMode === 'stickers') {
       const owned = api.packs();
-      if (stickerTab !== 'emoji' && !owned.includes(stickerTab)) stickerTab = owned[0] || 'emoji';
-      const isEmoji = stickerTab === 'emoji';
-      const items = isEmoji ? [] : packItems(stickerTab);
-      const grid = isEmoji
+      if (stickerTab !== 'emoji' && stickerTab !== 'mine' && !owned.includes(stickerTab)) stickerTab = owned[0] || 'emoji';
+      const isEmoji = stickerTab === 'emoji', isMine = stickerTab === 'mine';
+      const items = isEmoji || isMine ? [] : packItems(stickerTab);
+      const mineGrid = `<div class="sticker-grid mine"><button class="ms-new" data-act="make-sticker" aria-label="Bikin sticker">${icon('plus')}</button>${api.myStickers().map(s => `<button class="my-st" data-act="my-sticker" data-id="${s.id}"><img src="${s.src}" alt=""></button>`).join('')}</div>`;
+      const grid = isMine ? mineGrid : isEmoji
         ? `<div class="emoji-grid">${EMOJIS.map(e => `<button data-act="emoji" data-e="${e}">${e}</button>`).join('')}</div>`
         : `<div class="sticker-grid">${items.map(([s, a]) => a ? `<button data-act="sticker" data-s="${s}" data-a="${a}"><span class="anim-${a}">${s}</span></button>` : `<button data-act="sticker" data-s="${s}">${s}</button>`).join('')}</div>`;
-      const tabs = owned.map(k => `<button class="${k === stickerTab ? 'on' : ''}" data-act="stab" data-k="${k}">${packCover(k)}</button>`).join('');
+      const myCover = api.myStickers()[0];
+      const tabs = `<button class="${isMine ? 'on' : ''}" data-act="stab" data-k="mine">${myCover ? `<img class="st-cov" src="${myCover.src}" alt="">` : '✂️'}</button>` + owned.map(k => `<button class="${k === stickerTab ? 'on' : ''}" data-act="stab" data-k="${k}">${packCover(k)}</button>`).join('');
       panel.innerHTML = `<div class="sticker-wrap">${grid}</div><div class="sticker-tabs"><div class="st-scroll">${tabs}<button class="${isEmoji ? 'on' : ''}" data-act="stab" data-k="emoji">😀</button></div><button class="st-store" data-act="store" aria-label="Toko sticker">${icon('store')}</button></div>`;
     }
   }
@@ -885,6 +888,8 @@ function ChatScreen(chatId) {
     plus: () => openPanel('plus'),
     stickers: () => openPanel('stickers'),
     stab: t => { stickerTab = t.dataset.k; renderPanel(); },
+    'make-sticker': () => openStickerMaker(() => { stickerTab = 'mine'; renderPanel(); }),
+    'my-sticker': t => { const s = api.myStickers().find(x => x.id === t.dataset.id); if (s) { api.send(chatId, withReply({ type: 'sticker', sticker: '✨', img: s.src })); vibrate(6); } },
     sticker: t => sendSticker(t.dataset.s, t.dataset.a),
     'quick-sticker': t => sendSticker(t.dataset.s),
     emoji: t => {

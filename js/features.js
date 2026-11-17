@@ -647,3 +647,88 @@ export function WalletScreen() {
   render();
   return { el, destroy: off };
 }
+
+/* ================= PEMBUAT STICKER ================= */
+export async function openStickerMaker(onDone) {
+  const f = await pickFile('image/*');
+  if (!f) return;
+  const url = URL.createObjectURL(f);
+  const img = new Image();
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; }).catch(() => null);
+  if (!img.naturalWidth) return toast('Gagal memuat foto 😢');
+  const SIZE = 360;
+  let shape = 'circle', zoom = 1, ox = 0, oy = 0, outline = true, caption = '';
+  const el = h(`<div class="st-maker">
+    <div class="se-top"><button class="icon-btn" data-x aria-label="Tutup">${icon('x')}</button><b>Sticker</b><button class="se-post" data-save aria-label="Simpan">${icon('check')}</button></div>
+    <div class="stm-stage"><canvas width="${SIZE}" height="${SIZE}"></canvas></div>
+    <div class="stm-tools">
+      <div class="stm-shapes">${[['circle', '●'], ['round', '▢'], ['heart', '♥'], ['full', '⬚']].map(([k, l]) => `<button data-shape="${k}">${l}</button>`).join('')}<button data-outline>${icon('sparkle')}</button></div>
+      <input type="range" min="1" max="3" step="0.01" value="1" class="stm-zoom" aria-label="Zoom">
+      <input class="field stm-cap" maxlength="20" placeholder="Teks (opsional)">
+    </div>
+  </div>`);
+  document.getElementById('app').appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  const cv = $('canvas', el), ctx = cv.getContext('2d');
+  function shapePath(c, s, inset) {
+    const a = inset, b = s - inset, w = b - a;
+    c.beginPath();
+    if (shape === 'circle') c.arc(s / 2, s / 2, w / 2, 0, Math.PI * 2);
+    else if (shape === 'round') { const r = w * .22; c.moveTo(a + r, a); c.arcTo(b, a, b, b, r); c.arcTo(b, b, a, b, r); c.arcTo(a, b, a, a, r); c.arcTo(a, a, b, a, r); }
+    else if (shape === 'heart') {
+      const x = s / 2, top = a + w * .28;
+      c.moveTo(x, b - w * .04);
+      c.bezierCurveTo(a - w * .05, a + w * .62, a + w * .02, a - w * .02, x, top);
+      c.bezierCurveTo(b - w * .02, a - w * .02, b + w * .05, a + w * .62, x, b - w * .04);
+    } else c.rect(a, a, w, w);
+    c.closePath();
+  }
+  function draw(c = ctx, s = SIZE) {
+    c.clearRect(0, 0, s, s);
+    const pad = outline ? s * .045 : s * .01;
+    c.save();
+    shapePath(c, s, pad);
+    if (outline) { c.shadowColor = 'rgba(0,0,0,.25)'; c.shadowBlur = s * .03; c.fillStyle = '#fff'; c.fill(); c.shadowColor = 'transparent'; }
+    shapePath(c, s, pad + (outline ? s * .03 : 0));
+    c.clip();
+    const base = Math.max(s / img.naturalWidth, s / img.naturalHeight) * zoom;
+    const iw = img.naturalWidth * base, ih = img.naturalHeight * base;
+    c.drawImage(img, (s - iw) / 2 + ox * s, (s - ih) / 2 + oy * s, iw, ih);
+    c.restore();
+    if (caption) {
+      const fs = Math.round(s * (caption.length > 12 ? .1 : .13));
+      c.font = `900 ${fs}px -apple-system, system-ui, sans-serif`;
+      c.textAlign = 'center'; c.textBaseline = 'bottom'; c.lineJoin = 'round';
+      c.lineWidth = fs * .28; c.strokeStyle = '#111'; c.strokeText(caption, s / 2, s * .95);
+      c.fillStyle = '#fff'; c.fillText(caption, s / 2, s * .95);
+    }
+  }
+  const paint = () => {
+    el.querySelectorAll('[data-shape]').forEach(b => b.classList.toggle('on', b.dataset.shape === shape));
+    $('[data-outline]', el).classList.toggle('on', outline);
+    draw();
+  };
+  let drag = null;
+  cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, ox, oy }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => { if (!drag) return; const r = cv.getBoundingClientRect(); ox = drag.ox + (e.clientX - drag.x) / r.width; oy = drag.oy + (e.clientY - drag.y) / r.height; draw(); });
+  cv.addEventListener('pointerup', () => { drag = null; });
+  $('.stm-zoom', el).addEventListener('input', e => { zoom = +e.target.value; draw(); });
+  $('.stm-cap', el).addEventListener('input', e => { caption = e.target.value; draw(); });
+  const close = () => { el.classList.remove('show'); URL.revokeObjectURL(url); setTimeout(() => el.remove(), 250); };
+  el.addEventListener('click', e => {
+    if (e.target.closest('[data-x]')) return close();
+    const sh = e.target.closest('[data-shape]');
+    if (sh) { shape = sh.dataset.shape; vibrate(4); return paint(); }
+    if (e.target.closest('[data-outline]')) { outline = !outline; vibrate(4); return paint(); }
+    if (e.target.closest('[data-save]')) {
+      const out = document.createElement('canvas'); out.width = out.height = 256;
+      draw(out.getContext('2d'), 256);
+      let src = out.toDataURL('image/webp', .85);
+      if (!src.startsWith('data:image/webp')) src = out.toDataURL('image/png');
+      api.addMySticker(src);
+      toast('Sticker jadi ✂️'); vibrate(10);
+      close(); onDone?.();
+    }
+  });
+  paint();
+}

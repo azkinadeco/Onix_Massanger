@@ -16,7 +16,7 @@ export function chatAvatar(c, size = 52, opts = {}) {
 export function presence(u) {
   if (!u) return '';
   if (u.official) return 'Akun resmi';
-  if (u.remote) return u.online ? 'Online' : u.lastSeen ? `Aktif ${ago(u.lastSeen)}` : '@' + u.handle;
+  if (u.remote) return !api.seenVisible(u.id) ? '@' + u.handle : u.online ? 'Online' : u.lastSeen ? `Aktif ${ago(u.lastSeen)}` : '@' + u.handle;
   return u.online ? 'Online' : `Aktif ${ago(u.lastSeen)}`;
 }
 

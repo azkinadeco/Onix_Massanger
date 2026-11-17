@@ -46,6 +46,11 @@ export function OnlineScreen() {
       <div class="af-search on-search"><div class="search">${icon('search')}<input placeholder="Cari ID teman" autocapitalize="none" spellcheck="false" value="${esc(q)}"></div></div>
       <div class="on-results">${resultsHtml()}</div>
       ${!q && chats.length ? `<div class="section-h">Chat online</div>${chats.map(c => `<div class="list-item" data-act="open" data-id="${c.id}">${avatar(api.peerOf(c) || { name: c.name }, 44)}<div class="li-main"><div class="li-name">${esc(api.chatTitle(c))}</div><div class="li-sub">${esc(api.peerOf(c) ? '@' + api.peerOf(c).handle : '')}</div></div>${icon('chevronRight', 'tiny')}</div>`).join('')}` : ''}
+      <div class="section-h">Privasi</div>
+      <div class="set-group on-priv">
+        <label class="set-row">${icon('eye')}<div class="set-txt"><span>Terakhir dilihat</span></div><input type="checkbox" class="switch" data-priv="seen" ${api.privacy().seen ? 'checked' : ''}></label>
+        <label class="set-row">${icon('checks')}<div class="set-txt"><span>Centang dibaca</span></div><input type="checkbox" class="switch" data-priv="read" ${api.privacy().read ? 'checked' : ''}></label>
+      </div>
       <div class="pad"><button class="btn danger-ghost wide" data-act="logout">${icon('logout')} Keluar akun online</button></div>`;
     const inp = $('.on-search input', body);
     inp.addEventListener('input', () => { q = inp.value; clearTimeout(qT); qT = setTimeout(search, 300); });
@@ -91,6 +96,7 @@ export function OnlineScreen() {
       await be.signOut(); q = ''; results = null; render();
     },
   });
+  body.addEventListener('change', e => { const k = e.target.dataset?.priv; if (k) { api.setPrivacy({ [k]: e.target.checked }); vibrate(5); } });
   const offs = [bus.on('remote', () => { if (!$('.on-search input:focus', body)) render(); }), bus.on('chats', () => { if (api.remote.state() && !q) render(); })];
   render();
   return { el, destroy: () => offs.forEach(f => f()) };

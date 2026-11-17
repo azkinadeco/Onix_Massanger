@@ -364,7 +364,7 @@ function ChatScreen(chatId) {
     const reactHtml = reacts.length ? `<div class="reacts" data-act="react-info" data-mid="${m.id}">${reacts.map(([e, a]) => `<span class="${a.includes(ME) ? 'mine' : ''}">${e}${a.length > 1 ? `<small>${a.length}</small>` : ''}</span>`).join('')}</div>` : '';
     let read = '';
     if (mine && !m.unsent) {
-      const n = (m.readBy || []).length;
+      const n = (m.readBy || []).filter(api.readVisible).length;
       if (m.status === 'sending') read = '<span class="sending"></span>';
       else if (m.status === 'failed') read = `<button class="failed" data-act="retry" data-mid="${m.id}" aria-label="Kirim ulang">!</button>`;
       else if (m.status === 'queued') read = `<span class="queued" title="Nunggu sinyal">${icon('clock')}</span>`;
@@ -775,7 +775,7 @@ function ChatScreen(chatId) {
 
   function showReaders(m) {
     const ch = c();
-    const read = m.readBy || [];
+    const read = (m.readBy || []).filter(api.readVisible);
     const unread = ch.members.filter(id => id !== ME && !read.includes(id));
     const row = id => `<div class="list-item">${avatar(api.user(id), 36)}<div class="li-main"><div class="li-name">${esc(api.user(id)?.name)}</div></div></div>`;
     sheet({ top: `<div class="sheet-list"><div class="section-h">${icon('checks', 'tiny')} ${read.length}</div>${read.map(row).join('')}${unread.length ? `<div class="section-h">${icon('check', 'tiny')} ${unread.length}</div>${unread.map(row).join('')}` : ''}</div>` });

@@ -384,6 +384,7 @@ const remote = {
   presence(r) {
     const u = db.users[r.id];
     if (!u) return;
+    if (!api.seenVisible(r.id)) { u.online = false; bus.emit('presence'); return; }
     u.lastSeen = Math.max(u.lastSeen || 0, r.lastActive || 0);
     u.online = !!r.online && Date.now() - (r.lastActive || 0) < 120e3;
     bus.emit('presence');
@@ -457,6 +458,7 @@ const remote = {
     Object.assign(db.me, { name: r.name || db.me.name, status: r.status ?? db.me.status, hue: r.hue ?? db.me.hue, ...(avatarUrl ? { avatar: avatarUrl } : {}) });
     if (r.mood?.ts) (db.moods ||= {})[ME] = r.mood;
     for (const b of r.blocked || []) if (!db.blocked.includes(b)) db.blocked.push(b);
+    if (r.privacy && typeof r.privacy === 'object') db.privacy = { seen: r.privacy.seen !== false, read: r.privacy.read !== false };
     save(); bus.emit('me'); bus.emit('moods'); bus.emit('chats');
   },
   mapId(pid) { return pid === db.remote?.uid ? ME : pid; },
@@ -469,7 +471,8 @@ const remote = {
   user(r, avatarUrl) {
     if (!r || r.id === db.remote?.uid) return;
     const u = db.users[r.id] ||= { id: r.id, online: false, lastSeen: 0 };
-    Object.assign(u, { name: r.name || r.handle, handle: r.handle, hue: r.hue ?? 260, status: r.status || '', avatar: avatarUrl || null, remote: true });
+    Object.assign(u, { name: r.name || r.handle, handle: r.handle, hue: r.hue ?? 260, status: r.status || '', avatar: avatarUrl || null, remote: true,
+      hideSeen: r.privacy?.seen === false, hideRead: r.privacy?.read === false });
     db.moods ||= {};
     const had = JSON.stringify(db.moods[r.id] || null);
     if (r.mood?.ts) db.moods[r.id] = r.mood; else delete db.moods[r.id];
@@ -575,6 +578,17 @@ export const api = {
   isFriend(id) { return db.friends.includes(id) || !!db.users[id]?.remote; },
   isFav(id) { return db.favorites.includes(id); },
   isBlocked(id) { return db.blocked.includes(id); },
+  /* privasi (akun online). true = ditampilkan. Timbal balik: kalau kamu sembunyiin, kamu juga nggak lihat punya orang */
+  privacy() { return { seen: db.privacy?.seen !== false, read: db.privacy?.read !== false }; },
+  setPrivacy(patch) {
+    db.privacy = { ...api.privacy(), ...patch };
+    if (db.privacy.seen === false) for (const u of Object.values(db.users)) if (u.remote) u.online = false;
+    save(); bus.emit('presence'); bus.emit('remote');
+    for (const id of Object.keys(db.messages)) if (db.chats[id]?.remote) bus.emit('messages', id);
+    hooks.privacy?.(db.privacy);
+  },
+  seenVisible(id) { const u = db.users[id]; return !u?.remote || (api.privacy().seen && !u.hideSeen); },
+  readVisible(id) { const u = db.users[id]; return !u?.remote || (api.privacy().read && !u.hideRead); },
   favorites() { return db.favorites.map(id => db.users[id]).filter(u => u && !db.blocked.includes(u.id)); },
   toggleFav(id) {
     const i = db.favorites.indexOf(id);

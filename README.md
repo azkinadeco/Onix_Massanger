@@ -23,6 +23,11 @@ bash server/tunnel.sh     # (opsional) link HTTPS gratis via Cloudflare, buat iP
   **Video & file** (upload ke server, maks 50 MB), **polling, event, Onix Pay (kirim/minta/patungan), suit** interaktif lintas HP.
   **Telepon & video call** personal (WebRTC, sinyal lewat PocketBase). Mic/kamera di iPhone butuh HTTPS → pakai `server/tunnel.sh`.
   Catatan: call antar jaringan seluler kadang butuh server TURN (berbayar); di Wi-Fi yang sama / kebanyakan jaringan rumah biasanya lancar. Call grup online belum ada.
+- Juga online: **profil & mood**, **story** (yang lihat + reaksi), **VOOM** (post, like, komentar), **pin/bisu/arsip/hapus/dibaca**
+  sinkron antar HP sendiri, **riwayat lama & cari pesan di server**, **blokir & laporkan**, **admin grup & link undangan** (`#join=kode`),
+  **antre kirim** saat offline (otomatis terkirim saat sinyal balik) + status koneksi, **notifikasi sistem & badge ikon** saat app di background,
+  **privasi**: sembunyikan terakhir dilihat & centang dibaca (timbal balik). Atur di Saya → Onix Online.
+  Catatan: notif sistem di iPhone butuh app ditambah ke Layar Utama (iOS 16.4+) dan cuma jalan selama app masih hidup di background — push saat app ditutup total butuh Web Push (belum).
 
 ## Fitur
 - **Chat**: personal & grup, sticker, emoji, foto/kamera, voice note, lokasi, balas (reply), reaksi,

@@ -245,7 +245,9 @@ export async function joinGroup(code) {
 let beatT = null;
 async function beat(online = !document.hidden) {
   if (!started || !pb?.authStore.isValid) return;
-  profileQ = profileQ.then(() => pb.collection('users').update(myId(), { online, lastActive: Date.now() })).catch(() => {});
+  // terakhir dilihat disembunyiin -> status online/aktif nggak dikirim sama sekali
+  const body = api.privacy().seen ? { online, lastActive: Date.now() } : { online: false, lastActive: 0 };
+  profileQ = profileQ.then(() => pb.collection('users').update(myId(), body)).catch(() => {});
   return profileQ;
 }
 function startBeat() {
@@ -405,6 +407,13 @@ api.remote.hooks.blocked = ids => { profileQ = profileQ.then(() => pb.collection
 api.remote.hooks.report = (id, reason) => pb.collection('reports').create({ reporter: myId(), target: id, reason: reason || '' }).catch(e => console.warn('lapor gagal', e));
 
 /* ---------- profil ---------- */
+api.remote.hooks.privacy = p => {
+  profileQ = profileQ.then(() => pb.collection('users').update(myId(), { privacy: p })).catch(e => console.warn('privasi gagal', e));
+  beat();
+  // tampilan presence teman dihitung ulang (timbal balik)
+  if (p.seen) pb.collection('users').getFullList({ filter: pb.filter('id != {:me}', { me: myId() }), fields: 'id,online,lastActive,privacy' })
+    .then(list => list.forEach(r => { if (api.user(r.id)?.remote) api.remote.presence(r); })).catch(() => {});
+};
 api.remote.hooks.profile = async patch => {
   if (!pb?.authStore.isValid) return;
   const body = {};

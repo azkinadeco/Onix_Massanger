@@ -732,3 +732,66 @@ export async function openStickerMaker(onDone) {
   });
   paint();
 }
+
+/* ================= BACKUP & RESTORE ================= */
+export function BackupScreen() {
+  const el = h(`<div class="sub-screen">${navbar('Backup')}<div class="content bk-body"></div></div>`);
+  const body = $('.bk-body', el);
+  let withMedia = false, busy = false;
+  const fmt = b => b < 1048576 ? Math.max(1, Math.round(b / 1024)) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
+  function render() {
+    const last = api.settings().lastBackup;
+    const size = new Blob([JSON.stringify(api.exportData())]).size;
+    body.innerHTML = `
+      <div class="bk-hero"><div class="bk-ic">${icon('cloud')}</div>
+        <b>${last ? ago(last) : 'Belum pernah'}</b><small>${fmt(size)}</small></div>
+      <div class="set-group">
+        <label class="set-row">${icon('film')}<div class="set-txt"><span>Video & file</span></div><input type="checkbox" class="switch" data-media ${withMedia ? 'checked' : ''}></label>
+      </div>
+      <div class="pad bk-btns">
+        <button class="btn primary wide" data-act="backup" ${busy ? 'disabled' : ''}>${icon('download')} Backup</button>
+        <button class="btn ghost wide" data-act="restore" ${busy ? 'disabled' : ''}>${icon('upload')} Pulihkan</button>
+      </div>`;
+  }
+  body.addEventListener('change', e => { if (e.target.hasAttribute('data-media')) withMedia = e.target.checked; });
+  bindActs(el, {
+    backup: async () => {
+      busy = true; render();
+      try {
+        const payload = { app: 'onix', v: 1, at: Date.now(), data: api.exportData() };
+        if (withMedia) { const { exportMedia } = await import('./media.js'); payload.media = await exportMedia(); }
+        const d = new Date();
+        const name = `onix-backup-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`;
+        const file = new File([JSON.stringify(payload)], name, { type: 'application/json' });
+        if (navigator.canShare?.({ files: [file] }) && /iPhone|iPad|Android/i.test(navigator.userAgent)) {
+          await navigator.share({ files: [file] }).catch(() => {});
+        } else {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(file); a.download = name;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        }
+        api.setSetting('lastBackup', Date.now());
+        toast('Backup siap 💾'); vibrate(8);
+      } catch { toast('Backup gagal 😢'); }
+      busy = false; render();
+    },
+    restore: async () => {
+      const f = await pickFile('application/json,.json');
+      if (!f) return;
+      let payload;
+      try { payload = JSON.parse(await f.text()); } catch { return toast('File nggak valid'); }
+      if (payload?.app !== 'onix' || !payload.data?.me) return toast('Bukan file backup Onix');
+      const who = payload.data.me.name || '?';
+      if (!(await confirmBox({ title: `Pulihkan backup ${who}?`, text: `${new Date(payload.at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })} · data sekarang diganti`, ok: 'Pulihkan', danger: true }))) return;
+      try {
+        if (payload.media) { const { importMedia } = await import('./media.js'); await importMedia(payload.media); }
+        api.importData(payload.data);
+        toast('Dipulihkan ✅');
+        setTimeout(() => location.reload(), 500);
+      } catch { toast('Gagal memulihkan 😢'); }
+    },
+  });
+  render();
+  return { el };
+}

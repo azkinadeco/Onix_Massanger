@@ -47,6 +47,26 @@ export async function mediaUsage() {
   } catch { /* */ }
   return out;
 }
+export async function exportMedia() {
+  const out = {};
+  try {
+    const db = await open();
+    const entries = await new Promise((res, rej) => {
+      const list = [];
+      const r = db.transaction(STORE).objectStore(STORE).openCursor();
+      r.onsuccess = () => { const c = r.result; if (!c) return res(list); list.push([c.key, c.value]); c.continue(); };
+      r.onerror = () => rej(r.error);
+    });
+    for (const [k, blob] of entries) out[k] = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
+  } catch { /* */ }
+  return out;
+}
+export async function importMedia(map) {
+  for (const [id, dataUrl] of Object.entries(map || {})) {
+    const blob = await (await fetch(dataUrl)).blob();
+    await tx('readwrite', s => s.put(blob, id));
+  }
+}
 export async function deleteMedia(ids) {
   if (!ids.length) return;
   ids.forEach(id => { const u = urls.get(id); if (u) { URL.revokeObjectURL(u); urls.delete(id); } });

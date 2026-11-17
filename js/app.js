@@ -5,7 +5,7 @@ import { router, bindActs, onLongPress, toast, sheet, confirmBox, banner, initVi
 import { userAvatar, chatAvatar, chatRow, userRow, postCard, empty, preview } from './views.js';
 import { openChat, startCall } from './chat.js';
 import { clearMedia } from './media.js';
-import { KeepScreen, ArchivedScreen, setupPasscode, lockApp, StickerStoreScreen, ActivityScreen, hideChat, openHiddenChats, StorageScreen, moodRow, setMoodSheet, viewMoodSheet, WalletScreen } from './features.js';
+import { KeepScreen, ArchivedScreen, setupPasscode, lockApp, StickerStoreScreen, ActivityScreen, hideChat, openHiddenChats, StorageScreen, moodRow, setMoodSheet, viewMoodSheet, WalletScreen, BackupScreen } from './features.js';
 import {
   OnboardingScreen, ProfileScreen, EditProfileScreen, AddFriendScreen, NewGroupScreen, FriendPicker,
   PostComposeScreen, postActions, openStories, addStoryFlow,
@@ -177,6 +177,7 @@ function TabsScreen() {
           ${s.passcode ? link('hidden-chats', 'lock', 'Tersembunyi', '') : ''}
           ${link('store', 'store', 'Sticker', `<span class="count">${api.packs().length}</span>`)}
           ${link('storage', 'database', 'Penyimpanan')}
+          ${link('backup', 'cloud', 'Backup')}
         </div>
         <div class="set-group">
           <label class="set-row">${icon('lock')}<div class="set-txt"><span>Kunci PIN</span></div><input type="checkbox" class="switch" data-lock ${s.passcode ? 'checked' : ''}></label>
@@ -290,6 +291,7 @@ function TabsScreen() {
     'hidden-chats': () => openHiddenChats(),
     storage: () => router.push(StorageScreen()),
     wallet: () => router.push(WalletScreen()),
+    backup: () => router.push(BackupScreen()),
     activity: () => router.push(ActivityScreen()),
     store: () => router.push(StickerStoreScreen()),
     wish: t => {

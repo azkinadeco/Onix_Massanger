@@ -1357,3 +1357,12 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .stm-shapes button.on { background: rgba(var(--accent-rgb), .16); color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
 .stm-zoom { width: 100%; accent-color: var(--accent); }
 .stm-cap { text-align: center; }
+
+/* ============ B15: backup ============ */
+.bk-hero { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 26px 16px 22px; }
+.bk-ic { width: 76px; height: 76px; border-radius: 26px; display: grid; place-items: center; color: #fff; background: linear-gradient(140deg, var(--accent), #2E7BFF); box-shadow: 0 10px 26px rgba(var(--accent-rgb), .35); margin-bottom: 10px; }
+.bk-ic .ic { width: 36px; height: 36px; }
+.bk-hero b { font-size: 20px; font-weight: 800; }
+.bk-hero small { color: var(--text-2); font-size: 13px; }
+.bk-btns { display: flex; flex-direction: column; gap: 10px; }
+.bk-btns .btn { display: flex; align-items: center; justify-content: center; gap: 8px; }

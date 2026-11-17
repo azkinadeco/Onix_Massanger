@@ -313,6 +313,12 @@ export const api = {
   },
   idTaken(id) { return USERS.some(u => u.id === String(id).toLowerCase()); },
   reset() { db = null; localStorage.removeItem(KEY); },
+  exportData() { return JSON.parse(JSON.stringify(db)); },
+  importData(data) {
+    if (!data || !data.me || !data.chats || !data.messages) throw new Error('bad');
+    localStorage.setItem(KEY, JSON.stringify(data));
+    db = null; // cegah flush data lama saat reload
+  },
 
   me() { return { ...db.me, id: db.me.id }; },
   updateMe(patch) { Object.assign(db.me, patch); save(); bus.emit('me'); bus.emit('chats'); },

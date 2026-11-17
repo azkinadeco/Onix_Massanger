@@ -5,7 +5,7 @@ import { icon } from './icons.js';
 import { router, bindActs, navbar, sheet, toast } from './ui.js';
 
 // item tambahan di menu + : [aksi, ikon, label, warna]
-export const FUN_ITEMS = [['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4'], ['spin', 'refresh', 'Roda putar', '#B05CFF'], ['todo', 'checks', 'Checklist', '#0FB46C'], ['story', 'note', 'Cerita', '#7C5CFF'], ['guess', 'brush', 'Tebak gambar', '#FF5C8A'], ['tsticker', 'sticker', 'Stiker teks', '#FF7A1A'], ['who', 'users', 'Siapa paling', '#E1A100']];
+export const FUN_ITEMS = [['sopan', 'sparkle', 'Sopanin', '#3B2E7A'], ['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4'], ['spin', 'refresh', 'Roda putar', '#B05CFF'], ['todo', 'checks', 'Checklist', '#0FB46C'], ['story', 'note', 'Cerita', '#7C5CFF'], ['guess', 'brush', 'Tebak gambar', '#FF5C8A'], ['tsticker', 'sticker', 'Stiker teks', '#FF7A1A'], ['who', 'users', 'Siapa paling', '#E1A100']];
 
 /* ============ MODE KALEM ============
    Pesan yang kelihatan lagi emosi -> ditawarin tahan dulu sebelum kekirim */
@@ -1022,6 +1022,60 @@ export function textStickerSheet(chatId, onSent) {
         api.send(chatId, { type: 'sticker', sticker: '💬', img: src });
         buzz(10); close(); onSent?.();
       }));
+    },
+  });
+}
+
+/* ============ SOPANIN ============
+   Pesan gaul -> bahasa sopan buat dosen / atasan (tanpa AI, pakai kamus) */
+const SOPAN = {
+  'gw|gue|gua|aku|ak|w': 'saya', 'lu|lo|elu|elo|kamu|km|u': '{A}', 'gak|ga|gk|nggak|ngga|enggak|engga|kagak|g': 'tidak',
+  'udh|udah|dah|sdh': 'sudah', 'blm|belom|blom': 'belum', 'tp|tapi': 'tetapi', 'yg': 'yang', 'dgn|ama|sama': 'dengan',
+  'krn|karna|soalnya': 'karena', 'bgt|banget|bngt': '', 'ttg': 'tentang', 'dlm': 'dalam', 'trs|terus': 'lalu', 'msh|masih': 'masih', 'pak|bapak': 'Bapak', 'bu|ibu': 'Ibu', 'aja|doang': 'saja', 'gimana|gmn|gmna': 'bagaimana', 'knp|kenapa|napa': 'mengapa',
+  'mau|pengen|pgn|pingin': 'ingin', 'tau': 'tahu', 'ok|oke|okee|okey|sip|siap': 'baik', 'makasih|mksh|makasi|thx|thanks|tengkyu|thank': 'terima kasih',
+  'sorry|sori|sory|maap|maaf': 'mohon maaf', 'bsk|besok': 'besok', 'skrg|skrng|sekarang': 'sekarang', 'dmn|dimana': 'di mana', 'jg|juga': 'juga',
+  'utk|buat': 'untuk', 'kalo|klo|kl': 'apabila', 'emang|emg': 'memang', 'nanya|nanyain': 'bertanya', 'ngerjain': 'mengerjakan', 'ngumpulin|ngumpul': 'mengumpulkan',
+  'bales|balas': 'membalas', 'liat|lihat': 'melihat', 'ketemu': 'bertemu', 'bikin': 'membuat', 'ngasih': 'memberikan', 'nunggu': 'menunggu', 'nyampe|nyampai': 'sampai',
+  'telat': 'terlambat', 'abis|habis': 'setelah', 'gede': 'besar', 'kayak|kek|kyk': 'seperti', 'cuma|cuman': 'hanya', 'udahan': 'selesai', 'bener|bnr': 'benar',
+  'td|tadi': 'tadi', 'kmrn|kemaren': 'kemarin', 'pd|pada': 'pada', 'dr|dari': 'dari', 'sy': 'saya', 'tlg|tolong': 'mohon', 'ijin|izin': 'izin', 'bs|bisa': 'bisa',
+};
+const SOPAN_RE = Object.entries(SOPAN).map(([k, v]) => [new RegExp(`(^|[^\\p{L}])(${k})(?=$|[^\\p{L}])`, 'giu'), v]);
+export const sapaOf = text => { const m = text.trim().match(/^(pak|bapak|bu|ibu|kak|kakak)\b[\s,.]*/i); return m ? ({ pak: 'Bapak', bapak: 'Bapak', bu: 'Ibu', ibu: 'Ibu' }[m[1].toLowerCase()] || 'Kak') : null; };
+export function sopanin(text, sapa = 'Bapak') {
+  text = text.trim().replace(/^(pak|bapak|bu|ibu|kak|kakak)\b[\s,.]*/i, '');
+  const hasSalam = /^(selamat|assalamu|permisi|halo|hai)/i.test(text);
+  let t = ' ' + text.replace(/(\p{L})\1{2,}/gu, '$1') + ' ';   // yaaa -> ya
+  t = t.replace(/\p{Extended_Pictographic}|‍|️/gu, '').replace(/\b(wk)+w?k*\b|\b(ha){2,}\b|\b(he){2,}\b|\bxixi\w*/gi, '');
+  t = t.replace(/[!?]{2,}/g, m => m[0]);
+  for (const [re, v] of SOPAN_RE) t = t.replace(re, (m, a) => a + v.replace('{A}', sapa));
+  t = t.replace(/\s+(ya|yah|deh|dong|sih|nih|tuh|kok|loh|lho|nya kak)(?=[\s.,!?]|$)/gi, '').replace(/\s{2,}/g, ' ').trim();
+  t = t.split(/(?<=[.!?])\s+/).map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+  if (t && !/[.!?]$/.test(t)) t += '.';
+  const h = new Date().getHours();
+  const salam = `Selamat ${h < 11 ? 'pagi' : h < 15 ? 'siang' : h < 18 ? 'sore' : 'malam'}, ${sapa}.`;
+  const out = [];
+  if (!hasSalam) out.push(salam, /^mohon maaf/i.test(t) ? '' : 'Mohon maaf mengganggu waktunya.');
+  out.push(t);
+  if (!/terima kasih/i.test(t)) out.push('Terima kasih.');
+  return out.filter(Boolean).join(' ');
+}
+export function sopanSheet(text, onUse) {
+  if (!text.trim()) return toast('Ketik pesannya dulu, nanti aku sopanin ✨');
+  let sapa = sapaOf(text) || 'Bapak';
+  sheet({
+    top: `<div class="fun-compose">
+      <div class="fc-h">🎩 <b>Sopanin</b><small>Buat chat dosen / atasan</small></div>
+      <div class="fc-chips">${['Bapak', 'Ibu', 'Kak'].map(s => `<button class="${s === sapa ? 'on' : ''}" data-s="${s}">${s}</button>`).join('')}</div>
+      <div class="sop-old">${esc(text)}</div>
+      <div class="sop-new"></div>
+      <button class="btn primary wide" data-go>Pakai</button>
+    </div>`,
+    onMount: (s, close) => {
+      const out = s.querySelector('.sop-new');
+      const draw = () => { out.textContent = sopanin(text, sapa); };
+      draw();
+      s.querySelectorAll('[data-s]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); sapa = b.dataset.s; s.querySelectorAll('[data-s]').forEach(x => x.classList.toggle('on', x === b)); draw(); }));
+      s.querySelector('[data-go]').addEventListener('click', e => { e.stopPropagation(); onUse(out.textContent); close(); buzz(8); });
     },
   });
 }

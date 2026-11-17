@@ -991,6 +991,7 @@ function ChatScreen(chatId) {
     'cu-first': () => { bindGoto(cu.first); catchBar.hidden = true; },
     'cu-at': () => { bindGoto(cu.mentions[cuAt++ % cu.mentions.length]); },
     'cu-x': () => { catchBar.hidden = true; },
+    'att-sopan': () => { closePanel(); fun.sopanSheet(ta.value, s => { ta.value = s; autosize(); ta.focus(); }); },
     'att-tsticker': () => { closePanel(); fun.textStickerSheet(chatId); },
     'att-todo': () => { closePanel(); fun.todoSheet(chatId); },
     'att-story': () => { closePanel(); fun.storySheet(chatId); },

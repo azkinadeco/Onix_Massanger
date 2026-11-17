@@ -40,6 +40,17 @@ Semua ada di tombol **+** di chat → bagian *Khas Onix*, dan ikut tersinkron on
 - **Pemecah sepi**: chat sepi >3 hari muncul saran topik obrolan
 - **Mode kalem**: pesan kasar / huruf kapital semua / `!!!!` / panjang tengah malam → ditawarin tahan 10 menit
 - **Batal kirim**: tiap pesan nunggu 3 detik dengan tombol *Batal* (bisa dimatikan di Kamu)
+- **Kuis "Seberapa kenal aku?"**: bikin soal tentang kamu, teman main sekali, skornya otomatis kekirim
+- **Cek kabar**: "Gimana harimu?" — jawaban orang lain baru kebuka setelah kamu ikut jawab
+- **Hitung mundur** bareng (liburan, ultah, ujian…) yang jalan sendiri di chat
+- **Kenangan**: "2 bulan lalu hari ini" — pesan dari tanggal yang sama muncul di atas chat
+- **Ingetin aku**: tahan pesan → diingetin 20 menit / 1 jam / nanti malam / besok pagi, tap langsung ke pesannya
+- **Mode fokus** (Kamu): notif diem, chat personal dibales otomatis sekali, teman lihat 🎧 + jam selesainya
+- **Gaya teks** (tebal, sambung, spongebob, kecil, bulet, terbalik, alay) & **efek suara** voice note (cempreng 🐿️ / berat 🐻)
+- **Ketuk 2x** pesan = ❤️
+
+Catatan: isi kapsul waktu, pesan gosok, kuis & cek kabar cuma disembunyikan di tampilan (tidak dienkripsi).
+Pengingat, mode fokus & balas otomatis jalan selama app hidup.
 
 ## Fitur
 - **Chat**: personal & grup, sticker, emoji, foto/kamera, voice note, lokasi, balas (reply), reaksi,

@@ -1424,3 +1424,10 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 
 /* ============ privasi online ============ */
 .on-priv { margin: 0 16px 8px; }
+
+/* ============ C1: lebih simpel ============ */
+.attach-scroll { flex: 1; overflow-y: auto; padding-bottom: 14px; }
+.attach-scroll .attach-grid { padding: 20px 12px 6px; }
+.attach-h { margin: 14px 20px 0; padding-top: 14px; border-top: 1px solid var(--border); font-size: 12px; font-weight: 700; color: var(--text-3); letter-spacing: .02em; }
+.mood-item { width: 66px; }
+.mood-item small { font-size: 11.5px; }

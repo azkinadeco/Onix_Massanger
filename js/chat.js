@@ -1,5 +1,6 @@
 import { TTL_OPTS, ttlLabel, suitResult, rupiah } from './service.js';
 import { canCall, callSession } from './backend.js';
+import { FUN_ITEMS } from './fun.js';
 import { api, bus, ME, firstName, mentionRe } from './service.js';
 import { $, h, esc, linkify, avatar, hm, dayLabel, isSameDay, dur, hash, vibrate, pickFile, pickFiles, compressImage, copyText, isJumbo } from './util.js';
 import { icon } from './icons.js';
@@ -559,8 +560,10 @@ function ChatScreen(chatId) {
   }
   function renderPanel() {
     if (panelMode === 'plus') {
-      const items = [['photo', 'image', 'Foto', '#7C5CFF'], ['camera', 'camera', 'Kamera', '#FF3D81'], ['video', 'film', 'Video', '#14B8C4'], ['file', 'file', 'File', '#5B6CFF'], ['location', 'location', 'Lokasi', '#10B26C'], ['voice', 'mic', 'Voice', '#FF7A1A'], ['poll', 'poll', 'Polling', '#E1A100'], ['event', 'calendar', 'Event', '#2E7BFF'], ['game', 'dice', 'Game', '#FF3D6E'], ['pay', 'wallet', 'Pay', '#0FB46C']];
-      panel.innerHTML = `<div class="attach-grid">${items.map(([a, ic, label, col]) => `<button data-act="att-${a}"><span style="--c:${col}">${icon(ic)}</span><small>${label}</small></button>`).join('')}</div>`;
+      const basic = [['photo', 'image', 'Foto', '#7C5CFF'], ['camera', 'camera', 'Kamera', '#FF3D81'], ['video', 'film', 'Video', '#14B8C4'], ['file', 'file', 'File', '#5B6CFF'], ['location', 'location', 'Lokasi', '#10B26C'], ['voice', 'mic', 'Voice', '#FF7A1A'], ['poll', 'poll', 'Polling', '#E1A100'], ['event', 'calendar', 'Event', '#2E7BFF']];
+      const fun = [...FUN_ITEMS, ['game', 'dice', 'Game', '#FF3D6E'], ['pay', 'wallet', 'Pay', '#0FB46C']];
+      const grid = items => `<div class="attach-grid">${items.map(([a, ic, label, col]) => `<button data-act="att-${a}"><span style="--c:${col}">${icon(ic)}</span><small>${label}</small></button>`).join('')}</div>`;
+      panel.innerHTML = `<div class="attach-scroll">${grid(basic)}<div class="attach-h">✨ Khas Onix</div>${grid(fun)}</div>`;
     } else if (panelMode === 'stickers') {
       const owned = api.packs();
       if (stickerTab !== 'emoji' && stickerTab !== 'mine' && !owned.includes(stickerTab)) stickerTab = owned[0] || 'emoji';

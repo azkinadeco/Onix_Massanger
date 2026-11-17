@@ -53,7 +53,7 @@ export function chatRow(c) {
   return `<div class="list-item chat-item" data-act="open-chat" data-id="${c.id}">
     ${chatAvatar(c, 54)}
     <div class="li-main">
-      <div class="li-top"><span class="li-name">${esc(title)}</span>${peer?.official ? verified() : ''}${c.type === 'group' ? `<span class="count">${c.members.length}</span>` : ''}${c.muted ? icon('bellOff', 'tiny muted-ic') : ''}<span class="li-time">${last ? listTime(last.ts) : ''}</span></div>
+      <div class="li-top"><span class="li-name">${esc(title)}</span>${peer?.official ? verified() : ''}${c.muted ? icon('bellOff', 'tiny muted-ic') : ''}<span class="li-time">${last ? listTime(last.ts) : ''}</span></div>
       <div class="li-bottom"><span class="li-sub">${sub}</span>${c.pinned ? icon('pin', 'tiny pin-ic') : ''}${c.mention ? `<b class="mention-badge">@</b>` : ''}${c.unread ? `<b class="unread ${c.muted ? 'muted' : ''}">${c.unread > 99 ? '99+' : c.unread}</b>` : ''}</div>
     </div>
   </div>`;

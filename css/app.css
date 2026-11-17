@@ -1591,3 +1591,16 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .rec-fx { width: 40px; height: 40px; border-radius: 50%; font-size: 22px; background: var(--surface-2); margin-right: 6px; transition: transform .15s var(--ease); }
 .rec-fx.on { background: rgba(var(--accent-rgb), .18); transform: scale(1.08); }
 .vfx-tag { font-size: 15px; margin-left: 2px; }
+
+/* ============ D4: ingetin aku ============ */
+.rm-sh { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px 0; text-align: center; }
+.rm-ic { font-size: 40px; animation: ring 1.4s ease-in-out infinite; transform-origin: 50% 10%; }
+@keyframes ring { 0%, 60%, 100% { transform: rotate(0); } 10%, 30% { transform: rotate(14deg); } 20%, 40% { transform: rotate(-14deg); } }
+.rm-sh > b { font-size: 18px; }
+.rm-sh > small { color: var(--text-2); max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rm-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; margin-top: 12px; }
+.rm-opts button { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 16px; background: var(--surface-2); }
+.rm-opts button b { font-size: 15px; }
+.rm-opts button small { font-size: 12px; color: var(--text-2); }
+.rem-ic { color: var(--accent); margin-right: 3px; }
+.rem-ic .ic { width: 12px; height: 12px; }

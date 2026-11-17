@@ -488,6 +488,20 @@ function handleChatLink() {
   if (api.chat(m[1])) openChat(m[1]);
 }
 
+/* ---------- pengingat pesan ---------- */
+async function checkReminders() {
+  if (!api.ready) return;
+  const { dueReminders } = await import('./fun.js');
+  for (const r of dueReminders()) {
+    const chat = api.chat(r.chatId), title = '🔔 ' + api.chatTitle(chat), text = (r.who ? r.who + ': ' : '') + (r.text || 'Pesan yang kamu tandai');
+    if (document.hidden && await sysNotify(title, text, r.chatId)) continue;
+    banner({ title, text, avatarHtml: chatAvatar(chat, 40, { online: false }), onTap: () => openChat(r.chatId, { mid: r.mid }) });
+    vibrate([20, 40, 20]);
+  }
+}
+setInterval(checkReminders, 15e3);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReminders(); });
+
 bus.on('notify', ({ chat, msg, mention }) => {
   const s = api.settings();
   if (router.top()?.chatId === chat.id && !document.hidden) return;

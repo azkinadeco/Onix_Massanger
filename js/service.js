@@ -804,6 +804,11 @@ export const api = {
     }, hold));
     return m;
   },
+  /* pengingat pesan ("Ingetin aku") — lokal di HP ini */
+  reminders() { return db.reminders ||= []; },
+  addReminder(r) { api.reminders().push({ id: uid('rm'), ...r }); save(); bus.emit('reminders'); bus.emit('messages', r.chatId); },
+  removeReminder(id) { const r = api.reminders().find(x => x.id === id); db.reminders = api.reminders().filter(x => x.id !== id); save(); bus.emit('reminders'); if (r) bus.emit('messages', r.chatId); },
+  reminderFor(mid) { return api.reminders().find(x => x.mid === mid); },
   // status lokal (nggak dikirim ke server), mis. kapsul udah dibuka / pesan udah digosok
   setLocal(chatId, mid, patch) { const m = db.messages[chatId]?.find(x => x.id === mid); if (m) { Object.assign(m, patch); emitChat(chatId); } },
   cancelHold(chatId, mid) {

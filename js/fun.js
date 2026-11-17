@@ -481,3 +481,32 @@ export function styleSheet(text, onPick) {
 /* ============ EFEK SUARA ============ */
 export const VOICE_FX = [[null, '🙂', 1], ['chip', '🐿️', 1.55], ['deep', '🐻', 0.72]];
 export const vfxOf = k => VOICE_FX.find(v => v[0] === (k || null)) || VOICE_FX[0];
+
+/* ============ INGETIN AKU ============
+   Tunda pesan: nanti muncul pengingat, tap langsung loncat ke pesannya */
+const atHour = (h, addDay) => { const d = new Date(); if (addDay || d.getHours() >= h) d.setDate(d.getDate() + 1); d.setHours(h, 0, 0, 0); return +d; };
+export function remindSheet(chatId, m) {
+  const ex = api.reminderFor(m.id);
+  if (ex) { api.removeReminder(ex.id); toast('Pengingat dihapus'); return; }
+  const now = new Date();
+  const opts = [['20 menit', Date.now() + 20 * 60e3], ['1 jam', Date.now() + 3600e3], [now.getHours() < 19 ? 'Nanti malam' : 'Besok malam', atHour(20)], ['Besok pagi', atHour(8, true)]];
+  sheet({
+    top: `<div class="rm-sh"><div class="rm-ic">🔔</div><b>Ingetin aku</b><small>${esc((m.text || '').slice(0, 80) || 'Pesan ini')}</small>
+      <div class="rm-opts">${opts.map(([l, at], i) => `<button data-r="${i}"><b>${l}</b><small>${new Date(at).toLocaleString('id-ID', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</small></button>`).join('')}</div></div>`,
+    onMount: (s, close) => s.addEventListener('click', e => {
+      const b = e.target.closest('[data-r]');
+      if (!b) return;
+      e.stopPropagation();
+      const [l, at] = opts[+b.dataset.r];
+      const who = m.from === ME ? 'Kamu' : firstName(api.user(m.from)?.name || '');
+      api.addReminder({ chatId, mid: m.id, at, text: (m.text || '').slice(0, 120), who });
+      toast(`Oke, diingetin ${l.toLowerCase()} 🔔`); buzz(8); close();
+    }),
+  });
+}
+// dipanggil berkala dari app.js -> kembalikan pengingat yang udah waktunya
+export function dueReminders() {
+  const due = api.reminders().filter(r => r.at <= Date.now());
+  due.forEach(r => api.removeReminder(r.id));
+  return due.filter(r => api.chat(r.chatId));
+}

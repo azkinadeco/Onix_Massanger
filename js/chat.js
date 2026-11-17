@@ -385,7 +385,8 @@ function ChatScreen(chatId) {
       else if (n) read = group ? `<button class="read" data-act="readers" data-mid="${m.id}">${icon('checks')}${n}</button>` : `<span class="read">${icon('checks')}</span>`;
       else read = `<span class="sent">${icon('check')}</span>`;
     }
-    const meta = last || m.edited || m.expires ? `<div class="meta">${m.expires ? `<span class="exp">${icon('clock')}</span>` : ''}${m.edited ? `<span class="edited">${icon('edit')}</span>` : ''}${last ? `<span class="tm">${read}${hm(m.ts)}</span>` : ''}</div>` : '';
+    const rem = api.reminderFor(m.id);
+    const meta = last || m.edited || m.expires || rem ? `<div class="meta">${rem ? `<span class="rem-ic" title="Diingetin">${icon('bell')}</span>` : ''}${m.expires ? `<span class="exp">${icon('clock')}</span>` : ''}${m.edited ? `<span class="edited">${icon('edit')}</span>` : ''}${last ? `<span class="tm">${read}${hm(m.ts)}</span>` : ''}</div>` : '';
     return `<div class="msg-row ${mine ? 'me' : 'them'} ${first ? 'first' : ''} ${last ? 'last' : ''} ${bare ? 'bare' : ''}" data-mid="${m.id}">
       ${!mine ? `<div class="av-col">${first ? `<button data-act="profile" data-id="${m.from}">${avatar(u, 32)}</button>` : ''}</div>` : ''}
       <div class="msg-col">${!mine && first && group ? `<div class="sender">${esc(u.name)}</div>` : ''}
@@ -773,6 +774,7 @@ function ChatScreen(chatId) {
       if (m.type === 'text') acts.push({ label: 'Salin', icon: 'copy', run: async () => { await copyText(m.text); toast('Disalin'); } });
       if (mine && m.type === 'text' && Date.now() - m.ts < 15 * 60e3) acts.push({ label: 'Edit', icon: 'edit', run: () => setEdit(m) });
       const secret = SECRET_TYPES.includes(m.type);
+      acts.push({ label: api.reminderFor(m.id) ? 'Hapus pengingat' : 'Ingetin aku', icon: 'bell', run: () => fun.remindSheet(chatId, m) });
       if (m.type !== 'poll' && !secret) acts.push({ label: 'Teruskan', icon: 'forward', run: () => forwardMessage(m) });
       if (!secret) acts.push({ label: 'Keep', icon: 'bookmark', run: () => keepFromMessage(m, c()) });
       if (!secret) acts.push({ label: c().announcement?.mid === m.id ? 'Lepas pengumuman' : 'Pin pengumuman', icon: 'megaphone', run: () => api.setAnnouncement(chatId, c().announcement?.mid === m.id ? null : m) });

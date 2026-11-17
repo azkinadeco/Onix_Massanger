@@ -171,7 +171,7 @@ function waveBars(id, n = 26) {
 }
 
 function ChatScreen(chatId) {
-  const readAtOpen = api.chat(chatId)?.readAt || 0;
+  const unreadAtOpen = api.chat(chatId)?.unread || 0;
   const el = h(`<div class="chat-screen">
     <header class="navbar chat-nav">
       <button class="icon-btn back-btn" data-act="back" aria-label="Kembali">${icon('back')}<b class="back-count"></b></button>
@@ -419,6 +419,7 @@ function ChatScreen(chatId) {
     const full = api.messages(chatId);
     const list = full.length > limit ? full.slice(-limit) : full;
     const group = ch.type === 'group';
+    fun.indexRefs(full);
     const out = [], fresh = new Map();
     if (full.length > list.length || ch.hasMore) out.push(h(`<div class="older"><span></span></div>`));
     const put = (k, html) => {
@@ -598,7 +599,7 @@ function ChatScreen(chatId) {
   }
   setTimeout(renderMemo, 600);
   // ringkasan kalau banyak pesan belum dibaca
-  const cu = fun.catchUp(chatId, readAtOpen);
+  const cu = fun.catchUp(chatId, unreadAtOpen);
   const catchBar = $('.catch-bar', el);
   if (cu) {
     catchBar.innerHTML = `<div class="cu-t"><b>📝 ${cu.n} pesan baru</b>${cu.sub ? `<small>${esc(cu.sub)}</small>` : ''}</div><button class="cu-btn" data-act="cu-first">${icon('chevronUp', 'tiny')} Awal</button>${cu.mentions.length ? `<button class="cu-btn at" data-act="cu-at">@ ${cu.mentions.length}</button>` : ''}<button class="icon-btn sm" data-act="cu-x" aria-label="Tutup">${icon('x')}</button>`;
@@ -858,7 +859,13 @@ function ChatScreen(chatId) {
     acts.push({ label: ch.pinned ? 'Lepas pin' : 'Pin', icon: 'pin', run: () => api.togglePin(chatId) });
     acts.push({ label: ch.archived ? 'Batal arsip' : 'Arsipkan', icon: 'archive', run: () => api.toggleArchive(chatId) });
     acts.push({ label: 'Hapus riwayat', icon: 'trash', danger: true, run: async () => { if (await confirmBox({ title: 'Hapus semua pesan?', ok: 'Hapus', danger: true })) api.clearChat(chatId); } });
-    sheet({ actions: acts });
+    // menu jadi grid ikon (lebih ringkas); yang bahaya tetap di bawah
+    const safe = acts.filter(a => !a.danger), danger = acts.filter(a => a.danger);
+    sheet({
+      top: `<div class="menu-grid">${safe.map((a, i) => `<button data-g="${i}"><span>${icon(a.icon)}</span><small>${esc(a.label)}</small></button>`).join('')}</div>`,
+      actions: danger,
+      onMount: (s, close) => s.querySelectorAll('[data-g]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); close(); safe[+b.dataset.g].run(); })),
+    });
   }
 
   function bindGoto(mid) {

@@ -284,7 +284,17 @@ const VIBES = [
   ['laper', '🍜', 'Laper', '#10B26C', /makan|laper|lapar|\bmie\b|kopi|jajan|bakso|🍜|🍕|☕|🍔|🍩/giu],
 ];
 const VIBE_SEPI = { k: 'sepi', e: '🧊', label: 'Sepi', c: '#8C9BB0' }, VIBE_SANTAI = { k: 'santai', e: '😌', label: 'Santai', c: '#9B8CFF' };
+const vibeCache = new Map();
 export function vibeOf(chatId) {
+  const all = api.messages(chatId), last = all[all.length - 1];
+  const key = all.length + '|' + (last?.id || '') + '|' + Object.keys(last?.reactions || {}).length + '|' + Math.floor(Date.now() / 36e5);
+  const c = vibeCache.get(chatId);
+  if (c && c.key === key) return c.v;
+  const v = vibeCalc(chatId);
+  vibeCache.set(chatId, { key, v });
+  return v;
+}
+function vibeCalc(chatId) {
   const list = api.messages(chatId).filter(m => m.type !== 'system' && !m.unsent).slice(-40);
   if (list.length < 3) return null;
   if (Date.now() - list[list.length - 1].ts > 3 * 864e5) return { ...VIBE_SEPI, scores: [] };
@@ -554,7 +564,11 @@ export function QuizComposeScreen(chatId) {
   render();
   return { el };
 }
-const scoresFor = (chatId, mid) => api.messages(chatId).filter(x => x.type === 'quizres' && x.ref === mid);
+let refIdx = null;
+// dipanggil chat.js sebelum render: kelompokin pesan yang punya ref
+export function indexRefs(list) { refIdx = new Map(); for (const m of list) if (m.ref) { const k = m.type + '|' + m.ref; (refIdx.get(k) || refIdx.set(k, []).get(k)).push(m); } }
+const byRef = (chatId, type, mid) => refIdx ? (refIdx.get(type + '|' + mid) || []) : api.messages(chatId).filter(x => x.type === type && x.ref === mid);
+const scoresFor = (chatId, mid) => byRef(chatId, 'quizres', mid);
 export function quizHtml(m, chatId) {
   const mine = m.from === ME, n = m.quiz?.qs?.length || 0;
   const res = scoresFor(chatId, m.id);
@@ -693,7 +707,7 @@ export function focusSheet() {
    "Gimana harimu?" — jawaban orang lain baru kebuka setelah kamu ikut jawab */
 export const FEELS = ['😫', '😕', '😐', '🙂', '🤩'];
 const FEEL_TXT = ['Berat', 'Kurang', 'Biasa', 'Oke', 'Mantap'];
-const ansFor = (chatId, mid) => api.messages(chatId).filter(x => x.type === 'checkans' && x.ref === mid);
+const ansFor = (chatId, mid) => byRef(chatId, 'checkans', mid);
 export function checkinHtml(m, chatId) {
   const all = [{ from: m.from, v: m.v, note: m.note }, ...ansFor(chatId, m.id)];
   const answered = all.some(a => a.from === ME);
@@ -740,9 +754,10 @@ export function noteUse(act) { try { const u = useMap(); u[act] = (u[act] || 0) 
 export function sortByUse(items) { const u = useMap(); return items.map((x, i) => [x, i]).sort((a, b) => (u[b[0][0]] || 0) - (u[a[0][0]] || 0) || a[1] - b[1]).map(x => x[0]); }
 
 /* ============ RINGKASAN BELUM DIBACA ============ */
-export function catchUp(chatId, since) {
+export function catchUp(chatId, unread) {
   const ch = api.chat(chatId);
-  const list = api.messages(chatId).filter(m => m.from !== ME && m.type !== 'system' && m.ts > since);
+  if (!(unread >= 8)) return null;
+  const list = api.messages(chatId).filter(m => m.from !== ME && m.type !== 'system').slice(-unread);
   if (list.length < 8) return null;
   const by = {}, kinds = {};
   const mentions = [];

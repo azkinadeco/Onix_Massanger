@@ -346,6 +346,32 @@ api.remote.hooks.postLike = async (rid, on) => {
 };
 api.remote.hooks.postComment = (rid, text, cid) => pb.collection('post_comments').create({ post: rid, user: myId(), text, cid }).catch(e => console.warn('komentar gagal', e));
 
+/* ---------- riwayat lama & cari di server ---------- */
+const pbDate = ts => new Date(ts).toISOString().replace('T', ' ');
+api.remote.hooks.older = async chatId => {
+  const first = api.messages(chatId).find(m => m.rid);
+  if (!first) return api.remote.setHasMore(chatId, false);
+  try {
+    const res = await pb.collection('messages').getList(1, 100, { filter: pb.filter('chat = {:c} && created < {:t}', { c: chatId, t: pbDate(first.ts) }), sort: '-created' });
+    res.items.forEach(r => api.remote.message(withFile(r), false));
+    api.remote.setHasMore(chatId, res.totalItems > res.items.length);
+    api.remote.done();
+  } catch (e) { console.warn('riwayat gagal', e); }
+};
+const searched = new Set();
+export async function searchMessages(q) {
+  q = q.trim();
+  if (q.length < 3 || searched.has(q.toLowerCase()) || !pb?.authStore.isValid) return 0;
+  searched.add(q.toLowerCase());
+  try {
+    const res = await pb.collection('messages').getList(1, 40, { filter: pb.filter('text ~ {:q} && unsent != true', { q }), sort: '-created' });
+    let n = 0;
+    res.items.forEach(r => { if (!api.messages(r.chat).some(m => m.rid === r.id)) { api.remote.message(withFile(r), false); n++; } });
+    if (n) api.remote.done();
+    return n;
+  } catch { return 0; }
+}
+
 /* ---------- profil ---------- */
 api.remote.hooks.profile = async patch => {
   if (!pb?.authStore.isValid) return;
@@ -404,6 +430,7 @@ export function sync() {
       for (const c of chats) {
         const res = await pb.collection('messages').getList(1, 300, { filter: pb.filter('chat = {:c}', { c: c.id }), sort: '-created' });
         res.items.reverse().forEach(r => api.remote.message(withFile(r), false));
+        api.remote.setHasMore(c.id, res.totalItems > api.messages(c.id).filter(m => m.rid).length);
       }
       api.remote.done();
       (await pb.collection('chat_state').getFullList()).forEach(applyState);

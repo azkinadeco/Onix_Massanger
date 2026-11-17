@@ -437,6 +437,7 @@ const remote = {
     db.posts.sort((a, b) => b.ts - a.ts);
     save(); bus.emit('posts');
   },
+  setHasMore(chatId, v) { const c = db.chats[chatId]; if (c && c.hasMore !== v) { c.hasMore = v; save(); } },
   postSaved(localId, rid) { const p = db.posts.find(x => x.id === localId); if (p) { p.rid = rid; p.id = rid; save(); bus.emit('posts'); } },
   storySaved(itemId, rid) { const it = db.myStory?.items.find(i => i.id === itemId); if (it) { it.rid = rid; save(); } },
   storyViewers(views) { // views: [{story, user, ts, react}]

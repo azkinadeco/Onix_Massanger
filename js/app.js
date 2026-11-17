@@ -101,6 +101,7 @@ function TabsScreen() {
         const hits = [];
         api.chats().forEach(c => api.messages(c.id).forEach(m => { if (m.type === 'text' && !m.unsent && m.text.toLowerCase().includes(q)) hits.push({ c, m }); }));
         hits.sort((a, b) => b.m.ts - a.m.ts);
+        if (api.remote.state() && q.length >= 3) { clearTimeout(srvT); srvT = setTimeout(() => backend.searchMessages(q), 400); }
         const people = api.findPeople(q).filter(u => !byName.some(c => c.type === 'direct' && api.peerOf(c)?.id === u.id)).slice(0, 6);
         const posts = api.posts().filter(p => (p.text || '').toLowerCase().includes(q)).slice(0, 5);
         const sec = (label, n, html) => n ? `<div class="section-h">${label}<span class="sh-n">${n}</span></div>${html}` : '';
@@ -117,6 +118,7 @@ function TabsScreen() {
       return moods + arcRow + list.map(chatRow).join('');
     },
   };
+  let srvT = null;
   const snip = (text, q) => { const t = String(text || '').replace(/\s+/g, ' '); const i = t.toLowerCase().indexOf(q); return i > 28 ? '…' + t.slice(i - 20) : t; };
   const hl = (text, q) => { const t = esc(text); const i = t.toLowerCase().indexOf(esc(q)); return i < 0 ? t : t.slice(0, i) + '<mark>' + t.slice(i, i + esc(q).length) + '</mark>' + t.slice(i + esc(q).length); };
 

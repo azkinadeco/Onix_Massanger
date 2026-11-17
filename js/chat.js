@@ -232,7 +232,14 @@ function ChatScreen(chatId) {
   }
   function loadOlder() {
     const all = api.messages(chatId);
-    if (loadingOlder || limit >= all.length) return;
+    if (loadingOlder) return;
+    if (limit >= all.length) {
+      const ch = c();
+      if (!ch?.remote || !ch.hasMore || !api.remote.hooks.older) return;
+      loadingOlder = true;
+      api.remote.hooks.older(chatId).finally(() => { loadingOlder = false; if (api.messages(chatId).length > all.length) loadOlder(); });
+      return;
+    }
     loadingOlder = true; stick = false;
     const h0 = sc.scrollHeight, t0 = sc.scrollTop;
     limit += PAGE;
@@ -378,7 +385,7 @@ function ChatScreen(chatId) {
     const list = full.length > limit ? full.slice(-limit) : full;
     const group = ch.type === 'group';
     const out = [], fresh = new Map();
-    if (full.length > list.length) out.push(h(`<div class="older"><span></span></div>`));
+    if (full.length > list.length || ch.hasMore) out.push(h(`<div class="older"><span></span></div>`));
     const put = (k, html) => {
       let n = nodes.get(k);
       if (!n || n._h !== html) { n = h(html); n._h = html; }

@@ -398,6 +398,29 @@ const remote = {
     }
     save(); bus.emit('stories');
   },
+  // post VOOM dari server: [{rid, user, ts, text, images, likes:[uid], comments:[{rid,cid,user,text,ts}]}]
+  postsIn(list, first) {
+    const old = new Map(db.posts.filter(p => p.remote).map(p => [p.rid || p.id, p]));
+    const pending = db.posts.filter(p => p.remote && !p.rid); // lagi diupload
+    db.posts = db.posts.filter(p => !p.remote);
+    for (const r of list) {
+      const userId = remote.mapId(r.user);
+      const prev = old.get(r.rid);
+      const likes = r.likes.map(remote.mapId);
+      const comments = r.comments.map(c => ({ id: c.cid || c.rid, rid: c.rid, userId: remote.mapId(c.user), text: c.text, ts: c.ts, likes: [] }));
+      if (!first && userId === ME && prev) {
+        likes.filter(id => id !== ME && !prev.likes.includes(id)).forEach(id => addActivity('like', id, { postId: r.rid }));
+        comments.filter(c => c.userId !== ME && !prev.comments.some(x => x.rid === c.rid || x.id === c.id)).forEach(c => addActivity('comment', c.userId, { postId: r.rid }, c.text));
+      }
+      // komentar lokal yang belum sampai server jangan hilang
+      (prev?.comments || []).filter(c => !c.rid && c.userId === ME && !comments.some(x => x.id === c.id)).forEach(c => comments.push(c));
+      db.posts.push({ id: r.rid, rid: r.rid, remote: true, userId, ts: r.ts, text: r.text, images: r.images, image: r.images[0] || null, likes, comments: comments.sort((a, b) => a.ts - b.ts) });
+    }
+    db.posts.push(...pending.filter(p => !list.some(r => r.cid === p.id)));
+    db.posts.sort((a, b) => b.ts - a.ts);
+    save(); bus.emit('posts');
+  },
+  postSaved(localId, rid) { const p = db.posts.find(x => x.id === localId); if (p) { p.rid = rid; p.id = rid; save(); bus.emit('posts'); } },
   storySaved(itemId, rid) { const it = db.myStory?.items.find(i => i.id === itemId); if (it) { it.rid = rid; save(); } },
   storyViewers(views) { // views: [{story, user, ts, react}]
     if (!db.myStory) return;
@@ -951,6 +974,7 @@ export const api = {
     const p = { id: uid('p'), userId: ME, ts: Date.now(), text, image: images[0] || null, images, likes: [], comments: [] };
     db.posts.unshift(p);
     save(); bus.emit('posts');
+    if (db.remote) { p.remote = true; hooks.post?.(p); return p; }
     const likers = shuffle(db.friends).slice(0, 2 + Math.floor(Math.random() * 4));
     likers.forEach((id, i) => setTimeout(() => { if (!p.likes.includes(id)) { p.likes.push(id); addActivity('like', id, { postId: p.id }); } save(); bus.emit('posts'); }, 3000 + i * rand(1500, 4000)));
     setTimeout(() => {
@@ -971,12 +995,13 @@ export const api = {
     return i < 0;
   },
   sharePost(pid, chatIds) { chatIds.forEach(id => api.send(id, { type: 'post', postId: pid })); },
-  deletePost(id) { db.posts = db.posts.filter(p => p.id !== id); save(); bus.emit('posts'); },
+  deletePost(id) { const p = api.post(id); db.posts = db.posts.filter(p => p.id !== id); save(); bus.emit('posts'); if (p?.rid) hooks.postDelete?.(p.rid); },
   toggleLike(id) {
     const p = api.post(id);
     const i = p.likes.indexOf(ME);
     i >= 0 ? p.likes.splice(i, 1) : p.likes.push(ME);
     save(); bus.emit('posts');
+    if (p.rid) hooks.postLike?.(p.rid, i < 0);
     return i < 0;
   },
   comment(id, text) {
@@ -984,6 +1009,7 @@ export const api = {
     const mine = { id: uid('c'), userId: ME, text, ts: Date.now(), likes: [] };
     p.comments.push(mine);
     save(); bus.emit('posts');
+    if (p.remote) { if (p.rid) hooks.postComment?.(p.rid, text, mine.id); return; }
     if (p.userId !== ME && Math.random() < .8) setTimeout(() => { mine.likes ||= []; if (!mine.likes.includes(p.userId)) mine.likes.push(p.userId); save(); bus.emit('posts'); }, rand(1500, 3000));
     if (p.userId !== ME) {
       setTimeout(() => {

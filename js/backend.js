@@ -300,6 +300,45 @@ api.remote.hooks.storyView = async (rid, react) => {
   }
 };
 
+/* ---------- VOOM ---------- */
+let postsFirst = true;
+async function syncPosts() {
+  try {
+    const ids = [myId(), ...Object.values(api.friends()).filter(u => u.remote).map(u => u.id)];
+    const filter = ids.map((_, i) => `user = {:u${i}}`).join(' || ');
+    const params = Object.fromEntries(ids.map((id, i) => ['u' + i, id]));
+    const res = await pb.collection('posts').getList(1, 60, { filter: pb.filter(filter, params), sort: '-created' });
+    const pids = res.items.map(p => p.id);
+    let likes = [], comments = [];
+    if (pids.length) {
+      const pf = pids.map((_, i) => `post = {:p${i}}`).join(' || '), pp = Object.fromEntries(pids.map((id, i) => ['p' + i, id]));
+      likes = await pb.collection('post_likes').getFullList({ filter: pb.filter(pf, pp) });
+      comments = await pb.collection('post_comments').getFullList({ filter: pb.filter(pf, pp), sort: 'created' });
+    }
+    api.remote.postsIn(res.items.map(p => ({
+      rid: p.id, cid: p.cid, user: p.user, ts: Date.parse(p.created) || Date.now(), text: p.text,
+      images: (p.images || []).map(f => pb.files.getURL(p, f)),
+      likes: likes.filter(l => l.post === p.id).map(l => l.user),
+      comments: comments.filter(c => c.post === p.id).map(c => ({ rid: c.id, cid: c.cid, user: c.user, text: c.text, ts: Date.parse(c.created) || Date.now() })),
+    })), postsFirst);
+    postsFirst = false;
+  } catch (e) { console.warn('VOOM gagal', e); }
+}
+api.remote.hooks.post = async p => {
+  const body = { user: myId(), cid: p.id, text: p.text || '' };
+  const files = (p.images || []).filter(s => s?.startsWith('data:')).map((s, i) => new File([dataURLtoBlob(s)], `foto${i}.jpg`, { type: 'image/jpeg' }));
+  if (files.length) body.images = files;
+  try { const r = await pb.collection('posts').create(body); api.remote.postSaved(p.id, r.id); } catch (e) { console.warn('post gagal', e); bus.emit('toast', 'Post gagal diupload'); }
+};
+api.remote.hooks.postDelete = rid => pb.collection('posts').delete(rid).catch(() => {});
+api.remote.hooks.postLike = async (rid, on) => {
+  try {
+    if (on) await pb.collection('post_likes').create({ post: rid, user: myId() });
+    else { const r = await pb.collection('post_likes').getFirstListItem(pb.filter('post = {:p} && user = {:u}', { p: rid, u: myId() })); await pb.collection('post_likes').delete(r.id); }
+  } catch { /* udah like / udah unlike */ }
+};
+api.remote.hooks.postComment = (rid, text, cid) => pb.collection('post_comments').create({ post: rid, user: myId(), text, cid }).catch(e => console.warn('komentar gagal', e));
+
 /* ---------- profil ---------- */
 api.remote.hooks.profile = async patch => {
   if (!pb?.authStore.isValid) return;
@@ -337,6 +376,9 @@ async function start() {
   let stT = null;
   await pb.collection('stories').subscribe('*', () => { clearTimeout(stT); stT = setTimeout(syncStories, 400); });
   await pb.collection('story_views').subscribe('*', () => { clearTimeout(stT); stT = setTimeout(syncStories, 400); });
+  let poT = null;
+  const resyncPosts = () => { clearTimeout(poT); poT = setTimeout(syncPosts, 400); };
+  for (const c of ['posts', 'post_likes', 'post_comments']) await pb.collection(c).subscribe('*', resyncPosts);
   await pb.collection('chats').subscribe('*', e => { if (e.action !== 'delete') { ingestChat(e.record); api.remote.done(); } }, { expand: 'members' });
   let first = true;
   await pb.realtime.subscribe('PB_CONNECT', () => { setConn(true); if (!first) sync(); first = false; });
@@ -360,6 +402,7 @@ export function sync() {
       (await pb.collection('chat_state').getFullList()).forEach(applyState);
       (await pb.collection('msg_actions').getFullList()).forEach(applyAction);
       await syncStories();
+      await syncPosts();
     } catch (e) { console.warn('sync gagal', e); }
     finally { syncing = null; }
   })();

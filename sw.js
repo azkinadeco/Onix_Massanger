@@ -1,5 +1,5 @@
 // Service worker sederhana: network-first, fallback ke cache (biar bisa dibuka offline)
-const CACHE = 'onix-v10';
+const CACHE = 'onix-v11';
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', e => {
@@ -13,4 +13,16 @@ self.addEventListener('fetch', e => {
       return res;
     }).catch(() => caches.match(e.request))
   );
+});
+
+// tap notifikasi -> buka/fokus app lalu langsung ke chat-nya
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const chatId = e.notification.data?.chatId;
+  e.waitUntil((async () => {
+    const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const c = list[0];
+    if (c) { await c.focus(); if (chatId) c.postMessage({ type: 'open-chat', chatId }); return; }
+    await self.clients.openWindow('./' + (chatId ? '#chat=' + chatId : ''));
+  })());
 });

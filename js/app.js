@@ -252,6 +252,7 @@ function TabsScreen() {
     if (!k) return;
     api.setSetting(k, e.target.checked);
     vibrate(5);
+    if (k === 'notif' && e.target.checked) askNotifPermission();
   });
   $('.tabbar', el).addEventListener('click', e => { const t = e.target.closest('.tab'); if (t) switchTab(t.dataset.tab); });
 
@@ -438,20 +439,62 @@ function startApp() {
   applyTheme();
   router.setRoot(TabsScreen());
   lockApp();
-  backend.init().then(() => setTimeout(handleJoinLink, 500));
+  backend.init().then(() => setTimeout(() => { handleJoinLink(); handleChatLink(); }, 500));
+  updateAppBadge();
 }
-window.addEventListener('hashchange', () => { if (api.ready && /join=/.test(location.hash)) handleJoinLink(); });
+window.addEventListener('hashchange', () => { if (!api.ready) return; if (/join=/.test(location.hash)) handleJoinLink(); else if (/chat=/.test(location.hash)) handleChatLink(); });
 
 bus.on('settings', applyTheme);
+/* ---------- notifikasi sistem & badge ikon ---------- */
+const canNotify = () => 'Notification' in window;
+async function askNotifPermission() {
+  if (!canNotify()) return toast(/iPhone|iPad/.test(navigator.userAgent) ? 'Tambah ke Layar Utama dulu biar bisa notif' : 'Browser ini nggak dukung notif');
+  if (Notification.permission === 'default') {
+    const r = await Notification.requestPermission().catch(() => 'denied');
+    if (r === 'granted') toast('Notif aktif 🔔');
+  } else if (Notification.permission === 'denied') toast('Notif diblokir di pengaturan browser');
+}
+async function sysNotify(title, body, chatId) {
+  if (!canNotify() || Notification.permission !== 'granted') return false;
+  const opt = { body, tag: 'chat-' + chatId, renotify: true, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { chatId } };
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (reg) { await reg.showNotification(title || 'Onix', opt); return true; }
+    const n = new Notification(title || 'Onix', opt);
+    n.onclick = () => { focus(); openChat(chatId); n.close(); };
+    return true;
+  } catch { return false; }
+}
+let badgeT = null;
+function updateAppBadge() {
+  clearTimeout(badgeT);
+  badgeT = setTimeout(() => {
+    if (!('setAppBadge' in navigator)) return;
+    const n = api.ready ? api.totalUnread() : 0;
+    (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {});
+  }, 300);
+}
+bus.on('chats', updateAppBadge);
+bus.on('messages', updateAppBadge);
+// tap notif -> buka chat
+navigator.serviceWorker?.addEventListener('message', e => { if (e.data?.type === 'open-chat' && api.chat(e.data.chatId)) openChat(e.data.chatId); });
+function handleChatLink() {
+  const m = location.hash.match(/chat=([\w-]+)/);
+  if (!m) return;
+  history.replaceState(history.state, '', location.pathname);
+  if (api.chat(m[1])) openChat(m[1]);
+}
+
 bus.on('notify', ({ chat, msg, mention }) => {
   const s = api.settings();
-  if (router.top()?.chatId === chat.id) return;
+  if (router.top()?.chatId === chat.id && !document.hidden) return;
   if (s.sound) playPop();
   vibrate(10);
   if (!s.notif) return;
   const u = api.user(msg.from);
   const title = chat.type === 'group' ? `${mention ? '@ ' : ''}${chat.name}` : u?.name;
   const text = msg.type === 'system' ? msg.text : (chat.type === 'group' ? firstName(u?.name) + ': ' : '') + preview(msg, chat).replace(/^Kamu: /, '');
+  if (document.hidden) { sysNotify(title, text, chat.id); return; }
   banner({ title, text, avatarHtml: chatAvatar(chat, 40, { online: false }), onTap: () => openChat(chat.id) });
 });
 bus.on('incoming-call', ({ chatId, video, rtc }) => startCall(chatId, video, true, rtc));

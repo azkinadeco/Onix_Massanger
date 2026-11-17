@@ -357,6 +357,10 @@ function ChatScreen(chatId) {
       body = p
         ? `<button class="bubble postmsg" data-act="open-post" data-pid="${p.id}">${img ? `<img src="${img}" alt="">` : ''}<span class="pm-txt"><span class="pm-who">${avatar(pu, 20)}<b>${esc(pu?.name || '')}</b></span>${p.text ? `<span class="pm-body">${esc(p.text.slice(0, 120))}</span>` : ''}<small>${icon('voom', 'tiny')} VOOM${p.images?.length > 1 ? ` · ${p.images.length} foto` : ''}</small></span></button>`
         : `<div class="bubble unsent">${icon('voom', 'tiny')} Post udah dihapus</div>`;
+    } else if (m.type === 'todo') {
+      body = fun.todoHtml(m);
+    } else if (m.type === 'story') {
+      body = fun.storyHtml(m);
     } else if (m.type === 'spin') {
       bare = true; body = fun.spinHtml(m);
     } else if (m.type === 'checkin') {
@@ -613,7 +617,7 @@ function ChatScreen(chatId) {
     }
     editing = null;
     const u = api.user(m.from);
-    const text = m.type === 'text' ? m.text : m.type === 'poll' ? '📊 ' + m.poll.q : { sticker: 'Sticker ' + m.sticker, image: '📷 Foto', voice: '🎤 Voice note', location: '📍 Lokasi', video: '🎬 Video', file: '📎 ' + m.name, doodle: '🖍️ Coretan', spin: '🎡 Roda putar', checkin: '💭 Cek kabar', quiz: '🎯 Kuis', countdown: '⏱️ ' + (m.title || 'Hitung mundur'), capsule: '⏳ Kapsul waktu', scratch: '🫣 Pesan gosok' }[m.type];
+    const text = m.type === 'text' ? m.text : m.type === 'poll' ? '📊 ' + m.poll.q : { sticker: 'Sticker ' + m.sticker, image: '📷 Foto', voice: '🎤 Voice note', location: '📍 Lokasi', video: '🎬 Video', file: '📎 ' + m.name, doodle: m.word ? '🤔 Tebak gambar' : '🖍️ Coretan', todo: '☑️ ' + (m.title || 'Checklist'), story: '📖 Cerita bareng', spin: '🎡 Roda putar', checkin: '💭 Cek kabar', quiz: '🎯 Kuis', countdown: '⏱️ ' + (m.title || 'Hitung mundur'), capsule: '⏳ Kapsul waktu', scratch: '🫣 Pesan gosok' }[m.type];
     replyTo = { id: m.id, name: m.from === ME ? 'Kamu' : u?.name, text: (text || '').slice(0, 120) };
     replyBar.innerHTML = `<div class="rb-line"></div><div class="rb-txt"><b>${esc(replyTo.name)}</b><span>${esc(replyTo.text)}</span></div><button class="icon-btn sm" data-act="cancel-reply">${icon('x')}</button>`;
     replyBar.hidden = false;
@@ -971,6 +975,12 @@ function ChatScreen(chatId) {
     'cu-first': () => { bindGoto(cu.first); catchBar.hidden = true; },
     'cu-at': () => { bindGoto(cu.mentions[cuAt++ % cu.mentions.length]); },
     'cu-x': () => { catchBar.hidden = true; },
+    'att-todo': () => { closePanel(); fun.todoSheet(chatId); },
+    'att-story': () => { closePanel(); fun.storySheet(chatId); },
+    'att-guess': () => { closePanel(); ta.blur(); fun.doodleEditor(chatId, { guess: true }); },
+    'todo-tick': t => { const m = msgById(t.dataset.mid); if (m) fun.todoTick(chatId, m, +t.dataset.i); },
+    'story-add': t => { const m = msgById(t.dataset.mid); if (m) fun.storyAdd(chatId, m); },
+    guess: t => { const m = msgById(t.dataset.mid); if (m) fun.guess(chatId, m); },
     'att-spin': () => { closePanel(); fun.spinSheet(chatId); },
     'att-who': () => { closePanel(); fun.whoSheet(chatId); },
     'att-checkin': () => { closePanel(); fun.checkinSheet(chatId); },
@@ -1079,7 +1089,7 @@ function ChatScreen(chatId) {
       if (line) { const hrt = h('<i class="dbl-heart">❤️</i>'); line.appendChild(hrt); setTimeout(() => hrt.remove(), 900); }
     } else lastTap = { mid, t: now };
   });
-  onLongPress(inner, '.msg-row .bubble, .msg-row .spinmsg, .msg-row .sticker, .msg-row .photo, .msg-row .jumbo, .msg-row .doodle-msg', b => msgMenu(b.closest('.msg-row')));
+  onLongPress(inner, '.msg-row .bubble, .msg-row .spinmsg, .msg-row .dd-wrap, .msg-row .sticker, .msg-row .photo, .msg-row .jumbo, .msg-row .doodle-msg', b => msgMenu(b.closest('.msg-row')));
 
   /* ---------- lifecycle ---------- */
   const offs = [

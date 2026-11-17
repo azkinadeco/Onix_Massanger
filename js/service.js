@@ -320,7 +320,7 @@ setInterval(() => {
 /* ---------- jembatan ke server (PocketBase) ---------- */
 let remoteSend = null;
 const hooks = {}; // diisi backend.js: read, typing, update, rename, addMembers, leave
-const SKIP_KEYS = ['id', 'chatId', 'from', 'ts', 'status', 'reactions', 'readBy', 'rid', 'expires', 'type', 'text', 'unsent', 'edited', 'mediaId', 'fileUrl', 'credited'];
+const SKIP_KEYS = ['acts', 'capOpened', 'scratched', 'id', 'chatId', 'from', 'ts', 'status', 'reactions', 'readBy', 'rid', 'expires', 'type', 'text', 'unsent', 'edited', 'mediaId', 'fileUrl', 'credited'];
 // ganti id 'me' <-> id server di field yang menyimpan id orang
 function mapPayloadIds(p, fn) {
   const arr = a => (Array.isArray(a) ? a.map(fn) : a);
@@ -364,6 +364,8 @@ const remote = {
         m.paid.push(uid);
         if (m.from === ME && uid !== ME) { db.wallet.balance += m.per || 0; addTx({ type: 'in', amount: m.per || 0, userId: uid, chatId: rec.chat, note: m.note }); }
       }
+    } else if (rec.kind === 'fun') {
+      (m.acts ||= {})[uid] = v;
     } else if (rec.kind === 'suit' && m.game === 'suit') {
       m.picks ||= {};
       if (!m.opp || m.opp === uid) { m.picks[uid] = v; m.opp = uid; }
@@ -835,6 +837,16 @@ export const api = {
   addReminder(r) { api.reminders().push({ id: uid('rm'), ...r }); save(); bus.emit('reminders'); bus.emit('messages', r.chatId); },
   removeReminder(id) { const r = api.reminders().find(x => x.id === id); db.reminders = api.reminders().filter(x => x.id !== id); save(); bus.emit('reminders'); if (r) bus.emit('messages', r.chatId); },
   reminderFor(mid) { return api.reminders().find(x => x.mid === mid); },
+  /* aksi generik fitur khas (checklist, cerita, tebak gambar): tiap orang punya 1 nilai per pesan */
+  funAct(chatId, mid, value) {
+    const m = db.messages[chatId]?.find(x => x.id === mid);
+    if (!m) return;
+    (m.acts ||= {})[ME] = value;
+    emitChat(chatId);
+    if (db.chats[chatId].remote && m.rid) hooks.action?.(chatId, m, 'fun', value);
+  },
+  // simulasi teman (mode demo)
+  funActAs(chatId, mid, uid, value) { const m = db.messages[chatId]?.find(x => x.id === mid); if (m && !db.chats[chatId].remote) { (m.acts ||= {})[uid] = value; emitChat(chatId); } },
   // status lokal (nggak dikirim ke server), mis. kapsul udah dibuka / pesan udah digosok
   setLocal(chatId, mid, patch) { const m = db.messages[chatId]?.find(x => x.id === mid); if (m) { Object.assign(m, patch); emitChat(chatId); } },
   cancelHold(chatId, mid) {

@@ -5,7 +5,7 @@ import { icon } from './icons.js';
 import { router, bindActs, navbar, sheet, toast } from './ui.js';
 
 // item tambahan di menu + : [aksi, ikon, label, warna]
-export const FUN_ITEMS = [['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4'], ['spin', 'refresh', 'Roda putar', '#B05CFF'], ['who', 'users', 'Siapa paling', '#E1A100']];
+export const FUN_ITEMS = [['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4'], ['spin', 'refresh', 'Roda putar', '#B05CFF'], ['todo', 'checks', 'Checklist', '#0FB46C'], ['story', 'note', 'Cerita', '#7C5CFF'], ['guess', 'brush', 'Tebak gambar', '#FF5C8A'], ['who', 'users', 'Siapa paling', '#E1A100']];
 
 /* ============ MODE KALEM ============
    Pesan yang kelihatan lagi emosi -> ditawarin tahan dulu sebelum kekirim */
@@ -61,7 +61,7 @@ const dateTxt = ts => new Date(ts).toLocaleDateString('id-ID', { day: 'numeric',
 const txt = s => esc(s || '').replace(/\n/g, '<br>');
 const buzz = p => { try { navigator.vibrate?.(p); } catch { /* */ } };
 // tipe pesan yang isinya rahasia (jangan diteruskan / disalin / di-keep)
-export const SECRET_TYPES = ['capsule', 'scratch', 'nudge', 'quiz', 'quizres', 'checkin', 'checkans'];
+export const SECRET_TYPES = ['capsule', 'scratch', 'nudge', 'quiz', 'quizres', 'checkin', 'checkans', 'todo', 'story'];
 
 /* sheet nulis pesan khusus: judul, placeholder, opsi tambahan */
 async function composeSheet({ head, ph, extra = '', go, bind }) {
@@ -376,7 +376,8 @@ function ddPlay(cv, strokes) {
   requestAnimationFrame(step);
 }
 export function doodleHtml(m) {
-  return `<button class="doodle-msg" data-act="doodle-play" data-mid="${m.id}"><canvas class="dd-cv" data-dd="${m.id}"></canvas><span class="dd-replay">${icon('refresh', 'tiny')}</span></button>`;
+  const btn = `<button class="doodle-msg" data-act="doodle-play" data-mid="${m.id}"><canvas class="dd-cv" data-dd="${m.id}"></canvas><span class="dd-replay">${icon('refresh', 'tiny')}</span></button>`;
+  return m.word ? `<div class="dd-wrap">${btn}${guessHtml(m)}</div>` : btn;
 }
 export function initDoodles(root, getMsg) {
   root.querySelectorAll('canvas.dd-cv:not([data-on])').forEach(cv => {
@@ -398,11 +399,12 @@ export function doodleURL(m) {
   ddDraw(cv.getContext('2d'), 600, m.strokes || []);
   return cv.toDataURL('image/png');
 }
-export function doodleEditor(chatId) {
+export function doodleEditor(chatId, { guess: guessMode = false } = {}) {
   let strokes = [], color = 0, width = 0, cur = null;
   const css = Math.min(window.innerWidth - 32, 420);
   const el = h(`<div class="doodle-ed">
-    <div class="dd-top"><button class="icon-btn" data-dd="x" aria-label="Tutup">${icon('x')}</button><b>🖍️ Coretan</b><button class="icon-btn" data-dd="undo" aria-label="Undo">${icon('undo')}</button><button class="icon-btn" data-dd="clear" aria-label="Hapus">${icon('trash')}</button></div>
+    <div class="dd-top"><button class="icon-btn" data-dd="x" aria-label="Tutup">${icon('x')}</button><b>${guessMode ? '🤔 Tebak gambar' : '🖍️ Coretan'}</b><button class="icon-btn" data-dd="undo" aria-label="Undo">${icon('undo')}</button><button class="icon-btn" data-dd="clear" aria-label="Hapus">${icon('trash')}</button></div>
+    ${guessMode ? `<input class="fc-in dd-word" maxlength="24" placeholder="Kata rahasia (mis. kucing)">` : ''}
     <div class="dd-pad"><canvas></canvas><span class="dd-hint">Gambar di sini ✨</span></div>
     <div class="dd-bar">
       <div class="dd-colors">${DD_COLORS.map((c, i) => `<button class="${i ? '' : 'on'}" style="--c:${c}" data-c="${i}"></button>`).join('')}</div>
@@ -441,7 +443,10 @@ export function doodleEditor(chatId) {
     if (a === 'clear') { strokes = []; redraw(); }
     if (a === 'send') {
       if (!strokes.length) return toast('Gambar dulu dong 🖍️');
-      api.send(chatId, { type: 'doodle', strokes });
+      const word = guessMode ? el.querySelector('.dd-word').value.trim() : '';
+      if (guessMode && !word) return toast('Isi kata rahasianya dulu');
+      const sent = api.send(chatId, { type: 'doodle', strokes, ...(word ? { word } : {}) });
+      if (word) demoPeer(chatId, sent.id, p => api.funActAs(chatId, sent.id, p, { ok: Math.random() < .6, n: 1, g: '?', ts: Date.now() }), 4000);
       buzz(10); close();
     }
   });
@@ -825,4 +830,113 @@ export function whoSheet(chatId) {
       });
     },
   });
+}
+
+/* ============ helper aksi bareng ============ */
+const actsOf = m => Object.entries(m.acts || {});
+const nm = id => id === ME ? 'Kamu' : firstName(api.user(id)?.name || '?');
+const hueOf = id => (id === ME ? api.me() : api.user(id))?.hue ?? 260;
+// mode demo: teman ikut main
+function demoPeer(chatId, mid, fn, ms = 2500) {
+  const ch = api.chat(chatId);
+  if (!ch || ch.remote) return;
+  const peer = ch.members.find(id => id !== ME && !api.user(id)?.official);
+  if (peer) setTimeout(() => fn(peer), ms);
+}
+
+/* ============ CHECKLIST BARENG ============ */
+export function todoState(m) {
+  const st = (m.items || []).map(() => ({ done: false, by: null, ts: 0 }));
+  for (const [uid, v] of actsOf(m)) for (const [i, a] of Object.entries(v || {})) {
+    const s = st[+i];
+    if (s && Array.isArray(a) && a[1] > s.ts) Object.assign(s, { done: !!a[0], by: uid, ts: a[1] });
+  }
+  return st;
+}
+export function todoHtml(m) {
+  const st = todoState(m), done = st.filter(s => s.done).length;
+  return `<div class="bubble todo"><div class="td-h"><b>☑️ ${esc(m.title || 'Checklist')}</b><small>${done}/${st.length}</small></div>
+    <div class="td-bar"><i style="width:${st.length ? Math.round(done / st.length * 100) : 0}%"></i></div>
+    ${(m.items || []).map((t, i) => `<button class="td-row ${st[i].done ? 'on' : ''}" data-act="todo-tick" data-mid="${m.id}" data-i="${i}"><span class="td-box">${icon('check')}</span><span class="td-t">${esc(t)}</span>${st[i].done ? `<small style="--h:${hueOf(st[i].by)}">${esc(nm(st[i].by))}</small>` : ''}</button>`).join('')}</div>`;
+}
+export function todoTick(chatId, m, i) {
+  const cur = todoState(m)[i];
+  const mine = { ...(m.acts?.[ME] || {}), [i]: [cur.done ? 0 : 1, Date.now()] };
+  api.funAct(chatId, m.id, mine);
+  buzz(cur.done ? 5 : [8, 30, 8]);
+}
+export function todoSheet(chatId) {
+  composeSheet({
+    head: '☑️ <b>Checklist bareng</b><small>Satu item per baris, semua bisa centang</small>',
+    ph: 'Beli es batu\nBawa speaker\nPesen tempat',
+    go: 'Kirim',
+    extra: `<input class="fc-in td-title" maxlength="40" placeholder="Judul (mis. Persiapan camping)">`,
+    bind: s => {
+      s._ok = v => {
+        const items = v.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 15);
+        if (!items.length) return false;
+        const m = api.send(chatId, { type: 'todo', title: s.querySelector('.td-title').value.trim() || 'Checklist', items });
+        demoPeer(chatId, m.id, p => api.funActAs(chatId, m.id, p, { 0: [1, Date.now()] }), 3000);
+        buzz(10);
+      };
+    },
+  });
+}
+
+/* ============ LANJUTIN CERITA ============
+   Cerita estafet: tiap orang nambah satu kalimat, nggak boleh dua kali berturut-turut */
+export function storyLines(m) {
+  const lines = [{ from: m.from, t: m.start || '', ts: 0 }];
+  for (const [uid, v] of actsOf(m)) for (const l of (Array.isArray(v) ? v : [])) lines.push({ from: uid, t: l.t, ts: l.ts });
+  return lines.sort((a, b) => a.ts - b.ts);
+}
+export function storyHtml(m) {
+  const lines = storyLines(m), last = lines[lines.length - 1];
+  const myTurn = last.from !== ME;
+  return `<div class="bubble chain"><div class="ch-h">📖 <b>Cerita bareng</b><small>${lines.length} kalimat</small></div>
+    <div class="ch-body">${lines.map(l => `<p><b style="--h:${hueOf(l.from)}">${esc(nm(l.from))}</b> ${esc(l.t)}</p>`).join('')}</div>
+    <button class="ch-add" data-act="story-add" data-mid="${m.id}" ${myTurn ? '' : 'disabled'}>${myTurn ? '✍️ Lanjutin' : '⏳ Tunggu giliran teman'}</button></div>`;
+}
+export async function storyAdd(chatId, m) {
+  const lines = storyLines(m);
+  if (lines[lines.length - 1].from === ME) return toast('Gantian dong 😆');
+  const { promptBox } = await import('./ui.js');
+  const t = await promptBox({ title: 'Lanjutin ceritanya…', placeholder: 'Terus tiba-tiba…', ok: 'Tambah', max: 140 });
+  if (!t) return;
+  const mine = Array.isArray(m.acts?.[ME]) ? m.acts[ME] : [];
+  api.funAct(chatId, m.id, [...mine, { t, ts: Date.now() }].slice(-20));
+  buzz(8);
+  demoPeer(chatId, m.id, p => { const cur = Array.isArray(m.acts?.[p]) ? m.acts[p] : []; api.funActAs(chatId, m.id, p, [...cur, { t: ['terus semuanya kaget 😱', 'eh ternyata itu cuma mimpi wkwk', 'dan kucingnya ngomong "halo"', 'tapi tiba-tiba hujan deres 🌧️'][Math.floor(Math.random() * 4)], ts: Date.now() }]); }, 3500);
+}
+export function storySheet(chatId) {
+  composeSheet({
+    head: '📖 <b>Lanjutin cerita</b><small>Tulis pembuka, teman nambah satu-satu</small>',
+    ph: 'Suatu hari di kantin kampus…', go: 'Mulai cerita',
+    bind: s => { s._ok = v => { api.send(chatId, { type: 'story', start: v.slice(0, 200) }); buzz(10); }; },
+  });
+}
+
+/* ============ TEBAK GAMBAR ============
+   Coretan + kata rahasia. Teman nebak, yang bener dapet ✅ */
+const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+export function guessHtml(m) {
+  if (!m.word) return '';
+  const mine = m.from === ME;
+  const gs = actsOf(m).filter(([, v]) => v && typeof v === 'object');
+  const me = m.acts?.[ME];
+  const right = gs.filter(([, v]) => v.ok);
+  let body;
+  if (mine) body = gs.length ? gs.map(([u, v]) => `<span class="${v.ok ? 'ok' : ''}">${esc(nm(u))}: ${v.ok ? '✅' : `${v.n}x ❌`}</span>`).join('') : '<span>Belum ada yang nebak</span>';
+  else if (me?.ok) body = `<span class="ok">✅ Bener! <b>${esc(m.word)}</b></span>`;
+  else body = `<button data-act="guess" data-mid="${m.id}">🤔 Tebak${me?.n ? ` lagi (${me.n}x salah)` : ''}</button>`;
+  return `<div class="dd-guess"><small>${mine ? `Kata: <b>${esc(m.word)}</b>` : `Tebak gambar · ${right.length} bener`}</small>${body}</div>`;
+}
+export async function guess(chatId, m) {
+  const { promptBox } = await import('./ui.js');
+  const g = await promptBox({ title: 'Ini gambar apa?', placeholder: 'Jawabanmu', ok: 'Tebak', max: 30 });
+  if (!g) return;
+  const ok = norm(g) === norm(m.word);
+  const prev = m.acts?.[ME] || { n: 0 };
+  api.funAct(chatId, m.id, { ok, n: (prev.n || 0) + (ok ? 0 : 1), g: g.slice(0, 30), ts: Date.now() });
+  if (ok) { toast('BENER! 🎉'); buzz([10, 40, 10, 40, 10]); } else { toast('Salah, coba lagi 😆'); buzz([30, 50, 30]); }
 }

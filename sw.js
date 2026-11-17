@@ -1,5 +1,5 @@
 // Service worker sederhana: network-first, fallback ke cache (biar bisa dibuka offline)
-const CACHE = 'onix-v31';
+const CACHE = 'onix-v32';
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', e => {

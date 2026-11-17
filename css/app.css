@@ -1821,3 +1821,45 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .bomb.boom { background: linear-gradient(160deg, #FFB020, #FF5C38) !important; }
 .bomb.boom .bm-ic { animation: pop .5s var(--ease); font-size: 54px; }
 .bomb.boom b { font-size: 22px; font-weight: 900; }
+
+/* ============ F5: tantangan foto ============ */
+.bubble.chal { min-width: 250px; max-width: 290px; display: flex; flex-direction: column; gap: 10px; color: #fff; background: linear-gradient(140deg, #FF3D6E, #FF7A1A); }
+.cl-h { display: flex; gap: 10px; align-items: center; }
+.cl-h > span { font-size: 30px; }
+.cl-h div { display: flex; flex-direction: column; }
+.cl-h small { font-size: 11.5px; font-weight: 700; opacity: .85; text-transform: uppercase; letter-spacing: .04em; }
+.cl-h b { font-size: 16px; }
+.cl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.cl-grid button { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; }
+.cl-grid img { width: 100%; height: 100%; object-fit: cover; }
+.cl-grid i { position: absolute; left: 4px; bottom: 3px; font-style: normal; font-size: 10px; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+.cl-f { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cl-f small { font-size: 12px; opacity: .9; }
+.cl-f button { height: 34px; padding: 0 16px; border-radius: 17px; background: #fff; color: #FF3D6E; font-weight: 800; }
+.cl-ideas { max-height: 120px; overflow-y: auto; }
+.chal-pic { position: relative; }
+.chal-tag { position: absolute; left: 8px; top: 8px; z-index: 1; padding: 3px 8px; border-radius: 10px; background: rgba(0,0,0,.5); color: #fff; font-size: 11px; font-weight: 700; }
+
+/* ============ F6: kartu hoki ============ */
+.ft-card { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 16px; border-radius: 22px; color: #fff; text-align: center; background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--c) 60%, #fff), var(--c) 70%); box-shadow: 0 10px 26px -10px var(--c); }
+.ft-emo { font-size: 46px; animation: pop .6s var(--ease); }
+.ft-card b { font-size: 16px; line-height: 1.35; }
+.ft-stats { display: flex; gap: 6px; width: 100%; }
+.ft-stats span { flex: 1; display: flex; flex-direction: column; padding: 6px 0; border-radius: 12px; background: rgba(255,255,255,.2); font-weight: 800; font-size: 15px; }
+.ft-stats small { font-size: 10px; font-weight: 700; opacity: .85; text-transform: uppercase; }
+.bubble.fortune { width: 250px; display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--surface); color: var(--text); }
+.msg-row.me .bubble.fortune { background: var(--surface); color: var(--text); }
+.ft-who { font-size: 12px; color: var(--text-2); font-weight: 600; padding: 0 4px; }
+.ft-mine { height: 34px; border-radius: 17px; background: var(--surface-2); font-weight: 700; font-size: 13px; }
+.ft-sh { display: flex; flex-direction: column; gap: 12px; align-items: center; text-align: center; }
+.ft-sh > small { color: var(--text-2); }
+.ft-flip { width: 100%; animation: ftFlip .7s var(--ease); }
+@keyframes ftFlip { from { transform: perspective(600px) rotateY(90deg); opacity: 0; } }
+
+/* ============ F7: emoji campur ============ */
+.mx-prev { display: grid; place-items: center; height: 150px; }
+.mx-prev img { width: 150px; height: 150px; }
+.mx-row { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.mx-row::-webkit-scrollbar { display: none; }
+.mx-row button { flex-shrink: 0; width: 42px; height: 42px; border-radius: 12px; font-size: 24px; background: var(--surface-2); }
+.mx-row button.on { background: rgba(var(--accent-rgb), .2); box-shadow: inset 0 0 0 2px var(--accent); }

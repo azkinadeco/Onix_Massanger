@@ -1,11 +1,11 @@
 // Fitur khas Onix (nggak ada di app chat lain)
 import { api, bus, ME, firstName } from './service.js';
-import { esc, h, avatar } from './util.js';
+import { esc, h, avatar, hash, pickFile, compressImage } from './util.js';
 import { icon } from './icons.js';
 import { router, bindActs, navbar, sheet, toast } from './ui.js';
 
 // item tambahan di menu + : [aksi, ikon, label, warna]
-export const FUN_ITEMS = [['sopan', 'sparkle', 'Sopanin', '#3B2E7A'], ['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4'], ['spin', 'refresh', 'Roda putar', '#B05CFF'], ['todo', 'checks', 'Checklist', '#0FB46C'], ['story', 'note', 'Cerita', '#7C5CFF'], ['guess', 'brush', 'Tebak gambar', '#FF5C8A'], ['tsticker', 'sticker', 'Stiker teks', '#FF7A1A'], ['when', 'calendar', 'Kapan bisa', '#2E7BFF'], ['bomb', 'sparkle', 'Bom waktu', '#15151C'], ['who', 'users', 'Siapa paling', '#E1A100']];
+export const FUN_ITEMS = [['sopan', 'sparkle', 'Sopanin', '#3B2E7A'], ['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4'], ['spin', 'refresh', 'Roda putar', '#B05CFF'], ['todo', 'checks', 'Checklist', '#0FB46C'], ['story', 'note', 'Cerita', '#7C5CFF'], ['guess', 'brush', 'Tebak gambar', '#FF5C8A'], ['tsticker', 'sticker', 'Stiker teks', '#FF7A1A'], ['when', 'calendar', 'Kapan bisa', '#2E7BFF'], ['bomb', 'sparkle', 'Bom waktu', '#15151C'], ['challenge', 'camera', 'Tantangan foto', '#FF3D6E'], ['fortune', 'star', 'Kartu hoki', '#9B5CFF'], ['mix', 'smile', 'Emoji campur', '#FFB020'], ['who', 'users', 'Siapa paling', '#E1A100']];
 
 /* ============ MODE KALEM ============
    Pesan yang kelihatan lagi emosi -> ditawarin tahan dulu sebelum kekirim */
@@ -970,7 +970,7 @@ function wrapLines(x, text, maxW) {
   if (cur) lines.push(cur);
   return lines.slice(0, 4);
 }
-export function textSticker(text, si, size = 360) {
+export function textSticker(text, si, size = 300) {
   const st = TS_STYLES[si], cv = document.createElement('canvas');
   cv.width = cv.height = size;
   const x = cv.getContext('2d'), F = '900 {s}px -apple-system, "SF Pro Rounded", system-ui, sans-serif';
@@ -1160,4 +1160,116 @@ export function bombSend(chatId) {
   const m = api.send(chatId, { type: 'bomb', endAt: Date.now() + (20 + Math.random() * 25) * 1000 });
   buzz([20, 40, 20]);
   return m;
+}
+
+/* ============ TANTANGAN FOTO ============
+   "Foto langit sekarang!" — semua kirim foto, kumpul di kartunya */
+const CHAL = ['Foto langit sekarang ☁️', 'Pose paling aneh 🤪', 'Isi kulkasmu 🧊', 'Sepatu yang lagi dipake 👟', 'Pemandangan dari jendela 🪟', 'Makanan terakhir 🍜', 'Sesuatu warna ungu 💜', 'Meja kamu sekarang 💻'];
+export function challengeHtml(m, chatId) {
+  const pics = byRef(chatId, 'image', m.id), open = Date.now() < m.until;
+  const done = pics.some(p => p.from === ME);
+  const left = Math.max(0, Math.ceil((m.until - Date.now()) / 60e3));
+  return `<div class="bubble chal"><div class="cl-h"><span>📸</span><div><small>Tantangan foto</small><b>${esc(m.task)}</b></div></div>
+    ${pics.length ? `<div class="cl-grid">${pics.slice(0, 6).map(p => `<button data-act="goto" data-mid="${p.id}"><img src="${p.src}" alt="" loading="lazy"><i>${esc(nm(p.from))}</i></button>`).join('')}</div>` : ''}
+    <div class="cl-f"><small>${open ? `⏳ ${left} menit lagi · ${pics.length} foto` : `Selesai · ${pics.length} foto`}</small>${open && !done ? `<button data-act="chal-join" data-mid="${m.id}">Ikutan</button>` : done ? '<small>✅ kamu ikut</small>' : ''}</div></div>`;
+}
+export async function challengeJoin(chatId, m) {
+  const f = await pickFile('image/*', 'environment');
+  if (!f) return;
+  try { const img = await compressImage(f, 900, .72); api.send(chatId, { type: 'image', ...img, ref: m.id, chal: true }); buzz(10); }
+  catch { toast('Gagal memuat foto 😢'); }
+}
+export function challengeSheet(chatId) {
+  let mins = 10;
+  sheet({
+    top: `<div class="fun-compose">
+      <div class="fc-h">📸 <b>Tantangan foto</b><small>Semua kirim foto, kumpul jadi satu</small></div>
+      <div class="fc-chips cl-ideas">${CHAL.map(c => `<button data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div>
+      <input class="fc-in" maxlength="50" placeholder="Atau tulis tantanganmu">
+      <div class="fc-chips">${[5, 10, 30, 60].map(n => `<button class="${n === 10 ? 'on' : ''}" data-n="${n}">${n < 60 ? n + ' menit' : '1 jam'}</button>`).join('')}</div>
+      <button class="btn primary wide" data-go>Mulai tantangan</button>
+    </div>`,
+    onMount: (s, close) => {
+      const inp = s.querySelector('.fc-in');
+      s.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); inp.value = b.dataset.c; s.querySelectorAll('[data-c]').forEach(x => x.classList.toggle('on', x === b)); }));
+      s.querySelectorAll('[data-n]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); mins = +b.dataset.n; s.querySelectorAll('[data-n]').forEach(x => x.classList.toggle('on', x === b)); }));
+      s.querySelector('[data-go]').addEventListener('click', e => {
+        e.stopPropagation();
+        const task = inp.value.trim();
+        if (!task) return toast('Pilih atau tulis tantangannya');
+        api.send(chatId, { type: 'challenge', task, until: Date.now() + mins * 60e3 });
+        buzz(10); close();
+      });
+    },
+  });
+}
+
+/* ============ KARTU HOKI HARIAN ============
+   Tiap orang dapet kartu beda tiap hari (dari ID + tanggal), buat seru-seruan */
+const LUCK = ['Hari ini cocok buat mulai hal baru ✨', 'Ada kabar baik dari orang yang nggak kamu sangka 📩', 'Jangan lupa minum air, kamu butuh 💧', 'Rezeki nomplok: jajan gratis kemungkinan besar 🍩', 'Seseorang lagi kangen kamu 🫶', 'Waktunya istirahat, jangan dipaksa 🛌', 'Chat duluan, nanti dibales cepet 📱', 'Outfit kamu bakal dipuji hari ini 👗', 'Ide brilian datang pas mandi 🚿', 'Hati-hati boros di e-commerce 🛒', 'Ketawa paling kenceng hari ini 😂', 'Tugas yang ditunda bakal kelar 💪'];
+const LUCK_COL = [['Ungu', '#7C5CFF'], ['Pink', '#FF3D81'], ['Kuning', '#FFB020'], ['Hijau', '#10B26C'], ['Biru', '#2E7BFF'], ['Oranye', '#FF7A1A'], ['Tosca', '#14B8C4']];
+const LUCK_EMO = ['🍀', '🌈', '⭐', '🔮', '🌙', '☀️', '🦋', '🍓', '🎐', '🪐'];
+export function myFortune(uid = api.remote?.state?.()?.uid || api.me().id || 'me') {
+  const d = new Date();
+  let k = 7;
+  for (const ch of uid + d.toDateString()) k = (Math.imul(k, 31) + ch.charCodeAt(0)) >>> 0;
+  return { day: d.toDateString(), text: LUCK[k % LUCK.length], col: LUCK_COL[(k >> 3) % LUCK_COL.length], num: 1 + (k >> 6) % 99, emo: LUCK_EMO[(k >> 9) % LUCK_EMO.length], pct: 40 + (k >> 12) % 61 };
+}
+const fortuneCard = f => `<div class="ft-card" style="--c:${f.col[1]}"><div class="ft-emo">${f.emo}</div><b>${esc(f.text)}</b>
+  <div class="ft-stats"><span><small>Hoki</small>${f.pct}%</span><span><small>Angka</small>${f.num}</span><span><small>Warna</small>${esc(f.col[0])}</span></div></div>`;
+export function fortuneHtml(m) {
+  const who = m.from === ME ? 'Kartu hoki kamu' : `Kartu hoki ${esc(nm(m.from))}`;
+  return `<div class="bubble fortune"><small class="ft-who">🔮 ${who} · ${new Date(m.ts).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</small>${fortuneCard(m.f)}${m.from === ME ? '' : '<button data-act="fortune" class="ft-mine">Cek punyaku</button>'}</div>`;
+}
+export function fortuneSheet(chatId) {
+  const f = myFortune();
+  sheet({
+    top: `<div class="ft-sh"><div class="ft-flip">${fortuneCard(f)}</div><small>Ganti tiap hari, cuma buat seru-seruan 😆</small>${chatId ? '<button class="btn primary wide" data-go>Kirim ke chat</button>' : ''}</div>`,
+    onMount: (s, close) => s.querySelector('[data-go]')?.addEventListener('click', e => { e.stopPropagation(); api.send(chatId, { type: 'fortune', f }); buzz(10); close(); }),
+  });
+}
+
+/* ============ EMOJI CAMPUR ============ */
+const MIX = ['😂', '🥹', '😎', '🥺', '😡', '😴', '🤡', '👻', '💀', '🐱', '🐸', '🐶', '🍩', '🍕', '🔥', '💖', '⭐', '🌈', '👑', '🎧', '🌚', '🙈', '🤓', '🫠'];
+export function mixEmoji(a, b, mode, size = 240) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = size;
+  const x = cv.getContext('2d'), F = s => `${s}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  const put = (e, s, cx, cy, rot = 0) => { x.save(); x.translate(cx, cy); x.rotate(rot); x.font = F(s); x.fillText(e, 0, s * .06); x.restore(); };
+  x.shadowColor = 'rgba(0,0,0,.18)'; x.shadowBlur = 12; x.shadowOffsetY = 6;
+  if (mode === 0) { put(a, size * .72, size * .5, size * .52); put(b, size * .42, size * .74, size * .74, .25); }
+  else if (mode === 1) { put(a, size * .62, size * .5, size * .58); put(b, size * .42, size * .5, size * .2, -.1); }
+  else { put(a, size * .5, size * .3, size * .5, -.2); put(b, size * .5, size * .7, size * .5, .2); }
+  return cv.toDataURL('image/png');
+}
+export function mixSheet(chatId) {
+  let a = '😎', b = '👑', mode = 0;
+  sheet({
+    top: `<div class="fun-compose">
+      <div class="fc-h">🧪 <b>Emoji campur</b><small>Pilih dua emoji, jadi stiker</small></div>
+      <div class="mx-prev"><img alt=""></div>
+      <div class="fc-chips">${['Pegang', 'Topi', 'Kembar'].map((l, i) => `<button class="${i ? '' : 'on'}" data-m="${i}">${l}</button>`).join('')}</div>
+      <div class="mx-row" data-r="a">${MIX.map(e => `<button class="${e === a ? 'on' : ''}" data-e="${e}">${e}</button>`).join('')}</div>
+      <div class="mx-row" data-r="b">${MIX.map(e => `<button class="${e === b ? 'on' : ''}" data-e="${e}">${e}</button>`).join('')}</div>
+      <button class="btn primary wide" data-go>Kirim stiker</button>
+    </div>`,
+    onMount: (s, close) => {
+      const img = s.querySelector('.mx-prev img');
+      const draw = () => { img.src = mixEmoji(a, b, mode, 220); };
+      draw();
+      s.querySelectorAll('.mx-row').forEach(row => row.addEventListener('click', e => {
+        const btn = e.target.closest('[data-e]'); if (!btn) return; e.stopPropagation();
+        if (row.dataset.r === 'a') a = btn.dataset.e; else b = btn.dataset.e;
+        row.querySelectorAll('[data-e]').forEach(x => x.classList.toggle('on', x === btn)); draw(); buzz(4);
+      }));
+      s.querySelectorAll('[data-m]').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); mode = +btn.dataset.m; s.querySelectorAll('[data-m]').forEach(x => x.classList.toggle('on', x === btn)); draw(); }));
+      s.querySelector('[data-go]').addEventListener('click', e => {
+        e.stopPropagation();
+        const src = mixEmoji(a, b, mode);
+        api.addMySticker(src);
+        api.send(chatId, { type: 'sticker', sticker: a + b, img: src });
+        buzz(10); close();
+      });
+    },
+  });
 }

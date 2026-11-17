@@ -5,7 +5,7 @@ import { icon } from './icons.js';
 import { router, bindActs, navbar, sheet, toast } from './ui.js';
 
 // item tambahan di menu + : [aksi, ikon, label, warna]
-export const FUN_ITEMS = [['sopan', 'sparkle', 'Sopanin', '#3B2E7A'], ['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4'], ['spin', 'refresh', 'Roda putar', '#B05CFF'], ['todo', 'checks', 'Checklist', '#0FB46C'], ['story', 'note', 'Cerita', '#7C5CFF'], ['guess', 'brush', 'Tebak gambar', '#FF5C8A'], ['tsticker', 'sticker', 'Stiker teks', '#FF7A1A'], ['when', 'calendar', 'Kapan bisa', '#2E7BFF'], ['bomb', 'sparkle', 'Bom waktu', '#15151C'], ['challenge', 'camera', 'Tantangan foto', '#FF3D6E'], ['fortune', 'star', 'Kartu hoki', '#9B5CFF'], ['mix', 'smile', 'Emoji campur', '#FFB020'], ['who', 'users', 'Siapa paling', '#E1A100']];
+export const FUN_ITEMS = [['sopan', 'sparkle', 'Sopanin', '#3B2E7A'], ['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4'], ['spin', 'refresh', 'Roda putar', '#B05CFF'], ['todo', 'checks', 'Checklist', '#0FB46C'], ['story', 'note', 'Cerita', '#7C5CFF'], ['guess', 'brush', 'Tebak gambar', '#FF5C8A'], ['tsticker', 'sticker', 'Stiker teks', '#FF7A1A'], ['when', 'calendar', 'Kapan bisa', '#2E7BFF'], ['bomb', 'sparkle', 'Bom waktu', '#15151C'], ['challenge', 'camera', 'Tantangan foto', '#FF3D6E'], ['fortune', 'star', 'Kartu hoki', '#9B5CFF'], ['mix', 'smile', 'Emoji campur', '#FFB020'], ['card', 'gift', 'Kartu ucapan', '#FF5C8A'], ['who', 'users', 'Siapa paling', '#E1A100']];
 
 /* ============ MODE KALEM ============
    Pesan yang kelihatan lagi emosi -> ditawarin tahan dulu sebelum kekirim */
@@ -61,7 +61,7 @@ const dateTxt = ts => new Date(ts).toLocaleDateString('id-ID', { day: 'numeric',
 const txt = s => esc(s || '').replace(/\n/g, '<br>');
 const buzz = p => { try { navigator.vibrate?.(p); } catch { /* */ } };
 // tipe pesan yang isinya rahasia (jangan diteruskan / disalin / di-keep)
-export const SECRET_TYPES = ['capsule', 'scratch', 'nudge', 'quiz', 'quizres', 'checkin', 'checkans', 'todo', 'story', 'when', 'bomb'];
+export const SECRET_TYPES = ['capsule', 'scratch', 'nudge', 'quiz', 'quizres', 'checkin', 'checkans', 'todo', 'story', 'when', 'bomb', 'card'];
 
 /* sheet nulis pesan khusus: judul, placeholder, opsi tambahan */
 async function composeSheet({ head, ph, extra = '', go, bind }) {
@@ -1268,6 +1268,61 @@ export function mixSheet(chatId) {
         const src = mixEmoji(a, b, mode);
         api.addMySticker(src);
         api.send(chatId, { type: 'sticker', sticker: a + b, img: src });
+        buzz(10); close();
+      });
+    },
+  });
+}
+
+/* ============ KARTU UCAPAN BARENG ============
+   Satu kartu buat satu orang, semua anggota ikut tanda tangan */
+const OCC = [['🎂', 'Selamat ulang tahun!', '#FF5C8A', '#FFB020'], ['🎓', 'Selamat wisuda!', '#2E7BFF', '#7C5CFF'], ['💪', 'Semangat ya!', '#FF7A1A', '#FF3D3D'], ['🙏', 'Makasih banyak!', '#10B26C', '#14B8C4'], ['🎉', 'Selamat ya!', '#B05CFF', '#FF5CA8'], ['🫂', 'Get well soon!', '#14B8C4', '#2E7BFF']];
+const NOTE_COL = ['#FFF3B0', '#FFD6E7', '#D6F5FF', '#E3FFD6', '#EADCFF', '#FFE2CC'];
+export function cardHtml(m) {
+  const o = OCC[m.occ] || OCC[0], to = api.remote?.mapId ? api.remote.mapId(m.to) : m.to;
+  const signs = actsOf(m).filter(([, v]) => v?.t);
+  const forMe = to === ME, signed = !!m.acts?.[ME]?.t || m.from === ME;
+  return `<div class="bubble gcard" style="--a:${o[2]};--b:${o[3]}">
+    <div class="gc-cover"><span>${o[0]}</span><b>${esc(o[1])}</b><small>${forMe ? 'Buat KAMU 🎁' : `Buat ${esc(nm(to))}`}</small></div>
+    <div class="gc-f"><span class="gc-av">${[m.from, ...signs.map(s => s[0])].slice(0, 5).map(u => avatar(u === ME ? api.me() : api.user(u), 22)).join('')}</span><small>${signs.length + 1} tanda tangan</small></div>
+    <div class="gc-btns">${!forMe && !signed ? `<button data-act="card-sign" data-mid="${m.id}">✍️ Tanda tangan</button>` : ''}<button class="ghost" data-act="card-open" data-mid="${m.id}">${forMe ? '🎁 Buka' : 'Lihat'}</button></div></div>`;
+}
+export async function cardSign(chatId, m) {
+  const { promptBox } = await import('./ui.js');
+  const t = await promptBox({ title: 'Tulis ucapanmu', placeholder: 'Semoga…', ok: 'Tanda tangan', max: 140 });
+  if (!t) return;
+  api.funAct(chatId, m.id, { t, c: Math.floor(Math.random() * NOTE_COL.length) });
+  buzz(10);
+}
+export function cardOpen(m, host) {
+  const o = OCC[m.occ] || OCC[0], to = api.remote?.mapId ? api.remote.mapId(m.to) : m.to;
+  const notes = [{ u: m.from, t: m.note || o[1], c: 0 }, ...actsOf(m).filter(([, v]) => v?.t).map(([u, v]) => ({ u, t: v.t, c: v.c || 0 }))];
+  sheet({
+    top: `<div class="gc-open" style="--a:${o[2]};--b:${o[3]}"><div class="gc-big">${o[0]}</div><b>${esc(o[1])}</b><small>${to === ME ? 'Dari teman-temanmu 💖' : `Buat ${esc(nm(to))}`}</small>
+      <div class="gc-notes">${notes.map((n, i) => `<div class="gc-note" style="--n:${NOTE_COL[n.c % NOTE_COL.length]};--r:${(i % 2 ? 1 : -1) * (1 + i % 3)}deg"><p>${esc(n.t)}</p><small>— ${esc(nm(n.u))}</small></div>`).join('')}</div></div>`,
+  });
+  if (to === ME) import('./chat.js').then(c => c.playEffect('confetti', host));
+}
+export function cardSheet(chatId) {
+  const ch = api.chat(chatId);
+  const people = ch.members.filter(id => id !== ME && !api.user(id)?.official);
+  let to = people[0], occ = 0;
+  sheet({
+    top: `<div class="fun-compose">
+      <div class="fc-h">💌 <b>Kartu ucapan bareng</b><small>Semua anggota ikut tanda tangan</small></div>
+      <div class="fc-chips">${OCC.map((o, i) => `<button class="${i ? '' : 'on'}" data-o="${i}">${o[0]} ${esc(o[1].replace(/!$/, ''))}</button>`).join('')}</div>
+      ${people.length > 1 ? `<div class="fc-chips">${people.map((id, i) => `<button class="${i ? '' : 'on'}" data-to="${id}">${esc(firstName(api.user(id)?.name || '?'))}</button>`).join('')}</div>` : ''}
+      <input class="fc-in" maxlength="140" placeholder="Ucapan pertama dari kamu">
+      <button class="btn primary wide" data-go>Bikin kartu</button>
+    </div>`,
+    onMount: (s, close) => {
+      s.querySelectorAll('[data-o]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); occ = +b.dataset.o; s.querySelectorAll('[data-o]').forEach(x => x.classList.toggle('on', x === b)); }));
+      s.querySelectorAll('[data-to]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); to = b.dataset.to; s.querySelectorAll('[data-to]').forEach(x => x.classList.toggle('on', x === b)); }));
+      s.querySelector('[data-go]').addEventListener('click', e => {
+        e.stopPropagation();
+        if (!to) return toast('Belum ada teman di chat ini');
+        const m = api.send(chatId, { type: 'card', to, occ, note: s.querySelector('.fc-in').value.trim() });
+        demoPeer(chatId, m.id, p => { if (p !== to) api.funActAs(chatId, m.id, p, { t: 'Semoga makin sukses & bahagia ya! 🥳', c: 2 }); }, 3000);
         buzz(10); close();
       });
     },

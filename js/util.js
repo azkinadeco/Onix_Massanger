@@ -106,6 +106,7 @@ export function pickFiles(accept = 'image/*', max = 10) {
 }
 
 export function compressImage(file, max = 1080, q = 0.78) {
+  if (window.__onixSaver) { max = Math.min(max, 720); q = Math.min(q, 0.6); } // mode hemat kuota
   return new Promise((res, rej) => {
     const r = new FileReader();
     r.onload = () => {

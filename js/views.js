@@ -29,7 +29,7 @@ export function preview(m, c) {
   if (m.from === ME) who = 'Kamu: ';
   else if (c.type === 'group') who = firstName(api.user(m.from)?.name) + ': ';
   if (m.unsent) return who + 'Pesan ditarik';
-  const body = { sticker: 'Sticker ' + (m.sticker || ''), image: m.album?.length > 1 ? `📷 ${m.album.length} foto` : '📷 Foto', voice: '🎤 Voice note', location: '📍 ' + (m.title || 'Lokasi'), poll: '📊 ' + (m.poll?.q || 'Polling'), event: '📅 ' + (m.event?.title || 'Event'), video: '🎬 Video', file: '📎 ' + (m.name || 'File'), capsule: '⏳ Kapsul waktu', scratch: '🫣 Pesan gosok', nudge: '👉 Colek!', when: '📅 ' + (m.title || 'Kapan bisa?'), challenge: '📸 Tantangan: ' + (m.task || ''), fortune: '🔮 Kartu hoki', bomb: '💣 Bom waktu!', doodle: m.word ? '🤔 Tebak gambar' : '🖍️ Coretan', todo: '☑️ ' + (m.title || 'Checklist'), story: '📖 Cerita bareng', spin: '🎡 ' + (m.q || 'Roda putar'), checkin: '💭 Gimana harimu?', checkans: '💭 Jawab cek kabar', quiz: '🎯 Kuis', quizres: '🎯 Skor kuis ' + (m.score ?? '') + '/' + (m.total ?? ''), countdown: '⏱️ ' + (m.title || 'Hitung mundur'), post: '📰 Post VOOM', game: { dice: '🎲 Dadu', coin: '🪙 Koin', suit: '✊ Suit' }[m.game], pay: { send: '💸 Kirim uang', request: '💸 Minta uang', split: '💸 Patungan' }[m.kind] }[m.type] || m.text;
+  const body = { sticker: 'Sticker ' + (m.sticker || ''), image: m.album?.length > 1 ? `📷 ${m.album.length} foto` : '📷 Foto', voice: '🎤 Voice note', location: '📍 ' + (m.title || 'Lokasi'), poll: '📊 ' + (m.poll?.q || 'Polling'), event: '📅 ' + (m.event?.title || 'Event'), video: '🎬 Video', file: '📎 ' + (m.name || 'File'), capsule: '⏳ Kapsul waktu', scratch: '🫣 Pesan gosok', nudge: '👉 Colek!', when: '📅 ' + (m.title || 'Kapan bisa?'), challenge: '📸 Tantangan: ' + (m.task || ''), card: '💌 Kartu ucapan', fortune: '🔮 Kartu hoki', bomb: '💣 Bom waktu!', doodle: m.word ? '🤔 Tebak gambar' : '🖍️ Coretan', todo: '☑️ ' + (m.title || 'Checklist'), story: '📖 Cerita bareng', spin: '🎡 ' + (m.q || 'Roda putar'), checkin: '💭 Gimana harimu?', checkans: '💭 Jawab cek kabar', quiz: '🎯 Kuis', quizres: '🎯 Skor kuis ' + (m.score ?? '') + '/' + (m.total ?? ''), countdown: '⏱️ ' + (m.title || 'Hitung mundur'), post: '📰 Post VOOM', game: { dice: '🎲 Dadu', coin: '🪙 Koin', suit: '✊ Suit' }[m.game], pay: { send: '💸 Kirim uang', request: '💸 Minta uang', split: '💸 Patungan' }[m.kind] }[m.type] || m.text;
   return who + body;
 }
 
@@ -61,6 +61,7 @@ export function chatRow(c) {
   </div>`;
 }
 
+export const loadedPosts = new Set();
 export function postCard(p, { detail = false } = {}) {
   const u = api.user(p.userId);
   const liked = p.likes.includes(ME);
@@ -84,6 +85,8 @@ export function postCard(p, { detail = false } = {}) {
 function postMedia(p) {
   const imgs = p.images?.length ? p.images : p.image ? [p.image] : [];
   if (!imgs.length) return '';
+  // hemat kuota: gambar dari server baru dimuat pas di-tap
+  if (api.settings().saver && /^https?:/.test(imgs[0]) && !loadedPosts.has(p.id)) return `<button class="saver-img" data-post="${p.id}">🖼️ ${imgs.length > 1 ? imgs.length + ' foto' : 'Foto'} · tap buat muat</button>`;
   if (imgs.length === 1) return `<button class="post-img" data-act="view-src" data-src-post="${p.id}" data-i="0"><img src="${imgs[0]}" alt="" loading="lazy"></button>`;
   return `<div class="post-car" data-n="${imgs.length}"><div class="pc-track">${imgs.map((src, i) => `<button class="post-img" data-act="view-src" data-src-post="${p.id}" data-i="${i}"><img src="${src}" alt="" loading="lazy"></button>`).join('')}</div><span class="pc-count">1/${imgs.length}</span><div class="pc-dots">${imgs.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div></div>`;
 }

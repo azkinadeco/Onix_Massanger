@@ -1863,3 +1863,29 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .mx-row::-webkit-scrollbar { display: none; }
 .mx-row button { flex-shrink: 0; width: 42px; height: 42px; border-radius: 12px; font-size: 24px; background: var(--surface-2); }
 .mx-row button.on { background: rgba(var(--accent-rgb), .2); box-shadow: inset 0 0 0 2px var(--accent); }
+
+/* ============ F8: hemat kuota ============ */
+.saver-img { width: 100%; height: 120px; border-radius: 16px; background: var(--surface-2); color: var(--text-2); font-weight: 600; font-size: 14px; }
+
+/* ============ F9: kartu ucapan ============ */
+.bubble.gcard { width: 250px; padding: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--surface); color: var(--text); }
+.msg-row.me .bubble.gcard { background: var(--surface); color: var(--text); }
+.gc-cover { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 18px 12px 14px; color: #fff; text-align: center; background: linear-gradient(140deg, var(--a), var(--b)); }
+.gc-cover span { font-size: 42px; animation: pop .6s var(--ease); }
+.gc-cover b { font-size: 17px; }
+.gc-cover small { font-size: 12.5px; opacity: .92; font-weight: 600; }
+.gc-f { display: flex; align-items: center; gap: 8px; padding: 10px 12px 4px; }
+.gc-av { display: flex; padding-left: 6px; }
+.gc-av .av { margin-left: -6px; box-shadow: 0 0 0 2px var(--surface); }
+.gc-f small { color: var(--text-2); font-weight: 600; font-size: 12.5px; }
+.gc-btns { display: flex; gap: 6px; padding: 6px 12px 12px; }
+.gc-btns button { flex: 1; height: 36px; border-radius: 18px; background: var(--a); color: #fff; font-weight: 800; font-size: 13.5px; }
+.gc-btns button.ghost { background: var(--surface-2); color: var(--text); }
+.gc-open { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; max-height: 64vh; overflow-y: auto; padding: 4px 2px 8px; }
+.gc-big { font-size: 56px; animation: pop .6s var(--ease); }
+.gc-open > b { font-size: 21px; background: linear-gradient(90deg, var(--a), var(--b)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.gc-open > small { color: var(--text-2); margin-bottom: 10px; }
+.gc-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+.gc-note { padding: 12px; border-radius: 6px 18px 18px 18px; background: var(--n); color: #2A2A35; text-align: left; transform: rotate(var(--r)); box-shadow: 0 4px 12px rgba(0,0,0,.08); animation: pop .4s var(--ease) both; }
+.gc-note p { margin: 0 0 6px; font-family: 'Comic Sans MS', 'Chalkboard SE', 'Marker Felt', cursive; font-size: 14px; line-height: 1.35; }
+.gc-note small { font-size: 11.5px; font-weight: 700; opacity: .7; }

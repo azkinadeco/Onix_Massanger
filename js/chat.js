@@ -64,7 +64,7 @@ function effectOf(m) {
   return null;
 }
 export function playEffect(fx, host = document.body) {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || window.__onixSaver) return;
   host.querySelector('.fx-layer')?.remove();
   const layer = document.createElement('div');
   layer.className = 'fx-layer fx-' + fx;
@@ -359,6 +359,8 @@ function ChatScreen(chatId) {
       body = p
         ? `<button class="bubble postmsg" data-act="open-post" data-pid="${p.id}">${img ? `<img src="${img}" alt="">` : ''}<span class="pm-txt"><span class="pm-who">${avatar(pu, 20)}<b>${esc(pu?.name || '')}</b></span>${p.text ? `<span class="pm-body">${esc(p.text.slice(0, 120))}</span>` : ''}<small>${icon('voom', 'tiny')} VOOM${p.images?.length > 1 ? ` · ${p.images.length} foto` : ''}</small></span></button>`
         : `<div class="bubble unsent">${icon('voom', 'tiny')} Post udah dihapus</div>`;
+    } else if (m.type === 'card') {
+      body = fun.cardHtml(m);
     } else if (m.type === 'challenge') {
       body = fun.challengeHtml(m, chatId);
     } else if (m.type === 'fortune') {
@@ -638,7 +640,7 @@ function ChatScreen(chatId) {
     }
     editing = null;
     const u = api.user(m.from);
-    const text = m.type === 'text' ? m.text : m.type === 'poll' ? '📊 ' + m.poll.q : { sticker: 'Sticker ' + m.sticker, image: '📷 Foto', voice: '🎤 Voice note', location: '📍 Lokasi', video: '🎬 Video', file: '📎 ' + m.name, when: '📅 ' + (m.title || 'Kapan bisa?'), bomb: '💣 Bom waktu', challenge: '📸 ' + (m.task || 'Tantangan'), fortune: '🔮 Kartu hoki', doodle: m.word ? '🤔 Tebak gambar' : '🖍️ Coretan', todo: '☑️ ' + (m.title || 'Checklist'), story: '📖 Cerita bareng', spin: '🎡 Roda putar', checkin: '💭 Cek kabar', quiz: '🎯 Kuis', countdown: '⏱️ ' + (m.title || 'Hitung mundur'), capsule: '⏳ Kapsul waktu', scratch: '🫣 Pesan gosok' }[m.type];
+    const text = m.type === 'text' ? m.text : m.type === 'poll' ? '📊 ' + m.poll.q : { sticker: 'Sticker ' + m.sticker, image: '📷 Foto', voice: '🎤 Voice note', location: '📍 Lokasi', video: '🎬 Video', file: '📎 ' + m.name, when: '📅 ' + (m.title || 'Kapan bisa?'), bomb: '💣 Bom waktu', challenge: '📸 ' + (m.task || 'Tantangan'), card: '💌 Kartu ucapan', fortune: '🔮 Kartu hoki', doodle: m.word ? '🤔 Tebak gambar' : '🖍️ Coretan', todo: '☑️ ' + (m.title || 'Checklist'), story: '📖 Cerita bareng', spin: '🎡 Roda putar', checkin: '💭 Cek kabar', quiz: '🎯 Kuis', countdown: '⏱️ ' + (m.title || 'Hitung mundur'), capsule: '⏳ Kapsul waktu', scratch: '🫣 Pesan gosok' }[m.type];
     replyTo = { id: m.id, name: m.from === ME ? 'Kamu' : u?.name, text: (text || '').slice(0, 120) };
     replyBar.innerHTML = `<div class="rb-line"></div><div class="rb-txt"><b>${esc(replyTo.name)}</b><span>${esc(replyTo.text)}</span></div><button class="icon-btn sm" data-act="cancel-reply">${icon('x')}</button>`;
     replyBar.hidden = false;
@@ -1005,6 +1007,9 @@ function ChatScreen(chatId) {
     'cu-x': () => { catchBar.hidden = true; },
     'att-sopan': () => { closePanel(); fun.sopanSheet(ta.value, s => { ta.value = s; autosize(); ta.focus(); }); },
     'att-tsticker': () => { closePanel(); fun.textStickerSheet(chatId); },
+    'att-card': () => { closePanel(); fun.cardSheet(chatId); },
+    'card-sign': t => { const m = msgById(t.dataset.mid); if (m) fun.cardSign(chatId, m); },
+    'card-open': t => { const m = msgById(t.dataset.mid); if (m) fun.cardOpen(m, el); },
     'att-challenge': () => { closePanel(); fun.challengeSheet(chatId); },
     'att-fortune': () => { closePanel(); fun.fortuneSheet(chatId); },
     fortune: () => fun.fortuneSheet(chatId),

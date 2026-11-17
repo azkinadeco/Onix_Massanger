@@ -192,6 +192,7 @@ function TabsScreen() {
           ${toggle('sound', 'Suara', 'volume')}
           ${toggle('calm', 'Mode kalem', 'wind')}
           ${toggle('undoSend', 'Batal kirim', 'undo')}
+          ${toggle('saver', 'Hemat kuota', 'database')}
         </div>
         <div class="set-group">
           ${link('demo', 'sparkle', 'Demo')}
@@ -505,6 +506,16 @@ setInterval(checkReminders, 15e3);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReminders(); });
 
 setInterval(() => api.ready && api.endFocusIfDone(), 15e3);
+/* hemat kuota: foto dikirim lebih kecil, efek layar dimatiin, gambar VOOM dari server ditap dulu */
+const applySaver = () => { window.__onixSaver = !!api.settings().saver; document.documentElement.classList.toggle('saver', window.__onixSaver); };
+bus.on('settings', applySaver); applySaver();
+document.addEventListener('click', async e => {
+  const b = e.target.closest('.saver-img');
+  if (!b) return;
+  e.stopPropagation();
+  const { loadedPosts } = await import('./views.js');
+  loadedPosts.add(b.dataset.post); bus.emit('posts');
+}, true);
 // kirim pas dia online
 const flushWaits = () => { if (!api.ready || !api.waits().length) return; for (const u of api.flushWaits()) toast(`Kekirim, ${firstName(u.name)} udah online 🟢`); };
 bus.on('presence', flushWaits); bus.on('chats', () => setTimeout(flushWaits, 0)); setInterval(flushWaits, 20e3);

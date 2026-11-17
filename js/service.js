@@ -379,6 +379,11 @@ const remote = {
   setSender(fn) { remoteSend = fn; },
   state() { return db?.remote || null; },
   setState(s) { db.remote = s; save(); bus.emit('remote'); },
+  applyMe(r, avatarUrl) {
+    Object.assign(db.me, { name: r.name || db.me.name, status: r.status ?? db.me.status, hue: r.hue ?? db.me.hue, ...(avatarUrl ? { avatar: avatarUrl } : {}) });
+    if (r.mood?.ts) (db.moods ||= {})[ME] = r.mood;
+    save(); bus.emit('me'); bus.emit('moods'); bus.emit('chats');
+  },
   mapId(pid) { return pid === db.remote?.uid ? ME : pid; },
   payloadOf(m) {
     const p = {};
@@ -390,6 +395,10 @@ const remote = {
     if (!r || r.id === db.remote?.uid) return;
     const u = db.users[r.id] ||= { id: r.id, online: false, lastSeen: 0 };
     Object.assign(u, { name: r.name || r.handle, handle: r.handle, hue: r.hue ?? 260, status: r.status || '', avatar: avatarUrl || null, remote: true });
+    db.moods ||= {};
+    const had = JSON.stringify(db.moods[r.id] || null);
+    if (r.mood?.ts) db.moods[r.id] = r.mood; else delete db.moods[r.id];
+    if (had !== JSON.stringify(db.moods[r.id] || null)) bus.emit('moods');
   },
   chat(r) {
     const t = Date.parse(r.created) || Date.now();
@@ -465,7 +474,7 @@ export const api = {
   },
 
   me() { return { ...db.me, id: db.me.id }; },
-  updateMe(patch) { Object.assign(db.me, patch); save(); bus.emit('me'); bus.emit('chats'); },
+  updateMe(patch) { Object.assign(db.me, patch); save(); bus.emit('me'); bus.emit('chats'); if (db.remote) hooks.profile?.(patch); },
   settings() { return db ? db.settings : { theme: 'system', accent: 'violet' }; },
   setSetting(k, v) { db.settings[k] = v; save(); bus.emit('settings'); },
 
@@ -543,7 +552,7 @@ export const api = {
     const now = Date.now(), out = [];
     for (const [id, m] of Object.entries(db.moods || {})) {
       if (now - m.ts > 864e5) continue;
-      if (id !== ME && (!db.friends.includes(id) || db.blocked.includes(id))) continue;
+      if (id !== ME && ((!db.friends.includes(id) && !db.users[id]?.remote) || db.blocked.includes(id))) continue;
       out.push({ userId: id, ...m });
     }
     return out.sort((a, b) => b.ts - a.ts);
@@ -553,6 +562,7 @@ export const api = {
     db.moods ||= {};
     if (m) db.moods[ME] = { emoji: m.emoji, text: m.text || '', ts: Date.now() }; else delete db.moods[ME];
     save(); bus.emit('moods');
+    if (db.remote) hooks.profile?.({ mood: db.moods[ME] || null });
     if (m) {
       const fans = shuffle(db.friends.filter(id => !db.users[id]?.official)).slice(0, 2);
       fans.forEach((id, i) => setTimeout(() => { if (db.moods[ME]) addActivity('mood', id, { userId: ME }, `${m.emoji} ${m.text || ''}`.trim()); }, 6000 + i * 5000));

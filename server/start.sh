@@ -34,4 +34,4 @@ echo "  Laptop : http://localhost:8090"
 echo "  Admin  : lihat server/ADMIN.txt"
 echo "  HTTPS  : jalankan 'bash server/tunnel.sh' di terminal lain"
 echo ""
-exec ./pocketbase serve --http=0.0.0.0:8090 --dir=pb_data --migrationsDir=pb_migrations --publicDir=pb_public
+exec ./pocketbase serve --http=0.0.0.0:8090 --dir=pb_data --migrationsDir=pb_migrations --hooksDir=pb_hooks --publicDir=pb_public

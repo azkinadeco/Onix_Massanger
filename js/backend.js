@@ -212,7 +212,8 @@ api.remote.hooks.leave = async chatId => {
 let beatT = null;
 async function beat(online = !document.hidden) {
   if (!started || !pb?.authStore.isValid) return;
-  try { await pb.collection('users').update(myId(), { online, lastActive: Date.now() }); } catch { /* */ }
+  profileQ = profileQ.then(() => pb.collection('users').update(myId(), { online, lastActive: Date.now() })).catch(() => {});
+  return profileQ;
 }
 function startBeat() {
   clearInterval(beatT);
@@ -262,8 +263,25 @@ export async function signIn({ handle, password, url }) {
   const auth = await pb.collection('users').authWithPassword(handle, password);
   api.remote.setState({ url: pb.baseURL, uid: auth.record.id, handle: auth.record.handle });
   localStorage.setItem('onix:pbUrl', pb.baseURL);
+  api.remote.applyMe(auth.record, avatarUrl(auth.record));
   await start();
 }
+
+/* ---------- profil ---------- */
+api.remote.hooks.profile = async patch => {
+  if (!pb?.authStore.isValid) return;
+  const body = {};
+  for (const k of ['name', 'status', 'hue', 'mood']) if (k in patch) body[k] = patch[k];
+  if ('avatar' in patch) {
+    if (!patch.avatar) body.avatar = null;
+    else if (patch.avatar.startsWith('data:')) body.avatar = new File([dataURLtoBlob(patch.avatar)], 'avatar.jpg', { type: 'image/jpeg' });
+  }
+  if (!Object.keys(body).length) return;
+  // antre: update profil dikirim satu per satu biar nggak saling timpa
+  profileQ = profileQ.then(() => pb.collection('users').update(myId(), body)).catch(e => console.warn('profil gagal', e));
+  return profileQ;
+};
+let profileQ = Promise.resolve();
 
 export async function signOut() {
   await beat(false);

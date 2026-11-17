@@ -20,6 +20,13 @@ Biar terasa seperti aplikasi: Safari → tombol Share → **Add to Home Screen**
 - **Panggilan**: telepon & video call (UI + kamera depan), riwayat, telepon masuk (simulasi)
 - **Kamu**: edit profil + foto, mode terang/gelap/auto, 5 warna aksen, notifikasi, mode demo, reset
 
+### Baru di v0.6
+- **Cari global** di tab Chat: chat, orang, isi pesan (tap = loncat ke pesannya), post VOOM
+- **Status mood** 24 jam di atas daftar chat, bisa dibalas cepat
+- **Onix Pay** (dummy): saldo, kirim & minta uang, patungan grup, bayar tagihan, riwayat
+- **Pembuat sticker** dari foto (lingkaran/kotak/hati, pinggiran putih, teks) → tab Buatanku
+- **Backup & pulihkan** semua data ke/dari file `.json`
+
 ### Baru di v0.5
 - **Daftar pakai nomor HP + OTP** (kode dummy muncul di banner), setup profil & cek ID
 - **Notifikasi** (lonceng di Home): like, komentar, mention, panggilan tak terjawab, permintaan teman

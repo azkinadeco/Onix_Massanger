@@ -327,6 +327,7 @@ export const api = {
     if (!q) return [];
     return Object.values(db.users).filter(u => !u.official && (u.id.includes(q) || u.name.toLowerCase().includes(q)));
   },
+  searchUsers(q) { q = q.toLowerCase(); return Object.values(db.users).filter(u => u.id !== ME && !db.blocked.includes(u.id) && (u.name.toLowerCase().includes(q) || (u.id || '').toLowerCase().includes(q))).sort((a, b) => db.friends.includes(b.id) - db.friends.includes(a.id)); },
   recommended() { return Object.values(db.users).filter(u => !u.official && !db.friends.includes(u.id) && !db.blocked.includes(u.id)); },
   addFriend(id) {
     if (!db.friends.includes(id)) db.friends.push(id);

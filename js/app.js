@@ -98,9 +98,15 @@ function TabsScreen() {
         const byName = list.filter(c => api.chatTitle(c).toLowerCase().includes(q));
         const hits = [];
         api.chats().forEach(c => api.messages(c.id).forEach(m => { if (m.type === 'text' && !m.unsent && m.text.toLowerCase().includes(q)) hits.push({ c, m }); }));
-        return byName.map(chatRow).join('')
-          + (hits.length ? `<div class="section-h">Pesan</div>${hits.slice(-30).reverse().map(({ c, m }) => `<div class="list-item" data-act="open-chat" data-id="${c.id}">${chatAvatar(c, 46)}<div class="li-main"><div class="li-top"><span class="li-name">${esc(api.chatTitle(c))}</span><span class="li-time">${listTime(m.ts)}</span></div><div class="li-sub">${hl(preview(m, c), q)}</div></div></div>`).join('')}` : '')
-          + (!byName.length && !hits.length ? empty('🔍', 'Nggak ada hasil') : '');
+        hits.sort((a, b) => b.m.ts - a.m.ts);
+        const people = api.searchUsers(q).filter(u => !byName.some(c => c.type === 'direct' && api.peerOf(c)?.id === u.id)).slice(0, 6);
+        const posts = api.posts().filter(p => (p.text || '').toLowerCase().includes(q)).slice(0, 5);
+        const sec = (label, n, html) => n ? `<div class="section-h">${label}<span class="sh-n">${n}</span></div>${html}` : '';
+        const out = sec('Chat', byName.length, byName.map(chatRow).join(''))
+          + sec('Orang', people.length, people.map(u => userRow(u)).join(''))
+          + sec('Pesan', hits.length, hits.slice(0, 40).map(({ c, m }) => `<div class="list-item" data-act="open-hit" data-id="${c.id}" data-mid="${m.id}">${chatAvatar(c, 46)}<div class="li-main"><div class="li-top"><span class="li-name">${esc(api.chatTitle(c))}</span><span class="li-time">${listTime(m.ts)}</span></div><div class="li-sub">${m.from === ME ? 'Kamu: ' : ''}${hl(snip(m.text, q), q)}</div></div></div>`).join(''))
+          + sec('VOOM', posts.length, posts.map(p => { const u = api.user(p.userId); return `<div class="list-item" data-act="post" data-id="${p.id}">${userAvatar(u, 46)}<div class="li-main"><div class="li-name">${esc(u?.name || '')}</div><div class="li-sub">${hl(snip(p.text, q), q)}</div></div>${p.images?.[0] || p.image ? `<img class="sr-thumb" src="${p.images?.[0] || p.image}" alt="">` : ''}</div>`; }).join(''));
+        return out || empty('🔍', 'Nggak ada hasil');
       }
       const arc = st.filter === 'all' ? api.archived() : [];
       const arcRow = arc.length ? `<div class="list-item arc-row" data-act="archived"><span class="round-ic">${icon('archive')}</span><div class="li-main"><div class="li-name">Arsip</div></div><span class="count">${arc.length}</span>${arc.some(c => c.unread) ? '<i class="arc-dot"></i>' : ''}</div>` : '';
@@ -108,6 +114,7 @@ function TabsScreen() {
       return arcRow + list.map(chatRow).join('');
     },
   };
+  const snip = (text, q) => { const t = String(text || '').replace(/\s+/g, ' '); const i = t.toLowerCase().indexOf(q); return i > 28 ? '…' + t.slice(i - 20) : t; };
   const hl = (text, q) => { const t = esc(text); const i = t.toLowerCase().indexOf(esc(q)); return i < 0 ? t : t.slice(0, i) + '<mark>' + t.slice(i, i + esc(q).length) + '</mark>' + t.slice(i + esc(q).length); };
 
   /* ----- VOOM ----- */
@@ -247,6 +254,7 @@ function TabsScreen() {
     'new-chat': () => router.push(FriendPicker({ title: 'Chat baru', onDone: ([id]) => { history.back(); setTimeout(() => openChat(api.directWith(id).id), 350); } })),
     'new-call': () => router.push(FriendPicker({ title: 'Telepon siapa?', onDone: ([id]) => { history.back(); setTimeout(() => startCall(api.directWith(id).id, false), 350); } })),
     'open-chat': t => openChat(t.dataset.id),
+    'open-hit': t => openChat(t.dataset.id, { mid: t.dataset.mid }),
     profile: t => router.push(ProfileScreen(t.dataset.id)),
     'compose-menu': () => sheet({ actions: [
       { label: 'Chat baru', icon: 'chat', run: handlers['new-chat'] },

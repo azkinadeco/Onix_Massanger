@@ -110,10 +110,13 @@ function gameHtml(m) {
 
 const mapText = (html, fn) => html.split(/(<[^>]+>)/).map(p => (p.startsWith('<') ? p : fn(p))).join('');
 
-export function openChat(chatId) {
+export function openChat(chatId, opts = {}) {
   // kalau chat yang sama sudah terbuka di atas, jangan dobel
-  if (router.top()?.chatId === chatId) return;
-  router.push(ChatScreen(chatId));
+  const top = router.top();
+  if (top?.chatId === chatId) { if (opts.mid) top.goto?.(opts.mid); return; }
+  const scr = ChatScreen(chatId);
+  router.push(scr);
+  if (opts.mid) setTimeout(() => scr.goto(opts.mid), 380);
 }
 
 const REACTS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
@@ -914,7 +917,7 @@ function ChatScreen(chatId) {
   renderSched();
 
   return {
-    el, chatId,
+    el, chatId, goto: bindGoto,
     show() { api.setActive(chatId); api.markRead(chatId); renderHeader(); },
     destroy() {
       offs.forEach(f => f());

@@ -1250,3 +1250,8 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .game-suit { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
 .game-suit button { height: 72px; border-radius: 20px; background: var(--surface-2); font-size: 36px; display: grid; place-items: center; transition: transform .15s var(--ease); }
 .game-pick button:active, .game-suit button:active { transform: scale(.92); }
+
+/* ============ B11: cari global ============ */
+.sh-n { margin-left: 6px; font-weight: 700; opacity: .5; }
+.sr-thumb { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; flex-shrink: 0; }
+.list-item mark { background: rgba(var(--accent-rgb), .18); color: inherit; border-radius: 4px; padding: 0 2px; }

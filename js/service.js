@@ -179,6 +179,12 @@ function receive(chatId, from, payload) {
   c.hidden = false;
   if (db.users[from] && !db.users[from].remote) { db.users[from].online = true; db.users[from].lastSeen = Date.now(); }
   const mentionsMe = c.type === 'group' && mentionRe(db.me.name).test(m.text || '');
+  const f = api.focus();
+  if (f && c.type === 'direct' && !m.auto && m.type !== 'system' && !f.replied.includes(chatId)) {
+    f.replied.push(chatId);
+    const jam = new Date(f.until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    setTimeout(() => api.send(chatId, { type: 'text', text: `🎧 Lagi fokus${f.note ? ' (' + f.note + ')' : ''} sampai ${jam}. Nanti aku bales ya!`, auto: true }), 900);
+  }
   if (activeChat !== chatId || document.hidden) {
     c.unread = (c.unread || 0) + 1;
     if (mentionsMe) { c.mention = true; addActivity('mention', from, { chatId }, m.text); }
@@ -656,19 +662,35 @@ export const api = {
   moods() {
     const now = Date.now(), out = [];
     for (const [id, m] of Object.entries(db.moods || {})) {
-      if (now - m.ts > 864e5) continue;
+      if (now - m.ts > 864e5 || (m.focus && m.focus < now)) continue;
       if (id !== ME && ((!db.friends.includes(id) && !db.users[id]?.remote) || db.blocked.includes(id))) continue;
       out.push({ userId: id, ...m });
     }
     return out.sort((a, b) => b.ts - a.ts);
   },
-  moodOf(id) { const m = db.moods?.[id]; return m && Date.now() - m.ts < 864e5 ? m : null; },
+  moodOf(id) { const m = db.moods?.[id]; return m && Date.now() - m.ts < 864e5 && !(m.focus && m.focus < Date.now()) ? m : null; },
+  /* mode fokus: notif diem, chat personal dibales otomatis sekali, teman lihat 🎧 */
+  focus() { const f = db.focus; return f && f.until > Date.now() ? f : null; },
+  setFocus(until, note) {
+    if (!until) {
+      const prev = db.focus?.prev || null;
+      db.focus = null; save();
+      api.setMood(prev && Date.now() - prev.ts < 864e5 ? prev : null);
+    } else {
+      const cur = db.moods?.[ME];
+      db.focus = { until, note: note || '', prev: db.focus?.prev ?? (cur && !cur.focus ? cur : null), replied: [] };
+      save();
+      api.setMood({ emoji: '🎧', text: note || 'Lagi fokus', focus: until });
+    }
+    bus.emit('focus');
+  },
+  endFocusIfDone() { if (db.focus && db.focus.until <= Date.now()) api.setFocus(0); },
   setMood(m) {
     db.moods ||= {};
-    if (m) db.moods[ME] = { emoji: m.emoji, text: m.text || '', ts: Date.now() }; else delete db.moods[ME];
+    if (m) db.moods[ME] = { emoji: m.emoji, text: m.text || '', ts: Date.now(), ...(m.focus ? { focus: m.focus } : {}) }; else delete db.moods[ME];
     save(); bus.emit('moods');
     if (db.remote) hooks.profile?.({ mood: db.moods[ME] || null });
-    if (m) {
+    if (m && !m.focus) {
       const fans = shuffle(db.friends.filter(id => !db.users[id]?.official)).slice(0, 2);
       fans.forEach((id, i) => setTimeout(() => { if (db.moods[ME]) addActivity('mood', id, { userId: ME }, `${m.emoji} ${m.text || ''}`.trim()); }, 6000 + i * 5000));
     }

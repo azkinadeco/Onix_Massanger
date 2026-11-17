@@ -16,6 +16,8 @@ export function chatAvatar(c, size = 52, opts = {}) {
 export function presence(u) {
   if (!u) return '';
   if (u.official) return 'Akun resmi';
+  const fm = api.moodOf(u.id);
+  if (fm?.focus) return `🎧 Fokus s/d ${new Date(fm.focus).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
   if (u.remote) return !api.seenVisible(u.id) ? '@' + u.handle : u.online ? 'Online' : u.lastSeen ? `Aktif ${ago(u.lastSeen)}` : '@' + u.handle;
   return u.online ? 'Online' : `Aktif ${ago(u.lastSeen)}`;
 }

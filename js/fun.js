@@ -656,3 +656,30 @@ export function memoryOf(chatId) {
 const memoSeen = new Set();
 export const memoDismiss = k => memoSeen.add(k);
 export const memoHidden = k => memoSeen.has(k);
+
+/* ============ MODE FOKUS ============ */
+export function focusSheet() {
+  const f = api.focus();
+  const tmr = (() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(8, 0, 0, 0); return +d; })();
+  const opts = [['30 menit', 30 * 60e3], ['1 jam', 3600e3], ['2 jam', 7200e3], ['Sampai besok', 0]];
+  const jam = t => new Date(t).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  sheet({
+    top: `<div class="fc-sh">
+      <div class="fc-orb">🎧</div>
+      <b>${f ? `Fokus sampai ${jam(f.until)}` : 'Mode fokus'}</b>
+      <small>Notif diem, chat personal dibales otomatis, teman lihat kamu lagi fokus</small>
+      ${f ? `<button class="btn danger-ghost wide" data-off>Matikan fokus</button>` : `
+      <input class="fc-in" maxlength="30" placeholder="Lagi ngapain? (mis. belajar)">
+      <div class="rm-opts">${opts.map(([l], i) => `<button data-f="${i}"><b>${l}</b><small>s/d ${jam(opts[i][1] ? Date.now() + opts[i][1] : tmr)}</small></button>`).join('')}</div>`}
+    </div>`,
+    onMount: (s, close) => s.addEventListener('click', e => {
+      if (e.target.closest('[data-off]')) { e.stopPropagation(); api.setFocus(0); toast('Fokus selesai 👋'); close(); return; }
+      const b = e.target.closest('[data-f]');
+      if (!b) return;
+      e.stopPropagation();
+      const ms = opts[+b.dataset.f][1];
+      api.setFocus(ms ? Date.now() + ms : tmr, s.querySelector('.fc-in').value.trim());
+      toast('Mode fokus nyala 🎧'); buzz(10); close();
+    }),
+  });
+}

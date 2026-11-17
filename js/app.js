@@ -178,6 +178,7 @@ function TabsScreen() {
         <div class="set-group">
           ${link('online', 'globe', 'Onix Online', api.remote.state() ? `<span class="on-pill">@${esc(api.remote.state().handle)}</span>` : '')}
           ${link('wallet', 'wallet', 'Onix Pay', `<span class="count">${(api.wallet().balance / 1000).toLocaleString('id-ID')}rb</span>`)}
+          ${link('focus', 'headphones', 'Mode fokus', api.focus() ? `<span class="on-pill">🎧 s/d ${new Date(api.focus().until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>` : '')}
           ${link('keep', 'bookmark', 'Keep', `<span class="count">${api.keep().length || ''}</span>`)}
           ${link('archived', 'archive', 'Arsip', `<span class="count">${api.archived().length || ''}</span>`)}
           ${s.passcode ? link('hidden-chats', 'lock', 'Tersembunyi', '') : ''}
@@ -296,6 +297,7 @@ function TabsScreen() {
     'clear-calls': async () => { if (await confirmBox({ title: 'Hapus riwayat panggilan?', ok: 'Hapus', danger: true })) api.clearCalls(); },
     'edit-profile': () => router.push(EditProfileScreen()),
     keep: () => router.push(KeepScreen()),
+    focus: async () => (await import('./fun.js')).focusSheet(),
     feed: t => { if (st.feed === t.dataset.v) return; st.feed = t.dataset.v; renderBody(); body.scrollTo({ top: 0 }); },
     'hidden-chats': () => openHiddenChats(),
     storage: () => router.push(StorageScreen()),
@@ -502,7 +504,9 @@ async function checkReminders() {
 setInterval(checkReminders, 15e3);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReminders(); });
 
+setInterval(() => api.ready && api.endFocusIfDone(), 15e3);
 bus.on('notify', ({ chat, msg, mention }) => {
+  if (api.focus() && !mention) return; // lagi fokus: diem
   const s = api.settings();
   if (router.top()?.chatId === chat.id && !document.hidden) return;
   if (s.sound) playPop();

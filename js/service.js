@@ -129,6 +129,9 @@ const GROUP_INCOMING = ['siapa yg udah sampe?', 'guys liat ini wkwk', 'vote dong
 const BOT = ['Ini akun resmi (dummy) Onix 🤖 Coba chat teman kamu ya!', 'Fitur server belum aktif, tapi semua tampilan udah bisa kamu coba ✨', 'Tips: tahan pesan buat kasih reaksi 😆'];
 
 function replyFor(msg) {
+  if (msg.type === 'nudge') return Math.random() < 0.4 ? { type: 'nudge' } : { text: pick(['apaa 😆', 'iyaa kenapaa', 'hadir 🙋', 'jangan colek colek ih']) };
+  if (msg.type === 'capsule') return { text: pick(['penasaran bgt isinya 😭', 'kapsul apaan tuh 👀', 'oke aku tunggu ya ⏳']) };
+  if (msg.type === 'scratch') return { text: pick(['wkwk apaan nih', 'udah aku gosok 🫣', 'HAH 😳']) };
   if (msg.type === 'sticker') return Math.random() < 0.6 ? { type: 'sticker', ...(Math.random() < 0.5 ? pick(ANIM_REPLIES) : { sticker: pick(STICKER_REPLIES) }) } : { text: pick(['wkwk lucu stickernya', '😂😂', 'apaan sih wkwk']) };
   if (msg.type === 'image') return { text: pick(msg.album ? ['banyak bgt fotonya 😭', 'spam foto nih wkwk', 'yang ketiga bagus!', 'kirim lagi dong 📸'] : ['wih keren bgt 📸', 'aesthetic parah', 'save ah', 'dimana tuh?']) };
   if (msg.type === 'voice') return { text: pick(['bentar aku dengerin dulu 🎧', 'oke paham', 'wkwk suaranya lucu']) };
@@ -800,6 +803,8 @@ export const api = {
     }, hold));
     return m;
   },
+  // status lokal (nggak dikirim ke server), mis. kapsul udah dibuka / pesan udah digosok
+  setLocal(chatId, mid, patch) { const m = db.messages[chatId]?.find(x => x.id === mid); if (m) { Object.assign(m, patch); emitChat(chatId); } },
   cancelHold(chatId, mid) {
     const t = holds.get(mid);
     if (!t) return null;

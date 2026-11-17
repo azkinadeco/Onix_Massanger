@@ -1453,3 +1453,42 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 @keyframes undoBar { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 .msg-row:has(.undo-send) .bubble, .msg-row:has(.undo-send) .sticker { opacity: .6; }
 .sheet:has(.calm) .sheet-cancel { display: none; }
+
+/* ============ C4-6: kapsul, gosok, colek ============ */
+.fun-compose { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px 2px; }
+.fc-h { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 30px; text-align: center; }
+.fc-h b { font-size: 18px; }
+.fc-h small { font-size: 13px; color: var(--text-2); }
+.fc-ta { width: 100%; min-height: 104px; resize: none; border: 1.5px solid transparent; border-radius: 18px; padding: 12px 14px; background: var(--surface-2); color: var(--text); font: inherit; font-size: 16px; outline: none; }
+.fc-ta:focus { border-color: rgba(var(--accent-rgb), .5); background: var(--surface); }
+.fc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fc-chips > * { height: 34px; padding: 0 13px; border-radius: 17px; background: var(--surface-2); font-size: 13.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; position: relative; }
+.fc-chips .on { background: var(--accent); color: #fff; }
+.fc-cal input { position: absolute; inset: 0; opacity: 0; width: 100%; }
+.fc-cal .ic { width: 17px; height: 17px; }
+
+.bubble.capsule { display: flex; align-items: center; gap: 10px; min-width: 210px; color: #fff; background: linear-gradient(135deg, #7C5CFF, #B05CFF 60%, #FF7AC6); text-align: left; }
+.msg-row .bubble.capsule { border-radius: 20px; }
+.cap-ic { font-size: 28px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.2)); }
+.cap-t { display: flex; flex-direction: column; flex: 1; }
+.cap-t b { font-size: 15px; }
+.cap-t small { font-size: 12.5px; opacity: .85; }
+.cap-date { font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 10px; background: rgba(255,255,255,.2); white-space: nowrap; }
+.capsule.sealed .cap-ic { animation: capTip 3s ease-in-out infinite; }
+@keyframes capTip { 0%, 80%, 100% { transform: rotate(0); } 85% { transform: rotate(180deg); } 95% { transform: rotate(180deg); } }
+.capsule.ready { animation: capGlow 1.6s ease-in-out infinite; }
+.capsule.ready .cap-ic { animation: pop 1.6s ease-in-out infinite; }
+@keyframes capGlow { 50% { box-shadow: 0 0 0 6px rgba(176,92,255,.25); } }
+.bubble.capsule.open { flex-direction: column; align-items: flex-start; gap: 4px; animation: pop .45s var(--ease); }
+.cap-from { font-size: 11.5px; font-weight: 700; opacity: .85; }
+
+.bubble.scratch { position: relative; min-width: 170px; min-height: 46px; overflow: hidden; }
+.scratch-cv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; transition: opacity .35s; border-radius: inherit; }
+.scratch-cv.gone { opacity: 0; }
+.bubble.scratch.done .txt { animation: pop .4s var(--ease); }
+.sc-tag { display: block; font-size: 11px; font-weight: 700; opacity: .75; margin-bottom: 2px; }
+
+.sys.nudge span { background: rgba(255, 176, 32, .16); color: #C77A00; font-weight: 600; }
+[data-theme=dark] .sys.nudge span { color: #FFC24D; }
+.shake { animation: shake .6s cubic-bezier(.36,.07,.19,.97); }
+@keyframes shake { 10%, 90% { transform: translateX(-2px); } 20%, 80% { transform: translateX(5px); } 30%, 50%, 70% { transform: translateX(-9px) rotate(-.6deg); } 40%, 60% { transform: translateX(9px) rotate(.6deg); } }

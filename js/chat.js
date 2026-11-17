@@ -1,6 +1,7 @@
 import { TTL_OPTS, ttlLabel, suitResult, rupiah } from './service.js';
 import { canCall, callSession } from './backend.js';
-import { FUN_ITEMS, calmOn, calmReason, calmSheet, undoOn, UNDO_MS } from './fun.js';
+import * as fun from './fun.js';
+import { FUN_ITEMS, calmOn, calmReason, calmSheet, undoOn, UNDO_MS, SECRET_TYPES } from './fun.js';
 import { api, bus, ME, firstName, mentionRe } from './service.js';
 import { $, h, esc, linkify, avatar, hm, dayLabel, isSameDay, dur, hash, vibrate, pickFile, pickFiles, compressImage, copyText, isJumbo } from './util.js';
 import { icon } from './icons.js';
@@ -305,11 +306,12 @@ function ChatScreen(chatId) {
 
   /* ---------- messages ---------- */
   function brk(a, b) {
-    return !a || !b || a.from !== b.from || a.type === 'system' || b.type === 'system' || Math.abs(b.ts - a.ts) > 5 * 60e3 || !isSameDay(a.ts, b.ts);
+    return !a || !b || a.from !== b.from || a.type === 'system' || b.type === 'system' || a.type === 'nudge' || b.type === 'nudge' || Math.abs(b.ts - a.ts) > 5 * 60e3 || !isSameDay(a.ts, b.ts);
   }
 
   function msgHtml(m, prev, next, group) {
     if (m.type === 'system') return `<div class="sys"><span>${esc(m.text)}</span></div>`;
+    if (m.type === 'nudge') return fun.nudgeHtml(m, c());
     const mine = m.from === ME;
     const u = api.user(m.from) || { name: '?' };
     const first = brk(prev, m), last = brk(m, next);
@@ -345,6 +347,10 @@ function ChatScreen(chatId) {
       body = p
         ? `<button class="bubble postmsg" data-act="open-post" data-pid="${p.id}">${img ? `<img src="${img}" alt="">` : ''}<span class="pm-txt"><span class="pm-who">${avatar(pu, 20)}<b>${esc(pu?.name || '')}</b></span>${p.text ? `<span class="pm-body">${esc(p.text.slice(0, 120))}</span>` : ''}<small>${icon('voom', 'tiny')} VOOM${p.images?.length > 1 ? ` · ${p.images.length} foto` : ''}</small></span></button>`
         : `<div class="bubble unsent">${icon('voom', 'tiny')} Post udah dihapus</div>`;
+    } else if (m.type === 'capsule') {
+      body = fun.capsuleHtml(m);
+    } else if (m.type === 'scratch') {
+      body = fun.scratchHtml(m, mine);
     } else if (m.type === 'poll') {
       body = pollHtml(m);
     } else if (m.type === 'event') {
@@ -414,6 +420,8 @@ function ChatScreen(chatId) {
     const lm = list[list.length - 1];
     const newLast = lm && lm.id !== lastId;
     if (newLast && !firstRender) { const fx = effectOf(lm); if (fx) playEffect(fx, el); }
+    if (newLast && !firstRender && lm.type === 'nudge' && Date.now() - lm.ts < 20e3) fun.shake(el, lm.from !== ME);
+    fun.initScratch(inner, mid => api.setLocal(chatId, mid, { scratched: true }));
     if (firstRender || stick || (newLast && lm.from === ME)) { scrollBottom(); }
     else if (newLast) { newCount++; showJump(); }
     lastId = lm?.id;
@@ -532,6 +540,9 @@ function ChatScreen(chatId) {
     vibrate(6);
   }
   const calmOk = new Set();
+  function doNudge() { if (!fun.nudge(chatId)) toast('Sabar, baru aja nyolek 😆'); else vibrate(10); }
+  // kapsul: cek tiap 30 dtk biar hitung mundurnya jalan & kebuka sendiri
+  const capT = setInterval(() => { if (api.messages(chatId).some(m => m.type === 'capsule' && !m.capOpened)) renderMsgs(); }, 30e3);
   function sendSticker(s, anim) {
     api.send(chatId, withReply({ type: 'sticker', sticker: s, ...(anim ? { anim } : {}) }), { hold: undoOn() ? UNDO_MS : 0 });
     vibrate(6);
@@ -740,9 +751,10 @@ function ChatScreen(chatId) {
       acts.push({ label: 'Balas', icon: 'reply', run: () => setReply(m) });
       if (m.type === 'text') acts.push({ label: 'Salin', icon: 'copy', run: async () => { await copyText(m.text); toast('Disalin'); } });
       if (mine && m.type === 'text' && Date.now() - m.ts < 15 * 60e3) acts.push({ label: 'Edit', icon: 'edit', run: () => setEdit(m) });
-      if (m.type !== 'poll') acts.push({ label: 'Teruskan', icon: 'forward', run: () => forwardMessage(m) });
-      acts.push({ label: 'Keep', icon: 'bookmark', run: () => keepFromMessage(m, c()) });
-      acts.push({ label: c().announcement?.mid === m.id ? 'Lepas pengumuman' : 'Pin pengumuman', icon: 'megaphone', run: () => api.setAnnouncement(chatId, c().announcement?.mid === m.id ? null : m) });
+      const secret = SECRET_TYPES.includes(m.type);
+      if (m.type !== 'poll' && !secret) acts.push({ label: 'Teruskan', icon: 'forward', run: () => forwardMessage(m) });
+      if (!secret) acts.push({ label: 'Keep', icon: 'bookmark', run: () => keepFromMessage(m, c()) });
+      if (!secret) acts.push({ label: c().announcement?.mid === m.id ? 'Lepas pengumuman' : 'Pin pengumuman', icon: 'megaphone', run: () => api.setAnnouncement(chatId, c().announcement?.mid === m.id ? null : m) });
       if (mine && c().type === 'group') acts.push({ label: 'Dibaca oleh', icon: 'eye', run: () => showReaders(m) });
       if (m.type === 'video' || m.type === 'file') acts.push({ label: 'Simpan', icon: 'download', run: () => openMediaMsg(m) });
       if (m.type === 'image') acts.push({ label: 'Simpan foto', icon: 'download', run: () => { const a = document.createElement('a'); a.href = m.src; a.download = 'onix-foto.jpg'; a.click(); } });
@@ -771,6 +783,7 @@ function ChatScreen(chatId) {
     else acts.push({ label: 'Lihat profil', icon: 'user', run: () => router.push(ProfileScreen(api.peerOf(ch).id)) });
     acts.push({ label: 'Video call', icon: 'video', run: () => startCall(chatId, true) });
     acts.push({ label: 'Cari', icon: 'search', run: openSearch });
+    acts.push({ label: 'Colek', icon: 'hand', run: doNudge });
     if (ch.type === 'group') acts.push({ label: 'Catatan', icon: 'note', run: () => router.push(NotesScreen(chatId)) });
     acts.push({ label: 'Album', icon: 'grid', run: () => router.push(AlbumScreen(chatId)) });
     acts.push({ label: 'Wallpaper', icon: 'palette', run: () => wallpaperSheet(chatId) });
@@ -834,7 +847,7 @@ function ChatScreen(chatId) {
   sc.addEventListener('touchstart', e => {
     const row = e.target.closest('.msg-row');
     const t = e.touches[0];
-    if (!row || row.querySelector('.unsent') || t.clientX - el.getBoundingClientRect().left < 30) return;
+    if (!row || row.querySelector('.unsent') || e.target.closest('canvas') || t.clientX - el.getBoundingClientRect().left < 30) return;
     sw = { row, x: t.clientX, y: t.clientY, dx: 0, active: false, hit: false };
   }, { passive: true });
   sc.addEventListener('touchmove', e => {
@@ -896,6 +909,10 @@ function ChatScreen(chatId) {
       if (r === null) toast('Saldo kurang 🥲'); else if (r) { toast(`Dibayar ${rupiah(m.per)} ✅`); vibrate(10); }
     },
     retry: t => api.remote.retry(chatId, t.dataset.mid),
+    'att-capsule': () => { closePanel(); fun.capsuleSheet(chatId); },
+    'att-scratch': () => { closePanel(); fun.scratchSheet(chatId); },
+    'att-nudge': () => { closePanel(); doNudge(); },
+    'cap-open': t => { api.setLocal(chatId, t.dataset.mid, { capOpened: true }); playEffect('confetti', el); vibrate(15); },
     'undo-send': t => {
       const m = api.cancelHold(chatId, t.dataset.mid);
       if (!m) return;
@@ -995,6 +1012,7 @@ function ChatScreen(chatId) {
     destroy() {
       offs.forEach(f => f());
       document.removeEventListener('visibilitychange', onVis);
+      clearInterval(capT);
       stopPlay();
       if (rec) stopRec(false);
       api.setDraft(chatId, ta.value.trim());

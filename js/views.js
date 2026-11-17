@@ -27,7 +27,7 @@ export function preview(m, c) {
   if (m.from === ME) who = 'Kamu: ';
   else if (c.type === 'group') who = firstName(api.user(m.from)?.name) + ': ';
   if (m.unsent) return who + 'Pesan ditarik';
-  const body = { sticker: 'Sticker ' + (m.sticker || ''), image: m.album?.length > 1 ? `📷 ${m.album.length} foto` : '📷 Foto', voice: '🎤 Voice note', location: '📍 ' + (m.title || 'Lokasi'), poll: '📊 ' + (m.poll?.q || 'Polling'), event: '📅 ' + (m.event?.title || 'Event'), video: '🎬 Video', file: '📎 ' + (m.name || 'File'), post: '📰 Post VOOM', game: { dice: '🎲 Dadu', coin: '🪙 Koin', suit: '✊ Suit' }[m.game], pay: { send: '💸 Kirim uang', request: '💸 Minta uang', split: '💸 Patungan' }[m.kind] }[m.type] || m.text;
+  const body = { sticker: 'Sticker ' + (m.sticker || ''), image: m.album?.length > 1 ? `📷 ${m.album.length} foto` : '📷 Foto', voice: '🎤 Voice note', location: '📍 ' + (m.title || 'Lokasi'), poll: '📊 ' + (m.poll?.q || 'Polling'), event: '📅 ' + (m.event?.title || 'Event'), video: '🎬 Video', file: '📎 ' + (m.name || 'File'), capsule: '⏳ Kapsul waktu', scratch: '🫣 Pesan gosok', nudge: '👉 Colek!', doodle: '🖍️ Coretan', post: '📰 Post VOOM', game: { dice: '🎲 Dadu', coin: '🪙 Koin', suit: '✊ Suit' }[m.game], pay: { send: '💸 Kirim uang', request: '💸 Minta uang', split: '💸 Patungan' }[m.kind] }[m.type] || m.text;
   return who + body;
 }
 

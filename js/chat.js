@@ -171,6 +171,7 @@ function waveBars(id, n = 26) {
 }
 
 function ChatScreen(chatId) {
+  const readAtOpen = api.chat(chatId)?.readAt || 0;
   const el = h(`<div class="chat-screen">
     <header class="navbar chat-nav">
       <button class="icon-btn back-btn" data-act="back" aria-label="Kembali">${icon('back')}<b class="back-count"></b></button>
@@ -189,6 +190,7 @@ function ChatScreen(chatId) {
     </div>
     <div class="announce" hidden></div>
     <div class="memo-bar" hidden></div>
+    <div class="catch-bar" hidden></div>
     <div class="msgs"><div class="msgs-inner"></div><div class="typing-row" hidden></div></div>
     <button class="jump" hidden>${icon('chevronDown')}<b></b></button>
     <div class="composer-wrap">
@@ -210,6 +212,7 @@ function ChatScreen(chatId) {
   </div>`);
 
   const sc = $('.msgs', el), inner = $('.msgs-inner', el), ta = $('textarea', el);
+  el.addEventListener('click', e => { const b = e.target.closest('.attach-grid.sm [data-act^="att-"]'); if (b) fun.noteUse(b.dataset.act.slice(4)); }, true);
   const sendBtn = $('.send-btn', el), panel = $('.panel', el), jump = $('.jump', el);
   onLongPress(panel, '.my-st', async n => { if (await confirmBox({ title: 'Hapus sticker ini?', ok: 'Hapus', danger: true })) api.removeMySticker(n.dataset.id); });
   const replyBar = $('.reply-bar', el), recBar = $('.rec-bar', el), typingRow = $('.typing-row', el);
@@ -579,6 +582,14 @@ function ChatScreen(chatId) {
     if (!memoBar.hidden) memoBar.innerHTML = `<button class="memo-main" data-act="memo-go"><span class="memo-ic">📅</span><span class="memo-t"><b>${esc(mm.label)} hari ini</b><small>${esc(mm.text)}</small></span></button><button class="icon-btn sm" data-act="memo-x" aria-label="Tutup">${icon('x')}</button>`;
   }
   setTimeout(renderMemo, 600);
+  // ringkasan kalau banyak pesan belum dibaca
+  const cu = fun.catchUp(chatId, readAtOpen);
+  const catchBar = $('.catch-bar', el);
+  if (cu) {
+    catchBar.innerHTML = `<div class="cu-t"><b>📝 ${cu.n} pesan baru</b>${cu.sub ? `<small>${esc(cu.sub)}</small>` : ''}</div><button class="cu-btn" data-act="cu-first">${icon('chevronUp', 'tiny')} Awal</button>${cu.mentions.length ? `<button class="cu-btn at" data-act="cu-at">@ ${cu.mentions.length}</button>` : ''}<button class="icon-btn sm" data-act="cu-x" aria-label="Tutup">${icon('x')}</button>`;
+    catchBar.hidden = false;
+  }
+  let cuAt = 0;
   function sendSticker(s, anim) {
     api.send(chatId, withReply({ type: 'sticker', sticker: s, ...(anim ? { anim } : {}) }), { hold: undoOn() ? UNDO_MS : 0 });
     vibrate(6);
@@ -622,9 +633,9 @@ function ChatScreen(chatId) {
   function renderPanel() {
     if (panelMode === 'plus') {
       const basic = [['photo', 'image', 'Foto', '#7C5CFF'], ['camera', 'camera', 'Kamera', '#FF3D81'], ['video', 'film', 'Video', '#14B8C4'], ['file', 'file', 'File', '#5B6CFF'], ['location', 'location', 'Lokasi', '#10B26C'], ['voice', 'mic', 'Voice', '#FF7A1A'], ['poll', 'poll', 'Polling', '#E1A100'], ['event', 'calendar', 'Event', '#2E7BFF']];
-      const fun = [...FUN_ITEMS, ['game', 'dice', 'Game', '#FF3D6E'], ['pay', 'wallet', 'Pay', '#0FB46C']];
-      const grid = items => `<div class="attach-grid">${items.map(([a, ic, label, col]) => `<button data-act="att-${a}"><span style="--c:${col}">${icon(ic)}</span><small>${label}</small></button>`).join('')}</div>`;
-      panel.innerHTML = `<div class="attach-scroll">${grid(basic)}<div class="attach-h">✨ Khas Onix</div>${grid(fun)}</div>`;
+      const funItems = fun.sortByUse([...FUN_ITEMS, ['game', 'dice', 'Game', '#FF3D6E'], ['pay', 'wallet', 'Pay', '#0FB46C']]);
+      const grid = (items, cls = '') => `<div class="attach-grid ${cls}">${items.map(([a, ic, label, col]) => `<button data-act="att-${a}"><span style="--c:${col}">${icon(ic)}</span><small>${label}</small></button>`).join('')}</div>`;
+      panel.innerHTML = `<div class="attach-scroll">${grid(basic)}<div class="attach-h">✨ Khas Onix</div>${grid(funItems, 'sm')}</div>`;
     } else if (panelMode === 'stickers') {
       const owned = api.packs();
       if (stickerTab !== 'emoji' && stickerTab !== 'mine' && !owned.includes(stickerTab)) stickerTab = owned[0] || 'emoji';
@@ -954,6 +965,9 @@ function ChatScreen(chatId) {
     'ice-topic': t => { ta.value = t.dataset.t; autosize(); ta.focus(); iceBar.hidden = true; },
     'ice-more': () => renderIce(true),
     'ice-x': () => { iceOff.add(fun.icebreaker(chatId)?.key); iceBar.hidden = true; },
+    'cu-first': () => { bindGoto(cu.first); catchBar.hidden = true; },
+    'cu-at': () => { bindGoto(cu.mentions[cuAt++ % cu.mentions.length]); },
+    'cu-x': () => { catchBar.hidden = true; },
     'att-checkin': () => { closePanel(); fun.checkinSheet(chatId); },
     'ck-ans': t => fun.answerCheckin(chatId, t.dataset.mid, +t.dataset.v),
     'att-quiz': () => { closePanel(); router.push(fun.QuizComposeScreen(chatId)); },

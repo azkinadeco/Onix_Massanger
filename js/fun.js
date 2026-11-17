@@ -5,7 +5,7 @@ import { icon } from './icons.js';
 import { router, bindActs, navbar, sheet, toast } from './ui.js';
 
 // item tambahan di menu + : [aksi, ikon, label, warna]
-export const FUN_ITEMS = [['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Hitung mundur', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4']];
+export const FUN_ITEMS = [['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4']];
 
 /* ============ MODE KALEM ============
    Pesan yang kelihatan lagi emosi -> ditawarin tahan dulu sebelum kekirim */
@@ -726,4 +726,27 @@ export function answerCheckin(chatId, mid, v) {
   if (ansFor(chatId, mid).some(a => a.from === ME)) return;
   api.send(chatId, { type: 'checkans', ref: mid, v });
   buzz(10);
+}
+
+/* ============ MENU PINTAR ============ yang sering dipakai naik ke depan */
+const USE_KEY = 'onix:funUse';
+const useMap = () => { try { return JSON.parse(localStorage.getItem(USE_KEY) || '{}'); } catch { return {}; } };
+export function noteUse(act) { try { const u = useMap(); u[act] = (u[act] || 0) + 1; localStorage.setItem(USE_KEY, JSON.stringify(u)); } catch { /* */ } }
+export function sortByUse(items) { const u = useMap(); return items.map((x, i) => [x, i]).sort((a, b) => (u[b[0][0]] || 0) - (u[a[0][0]] || 0) || a[1] - b[1]).map(x => x[0]); }
+
+/* ============ RINGKASAN BELUM DIBACA ============ */
+export function catchUp(chatId, since) {
+  const ch = api.chat(chatId);
+  const list = api.messages(chatId).filter(m => m.from !== ME && m.type !== 'system' && m.ts > since);
+  if (list.length < 8) return null;
+  const by = {}, kinds = {};
+  const mentions = [];
+  const re = new RegExp('@' + firstName(api.me().name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
+  list.forEach(m => { by[m.from] = (by[m.from] || 0) + 1; kinds[m.type] = (kinds[m.type] || 0) + 1; if (re.test(m.text || '')) mentions.push(m.id); });
+  const top = Object.entries(by).sort((a, b) => b[1] - a[1])[0];
+  const bits = [];
+  if (ch.type === 'group' && top) bits.push(`${firstName(api.user(top[0])?.name || '')} paling rame`);
+  const K = { image: 'foto', video: 'video', voice: 'voice', poll: 'polling', event: 'event', pay: 'Pay', location: 'lokasi', file: 'file' };
+  for (const [k, l] of Object.entries(K)) if (kinds[k]) bits.push(`${kinds[k]} ${l}`);
+  return { n: list.length, first: list[0].id, mentions, sub: bits.slice(0, 4).join(' · ') };
 }

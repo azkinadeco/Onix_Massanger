@@ -55,6 +55,12 @@ function migrate(d) {
   d.notes ||= {};
   d.scheduled ||= [];
   d.packs ||= DEFAULT_PACKS.slice();
+  if (!d.moods) {
+    const t = Date.now();
+    const seed = [['☕', 'butuh kopi'], ['🎧', 'lagi denger NIKI'], ['📚', 'deadline mode'], ['🏃‍♀️', 'otw gym'], ['😴', 'ngantuk parah']];
+    d.moods = {};
+    (d.friends || []).filter(id => d.users[id] && !d.users[id].official).slice(0, 5).forEach((id, i) => { d.moods[id] = { emoji: seed[i][0], text: seed[i][1], ts: t - (i * 3 + 1) * 3600e3 }; });
+  }
   if (!d.activity) {
     const t = Date.now();
     d.activity = [
@@ -322,12 +328,37 @@ export const api = {
     i >= 0 ? db.favorites.splice(i, 1) : db.favorites.push(id);
     save(); bus.emit('friends');
   },
+  /* status mood (24 jam) */
+  moods() {
+    const now = Date.now(), out = [];
+    for (const [id, m] of Object.entries(db.moods || {})) {
+      if (now - m.ts > 864e5) continue;
+      if (id !== ME && (!db.friends.includes(id) || db.blocked.includes(id))) continue;
+      out.push({ userId: id, ...m });
+    }
+    return out.sort((a, b) => b.ts - a.ts);
+  },
+  moodOf(id) { const m = db.moods?.[id]; return m && Date.now() - m.ts < 864e5 ? m : null; },
+  setMood(m) {
+    db.moods ||= {};
+    if (m) db.moods[ME] = { emoji: m.emoji, text: m.text || '', ts: Date.now() }; else delete db.moods[ME];
+    save(); bus.emit('moods');
+    if (m) {
+      const fans = shuffle(db.friends.filter(id => !db.users[id]?.official)).slice(0, 2);
+      fans.forEach((id, i) => setTimeout(() => { if (db.moods[ME]) addActivity('mood', id, { userId: ME }, `${m.emoji} ${m.text || ''}`.trim()); }, 6000 + i * 5000));
+    }
+  },
+  replyMood(userId, text) {
+    const m = api.moodOf(userId), c = api.directWith(userId);
+    api.send(c.id, { type: 'text', text, replyTo: { id: 'mood', name: 'Mood ' + firstName(db.users[userId]?.name || ''), text: `${m?.emoji || ''} ${m?.text || ''}`.trim() } });
+    return c.id;
+  },
   searchUsers(q) {
     q = q.trim().toLowerCase().replace(/^@/, '');
     if (!q) return [];
     return Object.values(db.users).filter(u => !u.official && (u.id.includes(q) || u.name.toLowerCase().includes(q)));
   },
-  searchUsers(q) { q = q.toLowerCase(); return Object.values(db.users).filter(u => u.id !== ME && !db.blocked.includes(u.id) && (u.name.toLowerCase().includes(q) || (u.id || '').toLowerCase().includes(q))).sort((a, b) => db.friends.includes(b.id) - db.friends.includes(a.id)); },
+  findPeople(q) { q = q.toLowerCase(); return Object.values(db.users).filter(u => u.id !== ME && !db.blocked.includes(u.id) && (u.name.toLowerCase().includes(q) || (u.id || '').toLowerCase().includes(q))).sort((a, b) => db.friends.includes(b.id) - db.friends.includes(a.id)); },
   recommended() { return Object.values(db.users).filter(u => !u.official && !db.friends.includes(u.id) && !db.blocked.includes(u.id)); },
   addFriend(id) {
     if (!db.friends.includes(id)) db.friends.push(id);

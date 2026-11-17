@@ -5,7 +5,7 @@ import { router, bindActs, onLongPress, toast, sheet, confirmBox, banner, initVi
 import { userAvatar, chatAvatar, chatRow, userRow, postCard, empty, preview } from './views.js';
 import { openChat, startCall } from './chat.js';
 import { clearMedia } from './media.js';
-import { KeepScreen, ArchivedScreen, setupPasscode, lockApp, StickerStoreScreen, ActivityScreen, hideChat, openHiddenChats, StorageScreen } from './features.js';
+import { KeepScreen, ArchivedScreen, setupPasscode, lockApp, StickerStoreScreen, ActivityScreen, hideChat, openHiddenChats, StorageScreen, moodRow, setMoodSheet, viewMoodSheet } from './features.js';
 import {
   OnboardingScreen, ProfileScreen, EditProfileScreen, AddFriendScreen, NewGroupScreen, FriendPicker,
   PostComposeScreen, postActions, openStories, addStoryFlow,
@@ -99,7 +99,7 @@ function TabsScreen() {
         const hits = [];
         api.chats().forEach(c => api.messages(c.id).forEach(m => { if (m.type === 'text' && !m.unsent && m.text.toLowerCase().includes(q)) hits.push({ c, m }); }));
         hits.sort((a, b) => b.m.ts - a.m.ts);
-        const people = api.searchUsers(q).filter(u => !byName.some(c => c.type === 'direct' && api.peerOf(c)?.id === u.id)).slice(0, 6);
+        const people = api.findPeople(q).filter(u => !byName.some(c => c.type === 'direct' && api.peerOf(c)?.id === u.id)).slice(0, 6);
         const posts = api.posts().filter(p => (p.text || '').toLowerCase().includes(q)).slice(0, 5);
         const sec = (label, n, html) => n ? `<div class="section-h">${label}<span class="sh-n">${n}</span></div>${html}` : '';
         const out = sec('Chat', byName.length, byName.map(chatRow).join(''))
@@ -110,8 +110,9 @@ function TabsScreen() {
       }
       const arc = st.filter === 'all' ? api.archived() : [];
       const arcRow = arc.length ? `<div class="list-item arc-row" data-act="archived"><span class="round-ic">${icon('archive')}</span><div class="li-main"><div class="li-name">Arsip</div></div><span class="count">${arc.length}</span>${arc.some(c => c.unread) ? '<i class="arc-dot"></i>' : ''}</div>` : '';
-      if (!list.length) return arcRow + (st.filter === 'unread' ? empty('✅', 'Semua udah kebaca') : empty('💬', 'Belum ada chat'));
-      return arcRow + list.map(chatRow).join('');
+      const moods = st.filter === 'all' ? moodRow() : '';
+      if (!list.length) return moods + arcRow + (st.filter === 'unread' ? empty('✅', 'Semua udah kebaca') : empty('💬', 'Belum ada chat'));
+      return moods + arcRow + list.map(chatRow).join('');
     },
   };
   const snip = (text, q) => { const t = String(text || '').replace(/\s+/g, ' '); const i = t.toLowerCase().indexOf(q); return i > 28 ? '…' + t.slice(i - 20) : t; };
@@ -217,12 +218,12 @@ function TabsScreen() {
   const schedule = () => { cancelAnimationFrame(rq); rq = requestAnimationFrame(() => { renderBody(); renderBadges(); }); };
   const watch = {
     home: ['friends', 'chats', 'stories', 'me', 'presence'],
-    chats: ['chats', 'presence'],
+    chats: ['chats', 'presence', 'moods'],
     voom: ['posts', 'me'],
     calls: ['calls', 'friends'],
     me: ['me', 'settings', 'keep', 'chats', 'packs'],
   };
-  const offs = ['friends', 'chats', 'stories', 'me', 'presence', 'posts', 'calls', 'settings', 'keep', 'packs', 'activity'].map(ev => bus.on(ev, () => {
+  const offs = ['friends', 'chats', 'stories', 'me', 'presence', 'posts', 'calls', 'settings', 'keep', 'packs', 'activity', 'moods'].map(ev => bus.on(ev, () => {
     if (ev === 'chats') renderBadges();
     if (watch[cur].includes(ev)) schedule();
     if (ev === 'me' && (cur === 'home' || cur === 'voom')) renderHead();
@@ -254,6 +255,8 @@ function TabsScreen() {
     'new-chat': () => router.push(FriendPicker({ title: 'Chat baru', onDone: ([id]) => { history.back(); setTimeout(() => openChat(api.directWith(id).id), 350); } })),
     'new-call': () => router.push(FriendPicker({ title: 'Telepon siapa?', onDone: ([id]) => { history.back(); setTimeout(() => startCall(api.directWith(id).id, false), 350); } })),
     'open-chat': t => openChat(t.dataset.id),
+    'mood-me': () => setMoodSheet(),
+    'mood-view': t => viewMoodSheet(t.dataset.id),
     'open-hit': t => openChat(t.dataset.id, { mid: t.dataset.mid }),
     profile: t => router.push(ProfileScreen(t.dataset.id)),
     'compose-menu': () => sheet({ actions: [

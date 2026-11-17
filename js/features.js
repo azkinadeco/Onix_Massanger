@@ -406,6 +406,7 @@ const ACT = {
   friend: ['userPlus', '#0FB46C', () => 'nambahin kamu jadi teman'],
   missed: ['phoneOff', '#FF3B5C', a => `panggilan ${a.text || ''} tak terjawab`],
   story: ['voom', '#FF7A1A', a => `bales story: ${a.text}`],
+  mood: ['smile', '#FFB800', a => `suka mood kamu ${a.text}`],
 };
 export function ActivityScreen() {
   const el = h(`<div class="sub-screen">${navbar('Notifikasi', `<button class="icon-btn" data-act="clear" aria-label="Hapus semua">${icon('trash')}</button>`)}<div class="content act-body"></div></div>`);
@@ -525,4 +526,57 @@ export function StorageScreen() {
   });
   render();
   return { el };
+}
+
+/* ================= STATUS MOOD ================= */
+const MOOD_EMO = ['😊', '😴', '☕', '🎧', '📚', '🏃‍♀️', '🍜', '🎮', '🥲', '🔥', '💅', '🫠'];
+export function moodRow() {
+  const list = api.moods();
+  const mine = list.find(m => m.userId === ME);
+  const others = list.filter(m => m.userId !== ME);
+  const me = api.me();
+  const item = (u, m, act) => `<button class="mood-item" data-act="${act}" data-id="${u.id}">
+    <span class="mood-bub ${m ? '' : 'add'}">${m ? `<b>${m.emoji}</b>${m.text ? `<span>${esc(m.text)}</span>` : ''}` : icon('plus')}</span>
+    ${avatar(u, 58)}<small>${esc(u.id === ME ? 'Kamu' : firstName(u.name))}</small></button>`;
+  return `<div class="mood-row">${item(me, mine, 'mood-me')}${others.map(m => item(api.user(m.userId), m, 'mood-view')).join('')}</div>`;
+}
+export function setMoodSheet() {
+  const cur = api.moodOf(ME);
+  let emo = cur?.emoji || MOOD_EMO[0];
+  sheet({
+    top: `<div class="mood-set">
+      <div class="ms-preview"><span class="ms-emo">${emo}</span></div>
+      <input class="field" maxlength="40" placeholder="Lagi apa?" value="${esc(cur?.text || '')}">
+      <div class="ms-grid">${MOOD_EMO.map(e => `<button data-e="${e}" class="${e === emo ? 'on' : ''}">${e}</button>`).join('')}</div>
+      <div class="ms-btns">${cur ? `<button class="btn ghost" data-clear>${icon('trash')}</button>` : ''}<button class="btn primary" data-save>Pasang</button></div>
+    </div>`,
+    onMount: (s, close) => {
+      const inp = s.querySelector('input');
+      s.querySelectorAll('[data-e]').forEach(b => b.addEventListener('click', e => {
+        e.stopPropagation(); emo = b.dataset.e;
+        s.querySelectorAll('[data-e]').forEach(x => x.classList.toggle('on', x === b));
+        const pv = s.querySelector('.ms-emo'); pv.textContent = emo; pv.classList.remove('pop'); void pv.offsetWidth; pv.classList.add('pop');
+        vibrate(4);
+      }));
+      s.querySelector('[data-save]').addEventListener('click', e => { e.stopPropagation(); api.setMood({ emoji: emo, text: inp.value.trim() }); close(); toast('Mood dipasang ✨'); });
+      s.querySelector('[data-clear]')?.addEventListener('click', e => { e.stopPropagation(); api.setMood(null); close(); });
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') s.querySelector('[data-save]').click(); });
+    },
+  });
+}
+export function viewMoodSheet(userId) {
+  const u = api.user(userId), m = api.moodOf(userId);
+  if (!m) return;
+  sheet({
+    top: `<div class="mood-view">${avatar(u, 64)}<div class="mv-bub"><b>${m.emoji}</b>${m.text ? `<span>${esc(m.text)}</span>` : ''}</div><small>${esc(u.name)} · ${ago(m.ts)}</small>
+      <div class="mv-quick">${['😂', '🫶', '🔥', '😭'].map(e => `<button data-q="${e}">${e}</button>`).join('')}</div>
+      <div class="mv-reply"><input class="field" maxlength="200" placeholder="Balas…" enterkeyhint="send"><button class="send-btn active" data-send>${icon('send')}</button></div></div>`,
+    onMount: (s, close) => {
+      const inp = s.querySelector('input');
+      const go = text => { if (!text) return; api.replyMood(userId, text); close(); toast('Terkirim 💌'); vibrate(8); };
+      s.querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); go(b.dataset.q); }));
+      s.querySelector('[data-send]').addEventListener('click', e => { e.stopPropagation(); go(inp.value.trim()); });
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') go(inp.value.trim()); });
+    },
+  });
 }

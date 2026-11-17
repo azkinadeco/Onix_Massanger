@@ -155,7 +155,8 @@ function TabsScreen() {
     head: () => title('Kamu'),
     body: () => {
       const me = api.me(), s = api.settings();
-      const toggle = (k, label, ic) => `<label class="set-row">${icon(ic)}<div class="set-txt"><span>${label}</span></div><input type="checkbox" class="switch" data-set="${k}" ${s[k] ? 'checked' : ''}></label>`;
+      const DEF = { calm: true, undoSend: true };
+      const toggle = (k, label, ic) => `<label class="set-row">${icon(ic)}<div class="set-txt"><span>${label}</span></div><input type="checkbox" class="switch" data-set="${k}" ${(s[k] ?? DEF[k]) ? 'checked' : ''}></label>`;
       const link = (act, ic, label, extra = '') => `<button class="set-row" data-act="${act}">${icon(ic)}<div class="set-txt"><span>${label}</span></div>${extra}${icon('chevronRight', 'tiny')}</button>`;
       return `<div class="me-hero" style="--h:${me.hue}">
           <button data-act="open-me">${avatar(me, 84)}</button>
@@ -188,6 +189,8 @@ function TabsScreen() {
           <label class="set-row">${icon('lock')}<div class="set-txt"><span>Kunci PIN</span></div><input type="checkbox" class="switch" data-lock ${s.passcode ? 'checked' : ''}></label>
           ${toggle('notif', 'Notifikasi', 'bell')}
           ${toggle('sound', 'Suara', 'volume')}
+          ${toggle('calm', 'Mode kalem', 'wind')}
+          ${toggle('undoSend', 'Batal kirim', 'undo')}
         </div>
         <div class="set-group">
           ${link('demo', 'sparkle', 'Demo')}

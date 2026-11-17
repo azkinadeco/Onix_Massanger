@@ -1,6 +1,6 @@
 import { TTL_OPTS, ttlLabel, suitResult, rupiah } from './service.js';
 import { canCall, callSession } from './backend.js';
-import { FUN_ITEMS } from './fun.js';
+import { FUN_ITEMS, calmOn, calmReason, calmSheet, undoOn, UNDO_MS } from './fun.js';
 import { api, bus, ME, firstName, mentionRe } from './service.js';
 import { $, h, esc, linkify, avatar, hm, dayLabel, isSameDay, dur, hash, vibrate, pickFile, pickFiles, compressImage, copyText, isJumbo } from './util.js';
 import { icon } from './icons.js';
@@ -366,7 +366,8 @@ function ChatScreen(chatId) {
     let read = '';
     if (mine && !m.unsent) {
       const n = (m.readBy || []).filter(api.readVisible).length;
-      if (m.status === 'sending') read = '<span class="sending"></span>';
+      if (m.status === 'hold') read = `<button class="undo-send" data-act="undo-send" data-mid="${m.id}" style="--t:${Math.max(0, UNDO_MS - (Date.now() - m.ts))}ms">Batal</button>`;
+      else if (m.status === 'sending') read = '<span class="sending"></span>';
       else if (m.status === 'failed') read = `<button class="failed" data-act="retry" data-mid="${m.id}" aria-label="Kirim ulang">!</button>`;
       else if (m.status === 'queued') read = `<span class="queued" title="Nunggu sinyal">${icon('clock')}</span>`;
       else if (n) read = group ? `<button class="read" data-act="readers" data-mid="${m.id}">${icon('checks')}${n}</button>` : `<span class="read">${icon('checks')}</span>`;
@@ -512,14 +513,27 @@ function ChatScreen(chatId) {
       ta.value = ''; autosize();
       return;
     }
-    api.send(chatId, withReply({ type: 'text', text }));
+    const why = calmOn() && !calmOk.has(text) && calmReason(text);
+    if (why) {
+      ta.blur();
+      calmSheet(why, text).then(r => {
+        if (r === 'send') { calmOk.add(text); sendText(); }
+        else if (r === 'hold') {
+          api.schedule(chatId, withReply({ type: 'text', text }), Date.now() + 10 * 60e3);
+          ta.value = ''; autosize(); toast('Ditahan 10 menit 🫧'); vibrate(6);
+        } else { calmOk.add(text); ta.focus(); }
+      });
+      return;
+    }
+    api.send(chatId, withReply({ type: 'text', text }), { hold: undoOn() ? UNDO_MS : 0 });
     ta.value = '';
     autosize();
     ta.focus();
     vibrate(6);
   }
+  const calmOk = new Set();
   function sendSticker(s, anim) {
-    api.send(chatId, withReply({ type: 'sticker', sticker: s, ...(anim ? { anim } : {}) }));
+    api.send(chatId, withReply({ type: 'sticker', sticker: s, ...(anim ? { anim } : {}) }), { hold: undoOn() ? UNDO_MS : 0 });
     vibrate(6);
   }
 
@@ -882,6 +896,12 @@ function ChatScreen(chatId) {
       if (r === null) toast('Saldo kurang 🥲'); else if (r) { toast(`Dibayar ${rupiah(m.per)} ✅`); vibrate(10); }
     },
     retry: t => api.remote.retry(chatId, t.dataset.mid),
+    'undo-send': t => {
+      const m = api.cancelHold(chatId, t.dataset.mid);
+      if (!m) return;
+      vibrate(8);
+      if (m.type === 'text' && !ta.value.trim()) { ta.value = m.text; autosize(); ta.focus(); }
+    },
     'suit-pick': t => { api.suitPick(chatId, t.dataset.mid, t.dataset.v); vibrate(10); },
     'att-game': () => { closePanel(); gameSheet(); },
     'att-poll': () => { closePanel(); router.push(PollComposeScreen(chatId)); },

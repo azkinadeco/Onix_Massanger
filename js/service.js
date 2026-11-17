@@ -45,7 +45,7 @@ try {
   const d = JSON.parse(localStorage.getItem(KEY) || 'null');
   if (d && d.v === 1 && d.me) {
     db = migrate(d);
-    Object.entries(db.messages).forEach(([cid, list]) => list.forEach(m => { if (m.status === 'sending') m.status = db.chats[cid]?.remote && !m.rid ? 'queued' : 'sent'; }));
+    Object.entries(db.messages).forEach(([cid, list]) => list.forEach(m => { if (m.status === 'sending' || m.status === 'hold') m.status = db.chats[cid]?.remote && !m.rid ? 'queued' : 'sent'; }));
   }
 } catch { /* data rusak -> mulai baru */ }
 
@@ -163,6 +163,7 @@ function newMsg(chatId, from, payload) {
 export const TTL_OPTS = [[0, 'Mati'], [30, '30 detik'], [300, '5 menit'], [3600, '1 jam'], [86400, '1 hari'], [604800, '7 hari']];
 export const ttlLabel = s => (TTL_OPTS.find(x => x[0] === s) || [0, `${s} dtk`])[1];
 
+const holds = new Map();
 function receive(chatId, from, payload) {
   const c = db.chats[chatId];
   if (!c || db.blocked.includes(from)) return;
@@ -778,16 +779,33 @@ export const api = {
   markUnread(chatId) { const c = db.chats[chatId]; c.unread = Math.max(1, c.unread || 0); save(); bus.emit('chats'); },
   setDraft(chatId, text) { const c = db.chats[chatId]; if (c && c.draft !== text) { c.draft = text; save(); bus.emit('chats'); } },
 
-  send(chatId, payload) {
+  // hold (ms): pesan nunggu dulu, masih bisa dibatalin (api.cancelHold)
+  send(chatId, payload, { hold = 0 } = {}) {
     const c = db.chats[chatId];
-    const m = newMsg(chatId, ME, { ...payload, status: 'sending' });
+    const m = newMsg(chatId, ME, { ...payload, status: hold ? 'hold' : 'sending' });
     db.messages[chatId].push(m);
     c.updatedAt = m.ts; c.hidden = false; c.draft = '';
     emitChat(chatId);
-    if (c.remote) { if (remoteSend) remoteSend(chatId, m); else m.status = 'failed'; return m; }
-    if (!navigator.onLine) { outbox.push([chatId, m]); return m; }
-    setTimeout(() => { m.status = 'sent'; emitChat(chatId); }, rand(250, 600));
-    scheduleResponses(chatId, m);
+    const go = () => {
+      if (c.remote) { if (remoteSend) remoteSend(chatId, m); else m.status = 'failed'; return; }
+      if (!navigator.onLine) { outbox.push([chatId, m]); return; }
+      setTimeout(() => { m.status = 'sent'; emitChat(chatId); }, rand(250, 600));
+      scheduleResponses(chatId, m);
+    };
+    if (!hold) { go(); return m; }
+    holds.set(m.id, setTimeout(() => {
+      holds.delete(m.id);
+      if (!db.messages[chatId]?.includes(m)) return;
+      m.ts = Date.now(); m.status = 'sending'; emitChat(chatId); go();
+    }, hold));
+    return m;
+  },
+  cancelHold(chatId, mid) {
+    const t = holds.get(mid);
+    if (!t) return null;
+    clearTimeout(t); holds.delete(mid);
+    const m = db.messages[chatId]?.find(x => x.id === mid);
+    if (m) { db.messages[chatId] = db.messages[chatId].filter(x => x !== m); emitChat(chatId); }
     return m;
   },
   suitPick(chatId, mid, val) {

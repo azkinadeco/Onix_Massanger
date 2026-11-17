@@ -34,14 +34,20 @@ const ingestChat = r => { (r.expand?.members || []).forEach(ingestUser); return 
 const myState = new Map(); // chatId -> record id
 const typingOff = new Map();
 function applyState(r) {
-  if (r.user === myId()) { myState.set(r.chat, r.id); return; }
+  if (r.user === myId()) { myState.set(r.chat, r.id); api.remote.applyOwnState(r); return; }
   if (r.readAt) api.remote.applyRead(r.chat, r.user, r.readAt);
   const k = r.chat + r.user, left = (r.typingAt || 0) + 6000 - Date.now();
   clearTimeout(typingOff.get(k));
   if (left > 0) { api.remote.typing(r.chat, r.user, true); typingOff.set(k, setTimeout(() => api.remote.typing(r.chat, r.user, false), left)); }
   else api.remote.typing(r.chat, r.user, false);
 }
-async function upsertState(chatId, patch) {
+const stateQ = new Map();
+function upsertState(chatId, patch) {
+  const q = (stateQ.get(chatId) || Promise.resolve()).then(() => upsertStateNow(chatId, patch));
+  stateQ.set(chatId, q.catch(() => {}));
+  return q;
+}
+async function upsertStateNow(chatId, patch) {
   const id = myState.get(chatId);
   try {
     if (id) return await pb.collection('chat_state').update(id, patch);
@@ -54,6 +60,7 @@ async function upsertState(chatId, patch) {
   }
 }
 const readT = new Map(), typingSent = new Map();
+api.remote.hooks.prefs = (chatId, patch) => upsertState(chatId, patch);
 api.remote.hooks.read = chatId => { clearTimeout(readT.get(chatId)); readT.set(chatId, setTimeout(() => upsertState(chatId, { readAt: Date.now() }), 700)); };
 api.remote.hooks.typing = chatId => {
   const now = Date.now();

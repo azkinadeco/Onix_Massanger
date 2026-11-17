@@ -356,6 +356,23 @@ const remote = {
     emitChat(rec.chat);
     return true;
   },
+  // state chat milikku dari HP lain (pin, bisu, arsip, hapus, sudah dibaca)
+  applyOwnState(r) {
+    const c = db.chats[r.chat];
+    if (!c) return;
+    c.pinned = !!r.pinned; c.muted = !!r.muted; c.archived = !!r.archived;
+    if (r.clearedAt && r.clearedAt > (c.clearedAt || 0)) {
+      c.clearedAt = r.clearedAt;
+      db.messages[r.chat] = (db.messages[r.chat] || []).filter(m => m.ts > r.clearedAt);
+      if (!db.messages[r.chat].length) c.hidden = true;
+    }
+    if (r.readAt && r.readAt > (c.readAt || 0)) c.readAt = r.readAt;
+    if (activeChat !== r.chat) {
+      const n = (db.messages[r.chat] || []).filter(m => m.from !== ME && m.type !== 'system' && m.ts > (c.readAt || 0)).length;
+      if (n !== (c.unread || 0)) { c.unread = n; if (!n) c.mention = false; }
+    }
+    emitChat(r.chat);
+  },
   applyRead(chatId, uid, readAt) {
     const list = db.messages[chatId];
     if (!list || uid === db.remote?.uid) return;
@@ -466,6 +483,7 @@ const remote = {
     if (!c) return;
     const list = db.messages[chatId];
     const cid = rec.cid || rec.id;
+    if (c.clearedAt && (Date.parse(rec.created) || 0) <= c.clearedAt) return;
     const ex = list.find(m => m.id === cid || m.rid === rec.id);
     if (ex) { if (ex.status !== 'sent') { ex.status = 'sent'; ex.rid = rec.id; if (live) emitChat(chatId); } return; }
     const from = remote.mapId(rec.sender);
@@ -671,7 +689,7 @@ export const api = {
     db.messages[chatId].push(newMsg(chatId, ME, { type: 'system', text: sec ? `⏱ Pesan sementara · ${ttlLabel(sec)}` : '⏱ Pesan sementara dimatikan' }));
     emitChat(chatId);
   },
-  toggleArchive(chatId) { const c = db.chats[chatId]; c.archived = !c.archived; if (c.archived) c.pinned = false; save(); bus.emit('chats'); return c.archived; },
+  toggleArchive(chatId) { const c = db.chats[chatId]; c.archived = !c.archived; if (c.archived) c.pinned = false; save(); bus.emit('chats'); if (c.remote) hooks.prefs?.(chatId, { archived: !!c.archived, pinned: !!c.pinned }); return c.archived; },
   setWallpaper(chatId, key) { db.chats[chatId].wallpaper = key; save(); bus.emit('chats'); bus.emit('wallpaper', chatId); },
   allChats() { return Object.values(db.chats).filter(c => !c.hidden && !c.left).sort((a, b) => b.updatedAt - a.updatedAt); },
   groups() { return Object.values(db.chats).filter(c => c.type === 'group' && !c.left); },
@@ -949,10 +967,10 @@ export const api = {
   keepRemove(id) { db.keep = db.keep.filter(k => k.id !== id); save(); bus.emit('keep'); },
   keepUpdate(id, text) { const k = db.keep.find(x => x.id === id); if (k) { k.text = text; k.ts = Date.now(); save(); bus.emit('keep'); } },
 
-  togglePin(chatId) { const c = db.chats[chatId]; c.pinned = !c.pinned; save(); bus.emit('chats'); return c.pinned; },
-  toggleMute(chatId) { const c = db.chats[chatId]; c.muted = !c.muted; save(); bus.emit('chats'); return c.muted; },
-  clearChat(chatId) { db.messages[chatId] = []; emitChat(chatId); },
-  deleteChat(chatId) { const c = db.chats[chatId]; db.messages[chatId] = []; c.hidden = true; c.unread = 0; c.pinned = false; emitChat(chatId); },
+  togglePin(chatId) { const c = db.chats[chatId]; c.pinned = !c.pinned; save(); bus.emit('chats'); if (c.remote) hooks.prefs?.(chatId, { pinned: !!c.pinned }); return c.pinned; },
+  toggleMute(chatId) { const c = db.chats[chatId]; c.muted = !c.muted; save(); bus.emit('chats'); if (c.remote) hooks.prefs?.(chatId, { muted: !!c.muted }); return c.muted; },
+  clearChat(chatId) { const c = db.chats[chatId]; db.messages[chatId] = []; if (c.remote) { c.clearedAt = Date.now(); hooks.prefs?.(chatId, { clearedAt: c.clearedAt }); } emitChat(chatId); },
+  deleteChat(chatId) { const c = db.chats[chatId]; db.messages[chatId] = []; c.hidden = true; c.unread = 0; c.pinned = false; if (c.remote) { c.clearedAt = Date.now(); hooks.prefs?.(chatId, { clearedAt: c.clearedAt, pinned: false }); } emitChat(chatId); },
   images(chatId) {
     return (db.messages[chatId] || []).filter(m => m.type === 'image' && !m.unsent)
       .flatMap(m => (m.album?.length ? m.album : [m]).map((x, i) => ({ id: i ? m.id + '~' + i : m.id, mid: m.id, i, src: x.src, w: x.w, h: x.h, from: m.from, ts: m.ts }))).filter(x => x.src);

@@ -188,6 +188,7 @@ function ChatScreen(chatId) {
       <button class="text-btn" data-act="sr-close">Batal</button>
     </div>
     <div class="announce" hidden></div>
+    <div class="memo-bar" hidden></div>
     <div class="msgs"><div class="msgs-inner"></div><div class="typing-row" hidden></div></div>
     <button class="jump" hidden>${icon('chevronDown')}<b></b></button>
     <div class="composer-wrap">
@@ -310,12 +311,13 @@ function ChatScreen(chatId) {
 
   /* ---------- messages ---------- */
   function brk(a, b) {
-    return !a || !b || a.from !== b.from || a.type === 'system' || b.type === 'system' || a.type === 'nudge' || b.type === 'nudge' || Math.abs(b.ts - a.ts) > 5 * 60e3 || !isSameDay(a.ts, b.ts);
+    return !a || !b || a.from !== b.from || a.type === 'system' || b.type === 'system' || ['nudge', 'quizres'].includes(a.type) || ['nudge', 'quizres'].includes(b.type) || Math.abs(b.ts - a.ts) > 5 * 60e3 || !isSameDay(a.ts, b.ts);
   }
 
   function msgHtml(m, prev, next, group) {
     if (m.type === 'system') return `<div class="sys"><span>${esc(m.text)}</span></div>`;
     if (m.type === 'nudge') return fun.nudgeHtml(m, c());
+    if (m.type === 'quizres') return fun.quizResHtml(m);
     const mine = m.from === ME;
     const u = api.user(m.from) || { name: '?' };
     const first = brk(prev, m), last = brk(m, next);
@@ -351,6 +353,10 @@ function ChatScreen(chatId) {
       body = p
         ? `<button class="bubble postmsg" data-act="open-post" data-pid="${p.id}">${img ? `<img src="${img}" alt="">` : ''}<span class="pm-txt"><span class="pm-who">${avatar(pu, 20)}<b>${esc(pu?.name || '')}</b></span>${p.text ? `<span class="pm-body">${esc(p.text.slice(0, 120))}</span>` : ''}<small>${icon('voom', 'tiny')} VOOM${p.images?.length > 1 ? ` · ${p.images.length} foto` : ''}</small></span></button>`
         : `<div class="bubble unsent">${icon('voom', 'tiny')} Post udah dihapus</div>`;
+    } else if (m.type === 'quiz') {
+      body = fun.quizHtml(m, chatId);
+    } else if (m.type === 'countdown') {
+      body = fun.countdownHtml(m);
     } else if (m.type === 'doodle') {
       bare = true; body = fun.doodleHtml(m);
     } else if (m.type === 'capsule') {
@@ -562,7 +568,14 @@ function ChatScreen(chatId) {
   ta.addEventListener('input', () => { if (ta.value.trim() && !iceBar.hidden) iceBar.hidden = true; });
   function doNudge() { if (!fun.nudge(chatId)) toast('Sabar, baru aja nyolek 😆'); else vibrate(10); }
   // kapsul: cek tiap 30 dtk biar hitung mundurnya jalan & kebuka sendiri
-  const capT = setInterval(() => { if (api.messages(chatId).some(m => m.type === 'capsule' && !m.capOpened)) renderMsgs(); }, 30e3);
+  const capT = setInterval(() => { if (api.messages(chatId).some(m => (m.type === 'capsule' && !m.capOpened) || (m.type === 'countdown' && m.at > Date.now() - 60e3))) renderMsgs(); }, 30e3);
+  const memoBar = $('.memo-bar', el);
+  function renderMemo() {
+    const mm = fun.memoryOf(chatId);
+    memoBar.hidden = !mm || fun.memoHidden(mm.key);
+    if (!memoBar.hidden) memoBar.innerHTML = `<button class="memo-main" data-act="memo-go"><span class="memo-ic">📅</span><span class="memo-t"><b>${esc(mm.label)} hari ini</b><small>${esc(mm.text)}</small></span></button><button class="icon-btn sm" data-act="memo-x" aria-label="Tutup">${icon('x')}</button>`;
+  }
+  setTimeout(renderMemo, 600);
   function sendSticker(s, anim) {
     api.send(chatId, withReply({ type: 'sticker', sticker: s, ...(anim ? { anim } : {}) }), { hold: undoOn() ? UNDO_MS : 0 });
     vibrate(6);
@@ -583,7 +596,7 @@ function ChatScreen(chatId) {
     }
     editing = null;
     const u = api.user(m.from);
-    const text = m.type === 'text' ? m.text : m.type === 'poll' ? '📊 ' + m.poll.q : { sticker: 'Sticker ' + m.sticker, image: '📷 Foto', voice: '🎤 Voice note', location: '📍 Lokasi', video: '🎬 Video', file: '📎 ' + m.name, doodle: '🖍️ Coretan', capsule: '⏳ Kapsul waktu', scratch: '🫣 Pesan gosok' }[m.type];
+    const text = m.type === 'text' ? m.text : m.type === 'poll' ? '📊 ' + m.poll.q : { sticker: 'Sticker ' + m.sticker, image: '📷 Foto', voice: '🎤 Voice note', location: '📍 Lokasi', video: '🎬 Video', file: '📎 ' + m.name, doodle: '🖍️ Coretan', quiz: '🎯 Kuis', countdown: '⏱️ ' + (m.title || 'Hitung mundur'), capsule: '⏳ Kapsul waktu', scratch: '🫣 Pesan gosok' }[m.type];
     replyTo = { id: m.id, name: m.from === ME ? 'Kamu' : u?.name, text: (text || '').slice(0, 120) };
     replyBar.innerHTML = `<div class="rb-line"></div><div class="rb-txt"><b>${esc(replyTo.name)}</b><span>${esc(replyTo.text)}</span></div><button class="icon-btn sm" data-act="cancel-reply">${icon('x')}</button>`;
     replyBar.hidden = false;
@@ -938,6 +951,11 @@ function ChatScreen(chatId) {
     'ice-topic': t => { ta.value = t.dataset.t; autosize(); ta.focus(); iceBar.hidden = true; },
     'ice-more': () => renderIce(true),
     'ice-x': () => { iceOff.add(fun.icebreaker(chatId)?.key); iceBar.hidden = true; },
+    'att-quiz': () => { closePanel(); router.push(fun.QuizComposeScreen(chatId)); },
+    'att-countdown': () => { closePanel(); fun.countdownSheet(chatId); },
+    'quiz-play': t => { const m = msgById(t.dataset.mid); if (m) fun.playQuiz(chatId, m); },
+    'memo-go': () => { const mm = fun.memoryOf(chatId); if (mm) { fun.memoDismiss(mm.key); memoBar.hidden = true; bindGoto(mm.mid); } },
+    'memo-x': () => { const mm = fun.memoryOf(chatId); if (mm) fun.memoDismiss(mm.key); memoBar.hidden = true; },
     'att-doodle': () => { closePanel(); ta.blur(); fun.doodleEditor(chatId); },
     'doodle-play': t => fun.replayDoodle(inner, t.dataset.mid, msgById(t.dataset.mid)),
     'att-capsule': () => { closePanel(); fun.capsuleSheet(chatId); },

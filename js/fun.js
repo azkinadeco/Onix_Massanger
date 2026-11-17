@@ -5,7 +5,7 @@ import { icon } from './icons.js';
 import { router, bindActs, navbar, sheet, toast } from './ui.js';
 
 // item tambahan di menu + : [aksi, ikon, label, warna]
-export const FUN_ITEMS = [['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0']];
+export const FUN_ITEMS = [['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Hitung mundur', '#FF7A1A']];
 
 /* ============ MODE KALEM ============
    Pesan yang kelihatan lagi emosi -> ditawarin tahan dulu sebelum kekirim */
@@ -61,7 +61,7 @@ const dateTxt = ts => new Date(ts).toLocaleDateString('id-ID', { day: 'numeric',
 const txt = s => esc(s || '').replace(/\n/g, '<br>');
 const buzz = p => { try { navigator.vibrate?.(p); } catch { /* */ } };
 // tipe pesan yang isinya rahasia (jangan diteruskan / disalin / di-keep)
-export const SECRET_TYPES = ['capsule', 'scratch', 'nudge'];
+export const SECRET_TYPES = ['capsule', 'scratch', 'nudge', 'quiz', 'quizres'];
 
 /* sheet nulis pesan khusus: judul, placeholder, opsi tambahan */
 async function composeSheet({ head, ph, extra = '', go, bind }) {
@@ -510,3 +510,149 @@ export function dueReminders() {
   due.forEach(r => api.removeReminder(r.id));
   return due.filter(r => api.chat(r.chatId));
 }
+
+/* ============ KUIS "SEBERAPA KENAL AKU?" ============
+   Pengirim bikin soal tentang dirinya, teman jawab, skornya otomatis kekirim */
+const QUIZ_IDEAS = ['Makanan favorit aku?', 'Aku paling takut sama?', 'Warna favorit aku?', 'Kalau weekend aku biasanya?', 'Minuman andalan aku?', 'Genre musik favorit aku?'];
+export function QuizComposeScreen(chatId) {
+  const qs = [0, 1, 2].map(i => ({ q: '', o: ['', '', ''], a: 0, ph: QUIZ_IDEAS[i] }));
+  const el = h(`<div class="sub-screen">${navbar('Kuis 🎯')}<div class="content qz-c"></div></div>`);
+  const box = el.querySelector('.qz-c');
+  const render = () => {
+    box.innerHTML = `<p class="qz-intro">Bikin soal tentang kamu. Tandai jawaban yang benar ✅</p>${qs.map((x, i) => `<div class="qz-card" data-i="${i}">
+      <div class="qz-num">${i + 1}</div>
+      <input class="qz-q" data-k="q" value="${esc(x.q)}" placeholder="${esc(x.ph)}" maxlength="80">
+      ${x.o.map((o, j) => `<div class="qz-o ${x.a === j ? 'on' : ''}"><button data-act="ok" data-q="${i}" data-o="${j}" aria-label="Benar">${icon('check')}</button><input data-k="o" data-o="${j}" value="${esc(o)}" placeholder="Pilihan ${j + 1}" maxlength="40"></div>`).join('')}
+      ${qs.length > 1 ? `<button class="qz-del" data-act="del" data-q="${i}" aria-label="Hapus">${icon('trash')}</button>` : ''}
+    </div>`).join('')}
+    ${qs.length < 5 ? `<button class="btn ghost wide" data-act="add">${icon('plus', 'tiny')} Tambah soal</button>` : ''}
+    <button class="btn primary wide" data-act="send">Kirim kuis</button>`;
+  };
+  box.addEventListener('input', e => {
+    const card = e.target.closest('.qz-card'); if (!card) return;
+    const x = qs[+card.dataset.i];
+    if (e.target.dataset.k === 'q') x.q = e.target.value; else x.o[+e.target.dataset.o] = e.target.value;
+  });
+  bindActs(el, {
+    ok: t => { qs[+t.dataset.q].a = +t.dataset.o; render(); buzz(5); },
+    add: () => { qs.push({ q: '', o: ['', '', ''], a: 0, ph: QUIZ_IDEAS[qs.length] || 'Pertanyaan' }); render(); },
+    del: t => { qs.splice(+t.dataset.q, 1); render(); },
+    send: () => {
+      const ok = qs.map(x => ({ q: x.q.trim() || x.ph, o: x.o.map(s => s.trim()), a: x.a })).filter(x => x.o.filter(Boolean).length >= 2);
+      if (!ok.length) return toast('Isi minimal 2 pilihan per soal');
+      if (ok.some(x => !x.o[x.a])) return toast('Jawaban yang benar belum diisi');
+      const clean = ok.map(x => { const keep = x.o.map((s, j) => [s, j]).filter(([s]) => s); return { q: x.q, o: keep.map(k => k[0]), a: keep.findIndex(k => k[1] === x.a) }; });
+      api.send(chatId, { type: 'quiz', quiz: { qs: clean } });
+      buzz(10); router.back();
+    },
+  });
+  render();
+  return { el };
+}
+const scoresFor = (chatId, mid) => api.messages(chatId).filter(x => x.type === 'quizres' && x.ref === mid);
+export function quizHtml(m, chatId) {
+  const mine = m.from === ME, n = m.quiz?.qs?.length || 0;
+  const res = scoresFor(chatId, m.id);
+  const myRes = res.find(r => r.from === ME);
+  const owner = mine ? 'aku' : firstName(api.user(m.from)?.name || '');
+  return `<div class="bubble quiz"><div class="qz-top"><span>🎯</span><div><b>Seberapa kenal ${esc(owner)}?</b><small>${n} soal</small></div></div>
+    ${res.length ? `<div class="qz-res">${res.map(r => `<span>${esc(r.from === ME ? 'Kamu' : firstName(api.user(r.from)?.name || '?'))} <b>${r.score}/${r.total}</b></span>`).join('')}</div>` : ''}
+    ${!mine && !myRes ? `<button class="qz-play" data-act="quiz-play" data-mid="${m.id}">Main</button>` : ''}</div>`;
+}
+export function quizResHtml(m) {
+  const who = m.from === ME ? 'Kamu' : esc(firstName(api.user(m.from)?.name || '?'));
+  const pct = m.total ? m.score / m.total : 0;
+  return `<div class="sys quizres"><span>${pct === 1 ? '🏆' : pct >= .5 ? '🎯' : '😅'} ${who} dapet ${m.score}/${m.total} di kuis</span></div>`;
+}
+export function playQuiz(chatId, m) {
+  const qs = m.quiz?.qs || [];
+  if (!qs.length || scoresFor(chatId, m.id).some(r => r.from === ME)) return;
+  let i = 0, score = 0, locked = false;
+  sheet({
+    top: `<div class="qz-play-sh"></div>`,
+    onMount: (s, close) => {
+      const box = s.querySelector('.qz-play-sh');
+      const show = () => {
+        const x = qs[i];
+        box.innerHTML = `<div class="qz-prog">${qs.map((_, k) => `<i class="${k < i ? 'done' : k === i ? 'now' : ''}"></i>`).join('')}</div><b class="qz-q-t">${esc(x.q)}</b><div class="qz-ans">${x.o.map((o, j) => `<button data-j="${j}">${esc(o)}</button>`).join('')}</div>`;
+        locked = false;
+      };
+      const finish = () => {
+        box.innerHTML = `<div class="qz-done"><span>${score === qs.length ? '🏆' : score >= qs.length / 2 ? '🎯' : '😅'}</span><b>${score}/${qs.length}</b><small>${score === qs.length ? 'Kenal banget!' : score >= qs.length / 2 ? 'Lumayan kenal' : 'Kurang kenal nih wkwk'}</small></div>`;
+        api.send(chatId, { type: 'quizres', ref: m.id, score, total: qs.length });
+        setTimeout(close, 1600);
+      };
+      box.addEventListener('click', e => {
+        const b = e.target.closest('[data-j]');
+        if (!b || locked) return;
+        e.stopPropagation(); locked = true;
+        const right = +b.dataset.j === qs[i].a;
+        if (right) score++;
+        b.classList.add(right ? 'right' : 'wrong');
+        box.querySelector(`[data-j="${qs[i].a}"]`)?.classList.add('right');
+        buzz(right ? 10 : [20, 40, 20]);
+        setTimeout(() => { i++; i < qs.length ? show() : finish(); }, 750);
+      });
+      show();
+    },
+  });
+}
+
+/* ============ HITUNG MUNDUR ============ */
+const CD_EMO = ['🎂', '🎉', '✈️', '🏖️', '📚', '🎮', '💍', '🎄', '🎓', '🎤'];
+export function countdownHtml(m) {
+  const left = m.at - Date.now();
+  let big, unit;
+  if (left <= 0) { big = '🎉'; unit = 'Udah tiba!'; }
+  else if (left >= 864e5) { big = Math.ceil(left / 864e5); unit = 'hari lagi'; }
+  else if (left >= 3600e3) { big = Math.floor(left / 3600e3); unit = 'jam lagi'; }
+  else { big = Math.max(1, Math.ceil(left / 60e3)); unit = 'menit lagi'; }
+  return `<div class="bubble cdown ${left <= 0 ? 'done' : ''}"><div class="cd-emo">${esc(m.emoji || '🎉')}</div><div class="cd-t"><b>${esc(m.title || '')}</b><small>${new Date(m.at).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</small></div><div class="cd-num"><b>${big}</b><small>${unit}</small></div></div>`;
+}
+export function countdownSheet(chatId) {
+  let emoji = CD_EMO[0];
+  const pad = n => String(n).padStart(2, '0');
+  const d = new Date(Date.now() + 7 * 864e5);
+  const def = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  sheet({
+    top: `<div class="fun-compose">
+      <div class="fc-h">⏱️ <b>Hitung mundur</b><small>Biar nunggunya bareng</small></div>
+      <div class="cd-emos">${CD_EMO.map((e, i) => `<button class="${i ? '' : 'on'}" data-e="${e}">${e}</button>`).join('')}</div>
+      <input class="fc-in" maxlength="40" placeholder="Nunggu apa? (mis. Liburan Bali)">
+      <input class="fc-in" type="date" value="${def}" min="${def.slice(0, 8)}01">
+      <button class="btn primary wide" data-go>Mulai hitung mundur</button>
+    </div>`,
+    onMount: (s, close) => {
+      const [title, date] = s.querySelectorAll('.fc-in');
+      s.querySelectorAll('[data-e]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); emoji = b.dataset.e; s.querySelectorAll('[data-e]').forEach(x => x.classList.toggle('on', x === b)); }));
+      s.querySelector('[data-go]').addEventListener('click', e => {
+        e.stopPropagation();
+        const at = new Date(date.value + 'T00:00').getTime();
+        if (!title.value.trim()) { title.focus(); return toast('Kasih judul dulu'); }
+        if (!(at > Date.now())) return toast('Pilih tanggal yang akan datang');
+        api.send(chatId, { type: 'countdown', title: title.value.trim(), at, emoji });
+        buzz(10); close();
+      });
+    },
+  });
+}
+
+/* ============ KENANGAN ============
+   "1 bulan lalu hari ini" -> pesan dari tanggal yang sama di bulan/tahun sebelumnya */
+export function memoryOf(chatId) {
+  const now = new Date(), day = now.getDate();
+  const list = api.messages(chatId).filter(m => (m.type === 'text' || m.type === 'image') && !m.unsent && !m.secret);
+  for (const m of list) {
+    const d = new Date(m.ts);
+    if (d.getDate() !== day) continue;
+    const months = (now.getFullYear() - d.getFullYear()) * 12 + now.getMonth() - d.getMonth();
+    if (months < 1) continue;
+    const label = months % 12 === 0 ? `${months / 12} tahun lalu` : `${months} bulan lalu`;
+    const who = m.from === ME ? 'Kamu' : firstName(api.user(m.from)?.name || '');
+    return { mid: m.id, label, text: `${who}: ${m.type === 'image' ? '📷 Foto' : m.text}`, key: chatId + now.toDateString() };
+  }
+  return null;
+}
+const memoSeen = new Set();
+export const memoDismiss = k => memoSeen.add(k);
+export const memoHidden = k => memoSeen.has(k);

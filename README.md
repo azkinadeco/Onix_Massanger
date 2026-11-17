@@ -55,6 +55,13 @@ Semua ada di tombol **+** di chat → bagian *Khas Onix*, dan ikut tersinkron on
 - **Stiker teks**: ketik → 4 gaya → jadi stiker
 - **Ringkasan belum dibaca**: buka chat rame → jumlah pesan, siapa paling rame, loncat ke awal / ke mention
 - Menu **+** ngurutin fitur Khas Onix dari yang paling sering kamu pakai
+- **Sopanin**: pesan gaul → bahasa sopan buat dosen/atasan (salam, sapaan Bapak/Ibu/Kak, penutup)
+- **Kapan bisa?**: pilih beberapa hari, semua centang yang bisa, hari terbaik ditandai 👑
+- **Bom waktu**: bom dioper-oper, sumbunya rahasia, yang megang pas meledak kalah
+- **Tantangan foto**: tugas + batas waktu, semua kirim foto, terkumpul di satu kartu
+- **Kartu hoki harian**, **Emoji campur** (2 emoji jadi stiker), **Kartu ucapan bareng** (semua tanda tangan, penerima buka kartu)
+- **Hemat kuota** (Kamu): foto lebih kecil, tanpa efek layar, gambar VOOM ditap dulu
+- Menu ⋮ di chat sekarang grid ikon
 
 Catatan: isi kapsul waktu, pesan gosok, kuis & cek kabar cuma disembunyikan di tampilan (tidak dienkripsi).
 Pengingat, mode fokus & balas otomatis jalan selama app hidup.

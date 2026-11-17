@@ -251,12 +251,14 @@ async function beat(online = !document.hidden) {
 function startBeat() {
   clearInterval(beatT);
   beat();
-  beatT = setInterval(() => { if (!document.hidden) beat(true); api.remote.staleCheck(); }, 45000);
+  beatT = setInterval(() => { if (!document.hidden) beat(true); api.remote.staleCheck(); flushOutbox(); }, 45000);
 }
 document.addEventListener('visibilitychange', () => beat(!document.hidden));
 window.addEventListener('pagehide', () => beat(false));
 
-function setConn(v) { if (connected !== v) { connected = v; bus.emit('remote'); } }
+function setConn(v) { if (connected !== v) { connected = v; bus.emit('remote'); bus.emit('conn'); } }
+// status buat banner: 'ok' | 'offline' | 'wait' (akun online tapi server belum nyambung)
+export const connState = () => (!navigator.onLine ? 'offline' : api.remote.state() && !connected ? 'wait' : 'ok');
 
 export function errText(e) {
   if (!e?.status) return 'Server nggak bisa dihubungi';
@@ -444,7 +446,7 @@ async function start() {
   for (const c of ['posts', 'post_likes', 'post_comments']) await pb.collection(c).subscribe('*', resyncPosts);
   await pb.collection('chats').subscribe('*', e => { if (e.action !== 'delete') { ingestChat(e.record); api.remote.done(); } }, { expand: 'members' });
   let first = true;
-  await pb.realtime.subscribe('PB_CONNECT', () => { setConn(true); if (!first) sync(); first = false; });
+  await pb.realtime.subscribe('PB_CONNECT', () => { setConn(true); if (!first) sync(); first = false; flushOutbox(); });
   pb.realtime.onDisconnect = () => setConn(false);
   setConn(true);
   startBeat();
@@ -482,8 +484,28 @@ async function onMessage(r) {
   if (pendingActions.length) flushPendingActions();
 }
 
-async function sendRemote(chatId, m) {
+// pesan yang gagal karena jaringan -> antre, dikirim lagi saat koneksi balik
+const netErr = e => !e?.status || e.status >= 500 || e.status === 429;
+let flushing = null;
+export function flushOutbox() {
+  if (flushing || !pb?.authStore.isValid) return flushing;
+  flushing = (async () => {
+    for (const { chatId, m } of api.remote.outbox()) {
+      await api.remote.retry(chatId, m.id);
+      if (m.status === 'queued') break; // masih offline
+    }
+  })().finally(() => { flushing = null; });
+  return flushing;
+}
+
+async function sendRemote(chatId, m, again = false) {
   const type = m.type, text = m.text || '', data = api.remote.payloadOf(m);
+  if (again) { // jangan dobel: mungkin dulu udah masuk server tapi balasannya hilang
+    try {
+      const ex = await pb.collection('messages').getList(1, 1, { filter: pb.filter('chat = {:c} && cid = {:k}', { c: chatId, k: m.id }) });
+      if (ex.items[0]) return api.remote.sent(chatId, m.id, ex.items[0].id);
+    } catch (e) { if (netErr(e)) return api.remote.queued(chatId, m.id); }
+  }
   const body = { chat: chatId, sender: myId(), cid: m.id, type, text, data };
   if (m.mediaId) { // video & file: upload ke server
     const blob = await getMediaBlob(m.mediaId);
@@ -497,7 +519,7 @@ async function sendRemote(chatId, m) {
     if (typingSent.get(chatId)) { typingSent.set(chatId, 0); upsertState(chatId, { typingAt: 0 }); }
   } catch (e) {
     console.warn('kirim gagal', e);
-    api.remote.failed(chatId, m.id);
+    netErr(e) ? api.remote.queued(chatId, m.id) : api.remote.failed(chatId, m.id);
   }
 }
 
@@ -535,6 +557,6 @@ export async function init() {
     setTimeout(init, 15000);
   }
 }
-window.addEventListener('online', () => { if (started) sync(); });
+window.addEventListener('online', () => { if (started) { sync(); flushOutbox(); } else if (api.remote.state()) init(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && started) sync(); });
 export { ME };

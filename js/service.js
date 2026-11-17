@@ -45,7 +45,7 @@ try {
   const d = JSON.parse(localStorage.getItem(KEY) || 'null');
   if (d && d.v === 1 && d.me) {
     db = migrate(d);
-    Object.values(db.messages).forEach(list => list.forEach(m => { if (m.status === 'sending') m.status = 'sent'; }));
+    Object.entries(db.messages).forEach(([cid, list]) => list.forEach(m => { if (m.status === 'sending') m.status = db.chats[cid]?.remote && !m.rid ? 'queued' : 'sent'; }));
   }
 } catch { /* data rusak -> mulai baru */ }
 
@@ -522,7 +522,13 @@ const remote = {
   },
   sent(chatId, cid, rid) { const m = db.messages[chatId]?.find(x => x.id === cid); if (m) { m.status = 'sent'; m.rid = rid; emitChat(chatId); } },
   failed(chatId, cid) { const m = db.messages[chatId]?.find(x => x.id === cid); if (m) { m.status = 'failed'; emitChat(chatId); } },
-  retry(chatId, cid) { const m = db.messages[chatId]?.find(x => x.id === cid); if (m && remoteSend) { m.status = 'sending'; emitChat(chatId); remoteSend(chatId, m); } },
+  retry(chatId, cid) { const m = db.messages[chatId]?.find(x => x.id === cid); if (m && remoteSend) { m.status = 'sending'; emitChat(chatId); return remoteSend(chatId, m, true); } },
+  queued(chatId, cid) { const m = db.messages[chatId]?.find(x => x.id === cid); if (m) { m.status = 'queued'; save(); emitChat(chatId); } },
+  outbox() {
+    const out = [];
+    for (const c of Object.values(db.chats)) if (c.remote && !c.left) for (const m of db.messages[c.id] || []) if (m.status === 'queued' && m.from === ME) out.push({ chatId: c.id, m });
+    return out.sort((a, b) => a.m.ts - b.m.ts);
+  },
   directChatWith(uid) { return Object.values(db.chats).find(c => c.remote && c.type === 'direct' && c.members.includes(uid))?.id || null; },
   purge() {
     for (const c of Object.values(db.chats)) if (c.remote) { delete db.chats[c.id]; delete db.messages[c.id]; }

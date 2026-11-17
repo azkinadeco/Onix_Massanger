@@ -367,6 +367,7 @@ function ChatScreen(chatId) {
       const n = (m.readBy || []).length;
       if (m.status === 'sending') read = '<span class="sending"></span>';
       else if (m.status === 'failed') read = `<button class="failed" data-act="retry" data-mid="${m.id}" aria-label="Kirim ulang">!</button>`;
+      else if (m.status === 'queued') read = `<span class="queued" title="Nunggu sinyal">${icon('clock')}</span>`;
       else if (n) read = group ? `<button class="read" data-act="readers" data-mid="${m.id}">${icon('checks')}${n}</button>` : `<span class="read">${icon('checks')}</span>`;
       else read = `<span class="sent">${icon('check')}</span>`;
     }

@@ -1416,3 +1416,8 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .inv-ic { width: 56px; height: 56px; border-radius: 18px; display: grid; place-items: center; background: rgba(var(--accent-rgb), .14); color: var(--accent); }
 .inv-ic .ic { width: 26px; height: 26px; }
 .inv-link { font-size: 12.5px; padding: 8px 12px; border-radius: 12px; background: var(--surface-2); word-break: break-all; text-align: center; max-width: 100%; }
+
+/* ============ antrean kirim & status koneksi ============ */
+.meta .queued { display: inline-grid; place-items: center; margin-right: 3px; color: var(--text-3); }
+.meta .queued .ic { width: 12px; height: 12px; }
+.net-banner.wait { background: #6b5cff; }

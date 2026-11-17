@@ -471,11 +471,20 @@ document.getElementById('splash')?.remove();
 (() => {
   const b = document.createElement('div');
   b.className = 'net-banner';
-  b.innerHTML = `${icon('wifiOff')}<span>Offline</span>`;
-  const set = on => { b.classList.toggle('show', !on); document.documentElement.classList.toggle('is-offline', !on); if (on && b.dataset.was) { b.classList.add('back'); b.querySelector('span').textContent = 'Online lagi'; b.classList.add('show'); setTimeout(() => { b.classList.remove('show', 'back'); b.querySelector('span').textContent = 'Offline'; }, 1600); } b.dataset.was = on ? '' : '1'; };
-  const mount = () => { document.getElementById('app')?.appendChild(b); set(navigator.onLine); };
+  let bad = false, waitT = null, backT = null;
+  const show = (st, text, ic) => { clearTimeout(backT); b.innerHTML = `${icon(ic)}<span>${text}</span>`; b.classList.toggle('back', st === 'back'); b.classList.toggle('wait', st === 'wait'); b.classList.add('show'); };
+  const set = () => {
+    const st = backend.connState();
+    document.documentElement.classList.toggle('is-offline', st === 'offline');
+    clearTimeout(waitT);
+    if (st === 'offline') { bad = true; show('offline', 'Offline', 'wifiOff'); }
+    else if (st === 'wait') waitT = setTimeout(() => { if (backend.connState() === 'wait') { bad = true; show('wait', 'Menyambungkan…', 'cloud'); } }, 2500);
+    else if (bad) { bad = false; show('back', 'Online lagi', 'check'); backT = setTimeout(() => b.classList.remove('show', 'back'), 1600); }
+    else b.classList.remove('show');
+  };
+  const mount = () => { document.getElementById('app')?.appendChild(b); set(); };
   document.readyState === 'loading' ? addEventListener('DOMContentLoaded', mount) : mount();
-  bus.on('network', set);
+  bus.on('network', set); bus.on('conn', set);
 })();
 
 // carousel post: update titik & nomor saat digeser

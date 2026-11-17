@@ -351,6 +351,8 @@ function ChatScreen(chatId) {
       body = p
         ? `<button class="bubble postmsg" data-act="open-post" data-pid="${p.id}">${img ? `<img src="${img}" alt="">` : ''}<span class="pm-txt"><span class="pm-who">${avatar(pu, 20)}<b>${esc(pu?.name || '')}</b></span>${p.text ? `<span class="pm-body">${esc(p.text.slice(0, 120))}</span>` : ''}<small>${icon('voom', 'tiny')} VOOM${p.images?.length > 1 ? ` · ${p.images.length} foto` : ''}</small></span></button>`
         : `<div class="bubble unsent">${icon('voom', 'tiny')} Post udah dihapus</div>`;
+    } else if (m.type === 'doodle') {
+      bare = true; body = fun.doodleHtml(m);
     } else if (m.type === 'capsule') {
       body = fun.capsuleHtml(m);
     } else if (m.type === 'scratch') {
@@ -427,6 +429,7 @@ function ChatScreen(chatId) {
     if (newLast && !firstRender && lm.type === 'nudge' && Date.now() - lm.ts < 20e3) fun.shake(el, lm.from !== ME);
     fun.initScratch(inner, mid => api.setLocal(chatId, mid, { scratched: true }));
     renderIce();
+    fun.initDoodles(inner, msgById);
     if (firstRender || stick || (newLast && lm.from === ME)) { scrollBottom(); }
     else if (newLast) { newCount++; showJump(); }
     lastId = lm?.id;
@@ -579,7 +582,7 @@ function ChatScreen(chatId) {
     }
     editing = null;
     const u = api.user(m.from);
-    const text = m.type === 'text' ? m.text : m.type === 'poll' ? '📊 ' + m.poll.q : { sticker: 'Sticker ' + m.sticker, image: '📷 Foto', voice: '🎤 Voice note', location: '📍 Lokasi', video: '🎬 Video', file: '📎 ' + m.name }[m.type];
+    const text = m.type === 'text' ? m.text : m.type === 'poll' ? '📊 ' + m.poll.q : { sticker: 'Sticker ' + m.sticker, image: '📷 Foto', voice: '🎤 Voice note', location: '📍 Lokasi', video: '🎬 Video', file: '📎 ' + m.name, doodle: '🖍️ Coretan', capsule: '⏳ Kapsul waktu', scratch: '🫣 Pesan gosok' }[m.type];
     replyTo = { id: m.id, name: m.from === ME ? 'Kamu' : u?.name, text: (text || '').slice(0, 120) };
     replyBar.innerHTML = `<div class="rb-line"></div><div class="rb-txt"><b>${esc(replyTo.name)}</b><span>${esc(replyTo.text)}</span></div><button class="icon-btn sm" data-act="cancel-reply">${icon('x')}</button>`;
     replyBar.hidden = false;
@@ -773,6 +776,7 @@ function ChatScreen(chatId) {
       if (!secret) acts.push({ label: c().announcement?.mid === m.id ? 'Lepas pengumuman' : 'Pin pengumuman', icon: 'megaphone', run: () => api.setAnnouncement(chatId, c().announcement?.mid === m.id ? null : m) });
       if (mine && c().type === 'group') acts.push({ label: 'Dibaca oleh', icon: 'eye', run: () => showReaders(m) });
       if (m.type === 'video' || m.type === 'file') acts.push({ label: 'Simpan', icon: 'download', run: () => openMediaMsg(m) });
+      if (m.type === 'doodle') acts.push({ label: 'Simpan gambar', icon: 'download', run: () => { const a = document.createElement('a'); a.href = fun.doodleURL(m); a.download = 'onix-coretan.png'; a.click(); } });
       if (m.type === 'image') acts.push({ label: 'Simpan foto', icon: 'download', run: () => { const a = document.createElement('a'); a.href = m.src; a.download = 'onix-foto.jpg'; a.click(); } });
       if (mine && Date.now() - m.ts < 24 * 3600e3) acts.push({ label: 'Tarik', icon: 'undo', run: () => api.unsend(chatId, m.id) });
     }
@@ -930,6 +934,8 @@ function ChatScreen(chatId) {
     'ice-topic': t => { ta.value = t.dataset.t; autosize(); ta.focus(); iceBar.hidden = true; },
     'ice-more': () => renderIce(true),
     'ice-x': () => { iceOff.add(fun.icebreaker(chatId)?.key); iceBar.hidden = true; },
+    'att-doodle': () => { closePanel(); ta.blur(); fun.doodleEditor(chatId); },
+    'doodle-play': t => fun.replayDoodle(inner, t.dataset.mid, msgById(t.dataset.mid)),
     'att-capsule': () => { closePanel(); fun.capsuleSheet(chatId); },
     'att-scratch': () => { closePanel(); fun.scratchSheet(chatId); },
     'att-nudge': () => { closePanel(); doNudge(); },
@@ -1005,7 +1011,7 @@ function ChatScreen(chatId) {
       sheet({ top: `<div class="sheet-list">${rows}</div>` });
     },
   });
-  onLongPress(inner, '.msg-row .bubble, .msg-row .sticker, .msg-row .photo, .msg-row .jumbo', b => msgMenu(b.closest('.msg-row')));
+  onLongPress(inner, '.msg-row .bubble, .msg-row .sticker, .msg-row .photo, .msg-row .jumbo, .msg-row .doodle-msg', b => msgMenu(b.closest('.msg-row')));
 
   /* ---------- lifecycle ---------- */
   const offs = [

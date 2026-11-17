@@ -6,6 +6,7 @@ import { router, bindActs, navbar, toast, sheet, confirmBox, promptBox, onLongPr
 import { chatAvatar, chatRow, empty } from './views.js';
 import { openChat } from './chat.js';
 import { openImage } from './screens.js';
+import { doodleURL } from './fun.js';
 
 /* ================= WALLPAPER ================= */
 export const WALLPAPERS = [
@@ -70,6 +71,7 @@ export function keepFromMessage(m, chat) {
   else if (m.type === 'video') Object.assign(item, m.thumb ? { type: 'image', src: m.thumb, w: m.w, h: m.h } : { type: 'text', text: '🎬 Video' });
   else if (m.type === 'file') Object.assign(item, { type: 'text', text: '📎 ' + m.name });
   else if (m.type === 'voice') Object.assign(item, { type: 'text', text: '🎤 Voice note ' + (m.duration || 0) + ' detik' });
+  else if (m.type === 'doodle') Object.assign(item, { type: 'image', src: doodleURL(m), w: 1, h: 1 });
   api.keepAdd(item);
   toast('Disimpan 🔖');
 }

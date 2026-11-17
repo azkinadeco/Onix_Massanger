@@ -5,7 +5,7 @@ import { icon } from './icons.js';
 import { router, bindActs, navbar, sheet, toast } from './ui.js';
 
 // item tambahan di menu + : [aksi, ikon, label, warna]
-export const FUN_ITEMS = [['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020']];
+export const FUN_ITEMS = [['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0']];
 
 /* ============ MODE KALEM ============
    Pesan yang kelihatan lagi emosi -> ditawarin tahan dulu sebelum kekirim */
@@ -324,4 +324,127 @@ export function pickTopics(n = 3) {
   const a = TOPICS.slice();
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a.slice(0, n);
+}
+
+/* ============ CORETAN REPLAY ============
+   Gambar tangan dikirim sebagai goresan (bukan gambar), jadi di HP teman
+   coretannya "digambar ulang" pelan-pelan. Koordinat 0..1000. */
+const DD_COLORS = ['#15151C', '#7C5CFF', '#FF3D6E', '#FFB020', '#10B26C', '#2E7BFF'];
+const DD_SIZES = [7, 16];
+const DD_MAX = 6000;
+const ddCount = strokes => strokes.reduce((a, s) => a + s.p.length / 2, 0);
+function ddDraw(x, size, strokes, upto = Infinity) {
+  const k = size / 1000;
+  x.clearRect(0, 0, size, size);
+  x.fillStyle = '#fff'; x.fillRect(0, 0, size, size);
+  x.lineCap = 'round'; x.lineJoin = 'round';
+  let n = 0;
+  for (const s of strokes) {
+    if (n >= upto) break;
+    x.strokeStyle = DD_COLORS[s.c] || DD_COLORS[0];
+    x.lineWidth = (DD_SIZES[s.w] || DD_SIZES[0]) * k;
+    x.beginPath();
+    const p = s.p;
+    x.moveTo(p[0] * k, p[1] * k);
+    if (p.length === 2) x.lineTo(p[0] * k + .1, p[1] * k);
+    for (let i = 2; i < p.length && n < upto; i += 2, n++) x.lineTo(p[i] * k, p[i + 1] * k);
+    n++;
+    x.stroke();
+  }
+}
+function ddCanvas(cv, css) {
+  const dpr = devicePixelRatio || 1;
+  cv.width = cv.height = Math.round(css * dpr);
+  cv.style.width = cv.style.height = css + 'px';
+  const x = cv.getContext('2d');
+  x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return x;
+}
+const played = new Set();
+function ddPlay(cv, strokes) {
+  const x = cv.getContext('2d'), size = parseFloat(cv.style.width);
+  const N = ddCount(strokes), D = Math.min(3500, Math.max(900, N * 7));
+  const t0 = performance.now();
+  cv._play = (cv._play || 0) + 1;
+  const id = cv._play;
+  const step = now => {
+    if (cv._play !== id) return;
+    const f = Math.min(1, (now - t0) / D);
+    ddDraw(x, size, strokes, Math.ceil(N * f));
+    if (f < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+export function doodleHtml(m) {
+  return `<button class="doodle-msg" data-act="doodle-play" data-mid="${m.id}"><canvas class="dd-cv" data-dd="${m.id}"></canvas><span class="dd-replay">${icon('refresh', 'tiny')}</span></button>`;
+}
+export function initDoodles(root, getMsg) {
+  root.querySelectorAll('canvas.dd-cv:not([data-on])').forEach(cv => {
+    const m = getMsg(cv.dataset.dd);
+    if (!m?.strokes) return;
+    cv.dataset.on = 1;
+    const x = ddCanvas(cv, 210);
+    if (!played.has(m.id) && Date.now() - m.ts < 20e3) { played.add(m.id); ddPlay(cv, m.strokes); }
+    else ddDraw(x, 210, m.strokes);
+  });
+}
+export function replayDoodle(root, mid, m) {
+  const cv = root.querySelector(`canvas.dd-cv[data-dd="${mid}"]`);
+  if (cv && m?.strokes) ddPlay(cv, m.strokes);
+}
+export function doodleURL(m) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 600;
+  ddDraw(cv.getContext('2d'), 600, m.strokes || []);
+  return cv.toDataURL('image/png');
+}
+export function doodleEditor(chatId) {
+  let strokes = [], color = 0, width = 0, cur = null;
+  const css = Math.min(window.innerWidth - 32, 420);
+  const el = h(`<div class="doodle-ed">
+    <div class="dd-top"><button class="icon-btn" data-dd="x" aria-label="Tutup">${icon('x')}</button><b>🖍️ Coretan</b><button class="icon-btn" data-dd="undo" aria-label="Undo">${icon('undo')}</button><button class="icon-btn" data-dd="clear" aria-label="Hapus">${icon('trash')}</button></div>
+    <div class="dd-pad"><canvas></canvas><span class="dd-hint">Gambar di sini ✨</span></div>
+    <div class="dd-bar">
+      <div class="dd-colors">${DD_COLORS.map((c, i) => `<button class="${i ? '' : 'on'}" style="--c:${c}" data-c="${i}"></button>`).join('')}</div>
+      <div class="dd-sizes">${DD_SIZES.map((s, i) => `<button class="${i ? '' : 'on'}" data-w="${i}"><i style="width:${s}px;height:${s}px"></i></button>`).join('')}</div>
+    </div>
+    <button class="btn primary wide dd-send" data-dd="send">${icon('send', 'tiny')} Kirim</button>
+  </div>`);
+  const cv = el.querySelector('canvas'), x = ddCanvas(cv, css), hint = el.querySelector('.dd-hint');
+  const redraw = () => { ddDraw(x, css, strokes); hint.hidden = strokes.length > 0; };
+  redraw();
+  const pt = e => { const b = cv.getBoundingClientRect(); return [Math.round((e.clientX - b.left) / b.width * 1000), Math.round((e.clientY - b.top) / b.height * 1000)].map(v => Math.max(0, Math.min(1000, v))); };
+  cv.addEventListener('pointerdown', e => {
+    if (ddCount(strokes) > DD_MAX) return toast('Coretannya udah penuh');
+    try { cv.setPointerCapture(e.pointerId); } catch { /* */ }
+    cur = { c: color, w: width, p: pt(e) };
+    strokes.push(cur); redraw();
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!cur) return;
+    const [px, py] = pt(e), p = cur.p;
+    if (Math.hypot(px - p[p.length - 2], py - p[p.length - 1]) < 5) return;
+    p.push(px, py);
+    redraw();
+  });
+  const end = () => { cur = null; };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  const close = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 260); };
+  el.addEventListener('click', e => {
+    const c = e.target.closest('[data-c]'), w = e.target.closest('[data-w]'), b = e.target.closest('[data-dd]');
+    if (c) { color = +c.dataset.c; el.querySelectorAll('[data-c]').forEach(n => n.classList.toggle('on', n === c)); }
+    if (w) { width = +w.dataset.w; el.querySelectorAll('[data-w]').forEach(n => n.classList.toggle('on', n === w)); }
+    if (!b) return;
+    const a = b.dataset.dd;
+    if (a === 'x') close();
+    if (a === 'undo') { strokes.pop(); redraw(); }
+    if (a === 'clear') { strokes = []; redraw(); }
+    if (a === 'send') {
+      if (!strokes.length) return toast('Gambar dulu dong 🖍️');
+      api.send(chatId, { type: 'doodle', strokes });
+      buzz(10); close();
+    }
+  });
+  document.getElementById('app').appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
 }

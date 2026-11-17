@@ -29,6 +29,18 @@ bash server/tunnel.sh     # (opsional) link HTTPS gratis via Cloudflare, buat iP
   **privasi**: sembunyikan terakhir dilihat & centang dibaca (timbal balik). Atur di Saya → Onix Online.
   Catatan: notif sistem di iPhone butuh app ditambah ke Layar Utama (iOS 16.4+) dan cuma jalan selama app masih hidup di background — push saat app ditutup total butuh Web Push (belum).
 
+## Khas Onix ✨ (nggak ada di app chat lain)
+Semua ada di tombol **+** di chat → bagian *Khas Onix*, dan ikut tersinkron online.
+- **Kapsul waktu**: pesan disegel sampai waktu tertentu (1 jam – 1 tahun / pilih tanggal), dua pihak sama-sama nunggu
+- **Pesan gosok**: isi pesan ketutup lapisan warna-warni, penerima harus gosok buat baca
+- **Colek**: layar teman goyang + getar (maks 1x tiap 10 detik)
+- **Coretan replay**: gambar tangan dikirim sebagai goresan, di HP teman digambar ulang pelan-pelan (tap buat putar lagi)
+- **Rekap chat** ala Wrapped: paling cerewet, emoji andalan, jam rame, streak, kecepatan bales → bisa dikirim jadi kartu
+- **Vibe chat**: emoji + warna header ngikutin suasana 40 pesan terakhir (kocak, manis, seru, galau, sibuk, laper…), tap buat detail
+- **Pemecah sepi**: chat sepi >3 hari muncul saran topik obrolan
+- **Mode kalem**: pesan kasar / huruf kapital semua / `!!!!` / panjang tengah malam → ditawarin tahan 10 menit
+- **Batal kirim**: tiap pesan nunggu 3 detik dengan tombol *Batal* (bisa dimatikan di Kamu)
+
 ## Fitur
 - **Chat**: personal & grup, sticker, emoji, foto/kamera, voice note, lokasi, balas (reply), reaksi,
   salin, tarik pesan, hapus, tanda "Dibaca", indikator "lagi ngetik…", draft, pin/bisukan/hapus chat,

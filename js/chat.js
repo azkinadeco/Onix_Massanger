@@ -191,6 +191,7 @@ function ChatScreen(chatId) {
     <div class="msgs"><div class="msgs-inner"></div><div class="typing-row" hidden></div></div>
     <button class="jump" hidden>${icon('chevronDown')}<b></b></button>
     <div class="composer-wrap">
+      <div class="ice-bar" hidden></div>
       <div class="mention-list" hidden></div>
       <button class="sched-bar" data-act="sched-list" hidden></button>
       <div class="reply-bar" hidden></div>
@@ -263,7 +264,10 @@ function ChatScreen(chatId) {
     else if (ch.type === 'group') sub = `${ch.members.length} anggota`;
     else sub = esc(presence(api.peerOf(ch)));
     const peer = api.peerOf(ch);
-    $('.chat-title', el).innerHTML = `${chatAvatar(ch, 36)}<span class="ct-txt"><b>${esc(api.chatTitle(ch))}${peer?.official ? verified() : ''}${ch.muted ? icon('bellOff', 'tiny muted-ic') : ''}${ch.ttl ? `<span class="ttl-pill">${icon('clock')}${esc(ttlShort(ch.ttl))}</span>` : ''}</b><small>${sub}</small></span>`;
+    const vb = fun.vibeOf(chatId);
+    if (vb) el.style.setProperty('--vibe', vb.c); else el.style.removeProperty('--vibe');
+    el.toggleAttribute('data-vibe', !!vb);
+    $('.chat-title', el).innerHTML = `${chatAvatar(ch, 36)}<span class="ct-txt"><b>${esc(api.chatTitle(ch))}${peer?.official ? verified() : ''}${vb ? `<span class="vibe-pill" data-act="vibe" title="Vibe: ${vb.label}">${vb.e}</span>` : ''}${ch.muted ? icon('bellOff', 'tiny muted-ic') : ''}${ch.ttl ? `<span class="ttl-pill">${icon('clock')}${esc(ttlShort(ch.ttl))}</span>` : ''}</b><small>${sub}</small></span>`;
     const n = api.totalUnread(chatId);
     $('.back-count', el).textContent = n ? (n > 99 ? '99+' : n) : '';
     el.dataset.wall = ch.wallpaper || 'default';
@@ -422,6 +426,7 @@ function ChatScreen(chatId) {
     if (newLast && !firstRender) { const fx = effectOf(lm); if (fx) playEffect(fx, el); }
     if (newLast && !firstRender && lm.type === 'nudge' && Date.now() - lm.ts < 20e3) fun.shake(el, lm.from !== ME);
     fun.initScratch(inner, mid => api.setLocal(chatId, mid, { scratched: true }));
+    renderIce();
     if (firstRender || stick || (newLast && lm.from === ME)) { scrollBottom(); }
     else if (newLast) { newCount++; showJump(); }
     lastId = lm?.id;
@@ -540,6 +545,17 @@ function ChatScreen(chatId) {
     vibrate(6);
   }
   const calmOk = new Set();
+  const iceBar = $('.ice-bar', el), iceOff = new Set();
+  let iceKey = null;
+  function renderIce(force) {
+    const ib = fun.icebreaker(chatId);
+    if (!ib || iceOff.has(ib.key) || ta.value.trim()) { iceBar.hidden = true; iceKey = null; return; }
+    if (!force && iceKey === ib.key && !iceBar.hidden) return;
+    iceKey = ib.key;
+    iceBar.innerHTML = `<div class="ice-h"><span>🧊 ${esc(ib.label)}</span><button class="icon-btn sm" data-act="ice-more" aria-label="Ganti">${icon('shuffle')}</button><button class="icon-btn sm" data-act="ice-x" aria-label="Tutup">${icon('x')}</button></div><div class="ice-chips">${fun.pickTopics().map(t => `<button data-act="ice-topic" data-t="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
+    iceBar.hidden = false;
+  }
+  ta.addEventListener('input', () => { if (ta.value.trim() && !iceBar.hidden) iceBar.hidden = true; });
   function doNudge() { if (!fun.nudge(chatId)) toast('Sabar, baru aja nyolek 😆'); else vibrate(10); }
   // kapsul: cek tiap 30 dtk biar hitung mundurnya jalan & kebuka sendiri
   const capT = setInterval(() => { if (api.messages(chatId).some(m => m.type === 'capsule' && !m.capOpened)) renderMsgs(); }, 30e3);
@@ -909,6 +925,11 @@ function ChatScreen(chatId) {
       if (r === null) toast('Saldo kurang 🥲'); else if (r) { toast(`Dibayar ${rupiah(m.per)} ✅`); vibrate(10); }
     },
     retry: t => api.remote.retry(chatId, t.dataset.mid),
+    vibe: () => fun.vibeSheet(chatId),
+    'att-recap': () => { closePanel(); router.push(fun.RecapScreen(chatId)); },
+    'ice-topic': t => { ta.value = t.dataset.t; autosize(); ta.focus(); iceBar.hidden = true; },
+    'ice-more': () => renderIce(true),
+    'ice-x': () => { iceOff.add(fun.icebreaker(chatId)?.key); iceBar.hidden = true; },
     'att-capsule': () => { closePanel(); fun.capsuleSheet(chatId); },
     'att-scratch': () => { closePanel(); fun.scratchSheet(chatId); },
     'att-nudge': () => { closePanel(); doNudge(); },

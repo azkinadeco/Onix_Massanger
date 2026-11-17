@@ -1,10 +1,11 @@
 // Fitur khas Onix (nggak ada di app chat lain)
 import { api, bus, ME, firstName } from './service.js';
-import { esc } from './util.js';
+import { esc, h, avatar } from './util.js';
 import { icon } from './icons.js';
+import { router, bindActs, navbar, sheet, toast } from './ui.js';
 
 // item tambahan di menu + : [aksi, ikon, label, warna]
-export const FUN_ITEMS = [['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020']];
+export const FUN_ITEMS = [['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020']];
 
 /* ============ MODE KALEM ============
    Pesan yang kelihatan lagi emosi -> ditawarin tahan dulu sebelum kekirim */
@@ -188,4 +189,139 @@ export function shake(el, strong) {
   el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
   setTimeout(() => el.classList.remove('shake'), 700);
   if (strong) buzz([40, 60, 40, 60, 40]);
+}
+
+/* ============ REKAP CHAT (ala Wrapped) ============ */
+const EMO_RE = /\p{Extended_Pictographic}(‍\p{Extended_Pictographic}|️)*/gu;
+const nameOf = id => id === ME ? 'Kamu' : firstName(api.user(id)?.name || '?');
+const durTxt = ms => ms == null ? '–' : ms < 60e3 ? Math.max(1, Math.round(ms / 1e3)) + ' dtk' : ms < 3600e3 ? Math.round(ms / 60e3) + ' mnt' : Math.round(ms / 3600e3) + ' jam';
+const hourTxt = h => String(h).padStart(2, '0') + '.00';
+export function recapStats(chatId) {
+  const list = api.messages(chatId).filter(m => m.type !== 'system' && !m.unsent && m.status !== 'hold');
+  const by = {}, emo = {}, kinds = {}, hours = Array(24).fill(0), days = new Set(), rMine = [], rThem = [];
+  list.forEach((m, i) => {
+    by[m.from] = (by[m.from] || 0) + 1;
+    kinds[m.type] = (kinds[m.type] || 0) + 1;
+    const d = new Date(m.ts);
+    hours[d.getHours()]++;
+    days.add(d.toDateString());
+    const t = (m.type === 'text' ? m.text || '' : '') + (m.type === 'sticker' && !m.img ? m.sticker || '' : '');
+    for (const e of t.match(EMO_RE) || []) emo[e] = (emo[e] || 0) + 1;
+    for (const [e, a] of Object.entries(m.reactions || {})) emo[e] = (emo[e] || 0) + a.length;
+    const p = list[i - 1];
+    if (p && p.from !== m.from && m.ts - p.ts < 12 * 3600e3) (m.from === ME ? rMine : rThem).push(m.ts - p.ts);
+  });
+  const ds = [...days].map(d => +new Date(d)).sort((a, b) => a - b);
+  let streak = ds.length ? 1 : 0, cur = 1;
+  for (let i = 1; i < ds.length; i++) { cur = Math.round((ds[i] - ds[i - 1]) / 864e5) === 1 ? cur + 1 : 1; streak = Math.max(streak, cur); }
+  const med = a => a.length ? a.sort((x, y) => x - y)[a.length >> 1] : null;
+  const peak = hours.indexOf(Math.max(...hours));
+  const persona = !list.length ? '' : peak >= 22 || peak < 4 ? ['🦉', 'Duo begadang'] : peak < 10 ? ['🐦', 'Tim pagi'] : peak < 16 ? ['☀️', 'Anak siang'] : ['🌇', 'Geng sore'];
+  return {
+    total: list.length, since: list[0]?.ts, days: days.size, streak, hours, peak, persona,
+    by: Object.entries(by).sort((a, b) => b[1] - a[1]),
+    emo: Object.entries(emo).sort((a, b) => b[1] - a[1]).slice(0, 5),
+    kinds, rMine: med(rMine), rThem: med(rThem),
+  };
+}
+export function RecapScreen(chatId) {
+  const ch = api.chat(chatId), s = recapStats(chatId), group = ch.type === 'group';
+  const peer = group ? null : api.peerOf(ch);
+  const max = Math.max(1, ...s.hours);
+  const card = (cls, inner) => `<section class="rc-card ${cls}">${inner}</section>`;
+  const body = !s.total ? `<div class="rc-empty">📭<b>Belum ada obrolan</b></div>` : [
+    card('rc-hero', `<small>Rekap ${esc(api.chatTitle(ch))}</small><b class="rc-big">${s.total.toLocaleString('id-ID')}</b><span>pesan · ${s.days} hari ngobrol</span><small>sejak ${new Date(s.since).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</small>`),
+    card('rc-who', `<small>Paling cerewet</small>${s.by.slice(0, 5).map(([id, n]) => `<div class="rc-bar"><span class="rc-av">${avatar(id === ME ? api.me() : api.user(id), 30)}</span><span class="rc-track"><i style="width:${Math.round(n / s.by[0][1] * 100)}%"></i><em>${esc(nameOf(id))}</em></span><b>${Math.round(n / s.total * 100)}%</b></div>`).join('')}`),
+    s.emo.length ? card('rc-emo', `<small>Emoji andalan</small><div class="rc-emo-top">${s.emo[0][0]}</div><div class="rc-emo-rest">${s.emo.slice(1).map(([e, n]) => `<span>${e}<small>${n}</small></span>`).join('')}</div>`) : '',
+    card('rc-hour', `<small>Jam paling rame</small><b class="rc-mid">${s.persona[0]} ${s.persona[1]}</b><div class="rc-chart">${s.hours.map((n, i) => `<i class="${i === s.peak ? 'on' : ''}" style="height:${Math.max(4, Math.round(n / max * 100))}%"></i>`).join('')}</div><span>Puncaknya jam ${hourTxt(s.peak)}</span>`),
+    card('rc-streak', `<small>Streak terpanjang</small><b class="rc-big">${s.streak}🔥</b><span>hari berturut-turut</span>`),
+    !group && (s.rMine != null || s.rThem != null) ? card('rc-speed', `<small>Kecepatan bales</small><div class="rc-vs"><div><b>${durTxt(s.rMine)}</b><span>Kamu</span></div><i>vs</i><div><b>${durTxt(s.rThem)}</b><span>${esc(firstName(peer?.name || ''))}</span></div></div>`) : '',
+    `<button class="btn primary wide rc-share" data-act="share">${icon('share', 'tiny')} Kirim rekap ke chat</button>`,
+  ].join('');
+  const el = h(`<div class="sub-screen">${navbar('Rekap ✨')}<div class="content rc">${body}</div></div>`);
+  bindActs(el, {
+    share: () => {
+      const src = recapImage(ch, s);
+      api.send(chatId, { type: 'image', src, w: 1080, h: 1350 });
+      toast('Rekap terkirim ✨'); buzz(10); router.back();
+    },
+  });
+  return { el };
+}
+function recapImage(ch, s) {
+  const W = 1080, H = 1350, cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const x = cv.getContext('2d');
+  const g = x.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, '#7C5CFF'); g.addColorStop(.55, '#C04CFF'); g.addColorStop(1, '#FF6FB5');
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  x.fillStyle = 'rgba(255,255,255,.08)';
+  [[180, 220, 260], [930, 380, 200], [820, 1180, 300]].forEach(([cx, cy, r]) => { x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fill(); });
+  const F = '-apple-system, system-ui, sans-serif';
+  const t = (str, y, size, wgt = 700, a = 1) => { x.globalAlpha = a; x.fillStyle = '#fff'; x.font = `${wgt} ${size}px ${F}`; x.textAlign = 'center'; x.fillText(str, W / 2, y); x.globalAlpha = 1; };
+  t('REKAP ONIX', 140, 38, 800, .8);
+  t(api.chatTitle(ch).slice(0, 26), 220, 60, 800);
+  t(s.total.toLocaleString('id-ID'), 420, 190, 900);
+  t(`pesan · ${s.days} hari ngobrol`, 490, 44, 600, .9);
+  t(`${s.persona[0]} ${s.persona[1]}`, 640, 64, 800);
+  t(`paling rame jam ${hourTxt(s.peak)}`, 705, 38, 600, .85);
+  if (s.emo.length) { t(s.emo.slice(0, 3).map(e => e[0]).join('  '), 880, 120, 400); t('emoji andalan', 945, 36, 600, .85); }
+  t(`${s.streak} hari streak 🔥`, 1080, 56, 800);
+  const top = s.by[0];
+  if (top) t(`paling cerewet: ${nameOf(top[0])} (${Math.round(top[1] / s.total * 100)}%)`, 1150, 38, 600, .9);
+  t('onix', 1290, 34, 800, .55);
+  return cv.toDataURL('image/jpeg', .85);
+}
+
+/* ============ VIBE CHAT ============
+   Suasana obrolan dari 40 pesan terakhir -> emoji + warna di header */
+const VIBES = [
+  ['kocak', '😂', 'Kocak', '#FFB020', /wk{2,}|ha(ha)+|he(he)+|ngakak|lol|😂|🤣|😆|😹|lucu/giu],
+  ['manis', '💗', 'Manis', '#FF5CA8', /sayang|kangen|love|❤️|💖|🥰|😍|🫶|💕|💗|💜/giu],
+  ['seru', '🔥', 'Seru', '#FF6B1A', /\bgas+\b|anjay|keren|mantap|🔥|🤩|🎉|seru|wih|gokil/giu],
+  ['galau', '🥲', 'Galau', '#5B8CFF', /sedih|capek|cape|galau|nangis|😭|🥲|😢|💔|huhu/giu],
+  ['sibuk', '📚', 'Sibuk', '#14B8C4', /tugas|deadline|kerja|meeting|rapat|kuliah|ujian|dosen|📚|💻/giu],
+  ['laper', '🍜', 'Laper', '#10B26C', /makan|laper|lapar|\bmie\b|kopi|jajan|bakso|🍜|🍕|☕|🍔|🍩/giu],
+];
+const VIBE_SEPI = { k: 'sepi', e: '🧊', label: 'Sepi', c: '#8C9BB0' }, VIBE_SANTAI = { k: 'santai', e: '😌', label: 'Santai', c: '#9B8CFF' };
+export function vibeOf(chatId) {
+  const list = api.messages(chatId).filter(m => m.type !== 'system' && !m.unsent).slice(-40);
+  if (list.length < 3) return null;
+  if (Date.now() - list[list.length - 1].ts > 3 * 864e5) return { ...VIBE_SEPI, scores: [] };
+  const sc = Object.fromEntries(VIBES.map(v => [v[0], 0]));
+  list.forEach((m, i) => {
+    const w = 1 + i / list.length;
+    const t = (m.text || '') + ' ' + (m.type === 'sticker' && !m.img ? m.sticker || '' : '') + ' ' + Object.keys(m.reactions || {}).join(' ');
+    for (const [k, , , , re] of VIBES) sc[k] += (t.match(re) || []).length * w;
+  });
+  const scores = VIBES.map(v => ({ k: v[0], e: v[1], label: v[2], c: v[3], n: sc[v[0]] })).sort((a, b) => b.n - a.n);
+  const best = scores[0];
+  return best.n < 2 ? { ...VIBE_SANTAI, scores } : { ...best, scores };
+}
+export function vibeSheet(chatId) {
+  const v = vibeOf(chatId);
+  if (!v) return;
+  const tot = v.scores.reduce((a, b) => a + b.n, 0) || 1;
+  sheet({
+    top: `<div class="vibe-sh" style="--v:${v.c}"><div class="vs-emo">${v.e}</div><b>Vibe: ${v.label}</b><small>${v.k === 'sepi' ? 'Udah lama nggak ngobrol' : 'Dari 40 pesan terakhir'}</small>
+      ${v.scores.filter(x => x.n > 0).slice(0, 4).map(x => `<div class="vs-row" style="--v:${x.c}"><span>${x.e}</span><span class="vs-track"><i style="width:${Math.round(x.n / tot * 100)}%"></i></span><small>${Math.round(x.n / tot * 100)}%</small></div>`).join('')}</div>`,
+  });
+}
+
+/* ============ PEMECAH SEPI ============
+   Chat sepi > 3 hari (atau masih kosong) -> saran topik, tap buat dipakai */
+const TOPICS = ['Lagi dengerin lagu apa sekarang? 🎧', 'Kalau bisa liburan besok, mau ke mana?', 'Makanan paling enak minggu ini apa?', 'Ada tontonan seru nggak? Butuh rekomendasi 🍿', 'Hal kecil yang bikin kamu seneng hari ini?', 'Kangen ngobrol nih, apa kabar? 👋', 'Kalau punya 1 juta buat dihabisin sehari, beli apa?', 'Lagi sibuk apa sekarang?', 'Mau nongkrong kapan? ☕', 'Kebiasaan aneh kamu apa? wkwk', 'Lagu yang lagi nyangkut di kepala?', 'Tim bubur diaduk atau nggak diaduk? 🥣', 'Ada cerita lucu minggu ini?', 'Mending gunung atau pantai? 🏔️🏖️', 'Apa yang lagi kamu pengenin banget?', 'Film terakhir yang kamu tonton?', 'Kalau jadi hewan, mau jadi apa? 🐱', 'Rekomendasiin jajanan enak dong', 'Pagi ini sarapan apa?', 'Lagi pengen belajar hal baru apa?', 'Hal paling random yang kamu lakuin minggu ini?', 'Mau main bareng kapan? 🎮', 'Tempat nongkrong favorit kamu sekarang?', 'Kopi atau teh? ☕🍵'];
+export function icebreaker(chatId) {
+  const ch = api.chat(chatId);
+  if (!ch || api.peerOf(ch)?.official) return null;
+  const list = api.messages(chatId).filter(m => m.type !== 'system');
+  const last = list[list.length - 1];
+  if (!last) return { label: 'Mulai obrolan', key: 'empty' };
+  const days = Math.floor((Date.now() - last.ts) / 864e5);
+  return days >= 3 ? { label: `Udah ${days} hari sepi`, key: last.id } : null;
+}
+export function pickTopics(n = 3) {
+  const a = TOPICS.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a.slice(0, n);
 }

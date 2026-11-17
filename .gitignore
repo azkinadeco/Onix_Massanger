@@ -1,3 +1,9 @@
 .DS_Store
 node_modules/
 *.log
+
+# server lokal
+server/pocketbase
+server/cloudflared
+server/pb_data/
+server/ADMIN.txt

@@ -354,6 +354,7 @@ function ChatScreen(chatId) {
     if (mine && !m.unsent) {
       const n = (m.readBy || []).length;
       if (m.status === 'sending') read = '<span class="sending"></span>';
+      else if (m.status === 'failed') read = `<button class="failed" data-act="retry" data-mid="${m.id}" aria-label="Kirim ulang">!</button>`;
       else if (n) read = group ? `<button class="read" data-act="readers" data-mid="${m.id}">${icon('checks')}${n}</button>` : `<span class="read">${icon('checks')}</span>`;
       else read = `<span class="sent">${icon('check')}</span>`;
     }
@@ -864,6 +865,7 @@ function ChatScreen(chatId) {
       const r = api.payIncoming(chatId, t.dataset.mid);
       if (r === null) toast('Saldo kurang 🥲'); else if (r) { toast(`Dibayar ${rupiah(m.per)} ✅`); vibrate(10); }
     },
+    retry: t => api.remote.retry(chatId, t.dataset.mid),
     'att-game': () => { closePanel(); gameSheet(); },
     'att-poll': () => { closePanel(); router.push(PollComposeScreen(chatId)); },
     'att-event': () => { closePanel(); router.push(EventComposeScreen(chatId)); },

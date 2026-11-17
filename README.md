@@ -9,6 +9,18 @@ Aplikasi chat ala LINE, versi web (PWA) untuk dites di browser HP. Mode portrait
 Buka alamat **"Di iPhone"** yang muncul di Safari iPhone (HP & laptop harus di Wi-Fi yang sama).
 Biar terasa seperti aplikasi: Safari → tombol Share → **Add to Home Screen**.
 
+## Chat beneran (server PocketBase)
+```bash
+bash server/start.sh      # download PocketBase otomatis, jalan di port 8090
+bash server/tunnel.sh     # (opsional) link HTTPS gratis via Cloudflare, buat iPhone dari mana aja
+```
+- Buka `http://localhost:8090` (laptop) atau `http://IP-laptop:8090` (iPhone, satu Wi-Fi)
+- Di app: **Saya → Onix Online** → Daftar (ID + password) → cari ID teman → Chat
+- Dashboard admin: `http://localhost:8090/_/` (login ada di `server/ADMIN.txt`)
+- Skema ada di `server/pb_migrations/`, data di `server/pb_data/` (tidak ikut git)
+- Yang sudah online: akun, cari teman, chat personal realtime (teks, sticker, foto, voice, lokasi, dll), riwayat tersinkron.
+  Belum: grup online, read receipt, typing, reaksi/edit/tarik pesan, video & file.
+
 ## Fitur
 - **Chat**: personal & grup, sticker, emoji, foto/kamera, voice note, lokasi, balas (reply), reaksi,
   salin, tarik pesan, hapus, tanda "Dibaca", indikator "lagi ngetik…", draft, pin/bisukan/hapus chat,

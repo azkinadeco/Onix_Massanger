@@ -1366,3 +1366,28 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .bk-hero small { color: var(--text-2); font-size: 13px; }
 .bk-btns { display: flex; flex-direction: column; gap: 10px; }
 .bk-btns .btn { display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+/* ============ Onix Online (PocketBase) ============ */
+.on-hero { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 26px 16px 18px; }
+.on-ic { width: 76px; height: 76px; border-radius: 26px; display: grid; place-items: center; color: #fff; background: linear-gradient(140deg, #2EE6A6, #2E7BFF); box-shadow: 0 10px 26px rgba(46,123,255,.3); }
+.on-ic .ic { width: 36px; height: 36px; }
+.on-hero b { font-size: 20px; font-weight: 800; }
+.on-mode { margin: 0 16px 14px; }
+.on-form { display: flex; flex-direction: column; gap: 10px; padding: 0 16px; }
+.on-field { display: flex; align-items: center; gap: 2px; height: 48px; padding: 0 14px; border-radius: 14px; background: var(--surface-2); }
+.on-field span { color: var(--text-2); font-weight: 700; }
+.on-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font: inherit; font-size: 16px; color: var(--text); }
+.on-adv summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); padding: 4px 2px 8px; cursor: pointer; }
+.on-adv summary::-webkit-details-marker { display: none; }
+.on-adv .field { width: 100%; font-size: 14px; }
+.on-card { display: flex; align-items: center; gap: 12px; margin: 6px 16px 6px; padding: 14px; border-radius: 20px; background: var(--surface); }
+.on-who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.on-who small { color: var(--text-2); }
+.on-dot { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--text-2); }
+.on-dot::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #FFB800; }
+.on-dot.ok { color: #0B9A5B; }
+.on-dot.ok::before { background: #0FB46C; box-shadow: 0 0 0 3px rgba(15,180,108,.2); }
+.on-search { padding-top: 8px; }
+.on-loading { margin: 18px auto; width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid rgba(var(--accent-rgb), .25); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+.on-pill { font-size: 12.5px; font-weight: 700; color: #0B9A5B; background: rgba(15,180,108,.12); padding: 3px 8px; border-radius: 99px; }
+.meta .failed { width: 17px; height: 17px; border-radius: 50%; background: var(--danger); color: #fff; font-size: 11px; font-weight: 900; display: inline-grid; place-items: center; margin-right: 3px; }

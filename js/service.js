@@ -170,7 +170,7 @@ function receive(chatId, from, payload) {
   db.messages[chatId].push(m);
   c.updatedAt = m.ts;
   c.hidden = false;
-  if (db.users[from]) { db.users[from].online = true; db.users[from].lastSeen = Date.now(); }
+  if (db.users[from] && !db.users[from].remote) { db.users[from].online = true; db.users[from].lastSeen = Date.now(); }
   const mentionsMe = c.type === 'group' && mentionRe(db.me.name).test(m.text || '');
   if (activeChat !== chatId || document.hidden) {
     c.unread = (c.unread || 0) + 1;
@@ -302,8 +302,72 @@ setInterval(() => {
   }
 }, 10e3);
 
+/* ---------- jembatan ke server (PocketBase) ---------- */
+let remoteSend = null;
+const SKIP_KEYS = ['id', 'chatId', 'from', 'ts', 'status', 'reactions', 'readBy', 'rid', 'expires', 'type', 'text'];
+const remote = {
+  setSender(fn) { remoteSend = fn; },
+  state() { return db?.remote || null; },
+  setState(s) { db.remote = s; save(); bus.emit('remote'); },
+  mapId(pid) { return pid === db.remote?.uid ? ME : pid; },
+  payloadOf(m) {
+    const p = {};
+    for (const k in m) if (!SKIP_KEYS.includes(k) && m[k] !== undefined) p[k] = m[k];
+    if (p.replyTo?.name === 'Kamu') p.replyTo = { ...p.replyTo, name: db.me.name };
+    return p;
+  },
+  user(r, avatarUrl) {
+    if (!r || r.id === db.remote?.uid) return;
+    const u = db.users[r.id] ||= { id: r.id, online: false, lastSeen: 0 };
+    Object.assign(u, { name: r.name || r.handle, handle: r.handle, hue: r.hue ?? 260, status: r.status || '', avatar: avatarUrl || null, remote: true });
+  },
+  chat(r) {
+    const t = Date.parse(r.created) || Date.now();
+    const c = db.chats[r.id] ||= { id: r.id, pinned: false, muted: false, unread: 0, draft: '', createdAt: t, updatedAt: t };
+    Object.assign(c, { type: r.type, members: (r.members || []).map(remote.mapId), name: r.name || '', hue: r.hue ?? c.hue, emoji: r.emoji || c.emoji, remote: true, left: false });
+    db.messages[r.id] ||= [];
+    return c;
+  },
+  message(rec, live) {
+    const chatId = rec.chat, c = db.chats[chatId];
+    if (!c) return;
+    const list = db.messages[chatId];
+    const cid = rec.cid || rec.id;
+    const ex = list.find(m => m.id === cid || m.rid === rec.id);
+    if (ex) { if (ex.status !== 'sent') { ex.status = 'sent'; ex.rid = rec.id; if (live) emitChat(chatId); } return; }
+    const from = remote.mapId(rec.sender);
+    const payload = { ...(rec.data || {}), type: rec.type || 'text', id: cid, rid: rec.id, ts: Date.parse(rec.created) || Date.now() };
+    if (rec.text) payload.text = rec.text;
+    if (payload.replyTo && payload.replyTo.name === db.me.name) payload.replyTo = { ...payload.replyTo, name: 'Kamu' };
+    if (db.users[from]) db.users[from].lastSeen = Math.max(db.users[from].lastSeen || 0, payload.ts);
+    if (live && from !== ME) { receive(chatId, from, payload); return; }
+    const m = newMsg(chatId, from, { ...payload, status: 'sent' });
+    delete m.expires;
+    list.push(m);
+    if (from !== ME && m.ts > (c.readAt || 0) && activeChat !== chatId) c.unread = (c.unread || 0) + 1;
+    c.updatedAt = Math.max(c.updatedAt || 0, m.ts);
+    if (live) emitChat(chatId);
+  },
+  done() {
+    for (const c of Object.values(db.chats)) if (c.remote) db.messages[c.id].sort((a, b) => a.ts - b.ts);
+    save(); bus.emit('chats'); bus.emit('friends');
+    for (const c of Object.values(db.chats)) if (c.remote) bus.emit('messages', c.id);
+  },
+  sent(chatId, cid, rid) { const m = db.messages[chatId]?.find(x => x.id === cid); if (m) { m.status = 'sent'; m.rid = rid; emitChat(chatId); } },
+  failed(chatId, cid) { const m = db.messages[chatId]?.find(x => x.id === cid); if (m) { m.status = 'failed'; emitChat(chatId); } },
+  retry(chatId, cid) { const m = db.messages[chatId]?.find(x => x.id === cid); if (m && remoteSend) { m.status = 'sending'; emitChat(chatId); remoteSend(chatId, m); } },
+  directChatWith(uid) { return Object.values(db.chats).find(c => c.remote && c.type === 'direct' && c.members.includes(uid))?.id || null; },
+  purge() {
+    for (const c of Object.values(db.chats)) if (c.remote) { delete db.chats[c.id]; delete db.messages[c.id]; }
+    for (const u of Object.values(db.users)) if (u.remote) delete db.users[u.id];
+    db.remote = null; remoteSend = null;
+    save(); bus.emit('chats'); bus.emit('friends'); bus.emit('remote');
+  },
+};
+
 /* ================================================================ */
 export const api = {
+  remote,
   get ready() { return !!db?.me; },
 
   register({ name, id, phone = null, avatar = null, hue }) {
@@ -331,10 +395,11 @@ export const api = {
     return db.users[id];
   },
   friends() {
-    return db.friends.filter(id => !db.blocked.includes(id)).map(id => db.users[id]).filter(Boolean)
+    const remoteIds = Object.values(db.users).filter(u => u.remote).map(u => u.id);
+    return [...db.friends, ...remoteIds].filter(id => !db.blocked.includes(id)).map(id => db.users[id]).filter(Boolean)
       .sort((a, b) => a.name.localeCompare(b.name));
   },
-  isFriend(id) { return db.friends.includes(id); },
+  isFriend(id) { return db.friends.includes(id) || !!db.users[id]?.remote; },
   isFav(id) { return db.favorites.includes(id); },
   isBlocked(id) { return db.blocked.includes(id); },
   favorites() { return db.favorites.map(id => db.users[id]).filter(u => u && !db.blocked.includes(u.id)); },
@@ -361,7 +426,7 @@ export const api = {
     const split = c.type === 'group';
     const per = split ? Math.ceil(amount / (others.length + 1) / 100) * 100 : amount;
     const m = api.send(chatId, { type: 'pay', kind: split ? 'split' : 'request', amount, per, note, from: ME, members: others, paid: [] });
-    others.forEach((id, i) => {
+    if (!c.remote) others.forEach((id, i) => {
       if (split && Math.random() < .25) return; // ada yang belum bayar
       setTimeout(() => {
         if (m.paid.includes(id)) return;
@@ -424,7 +489,7 @@ export const api = {
   findPeople(q) { q = q.toLowerCase(); return Object.values(db.users).filter(u => u.id !== ME && !db.blocked.includes(u.id) && (u.name.toLowerCase().includes(q) || (u.id || '').toLowerCase().includes(q))).sort((a, b) => db.friends.includes(b.id) - db.friends.includes(a.id)); },
   recommended() { return Object.values(db.users).filter(u => !u.official && !db.friends.includes(u.id) && !db.blocked.includes(u.id)); },
   addFriend(id) {
-    if (!db.friends.includes(id)) db.friends.push(id);
+    if (!db.friends.includes(id) && !db.users[id]?.remote) db.friends.push(id);
     db.blocked = db.blocked.filter(x => x !== id);
     save(); bus.emit('friends');
     setTimeout(() => {
@@ -510,7 +575,7 @@ export const api = {
   typingIn(chatId) { return [...(typing[chatId] || [])]; },
   totalUnread(exceptId) { return Object.values(db.chats).filter(c => !c.left && !c.secret && c.id !== exceptId).reduce((s, c) => s + (c.unread || 0), 0); },
   setActive(chatId) { activeChat = chatId; },
-  markRead(chatId) { const c = db.chats[chatId]; if (c && (c.unread || c.mention)) { c.unread = 0; c.mention = false; save(); bus.emit('chats'); } },
+  markRead(chatId) { const c = db.chats[chatId]; if (!c) return; c.readAt = Date.now(); if (c.unread || c.mention) { c.unread = 0; c.mention = false; save(); bus.emit('chats'); } },
   markUnread(chatId) { const c = db.chats[chatId]; c.unread = Math.max(1, c.unread || 0); save(); bus.emit('chats'); },
   setDraft(chatId, text) { const c = db.chats[chatId]; if (c && c.draft !== text) { c.draft = text; save(); bus.emit('chats'); } },
 
@@ -520,6 +585,7 @@ export const api = {
     db.messages[chatId].push(m);
     c.updatedAt = m.ts; c.hidden = false; c.draft = '';
     emitChat(chatId);
+    if (c.remote) { if (remoteSend) remoteSend(chatId, m); else m.status = 'failed'; return m; }
     if (!navigator.onLine) { outbox.push([chatId, m]); return m; }
     setTimeout(() => { m.status = 'sent'; emitChat(chatId); }, rand(250, 600));
     scheduleResponses(chatId, m);
@@ -532,7 +598,7 @@ export const api = {
     const c = db.chats[chatId];
     const m = api.send(chatId, { type: 'game', game: 'suit', picks: { [ME]: pickVal } });
     const opp = c.members.find(id => id !== ME && db.users[id] && !db.users[id].official) || c.members.find(id => id !== ME);
-    if (opp) setTimeout(() => {
+    if (opp && !c.remote) setTimeout(() => {
       m.picks[opp] = pick(['rock', 'paper', 'scissors']);
       m.opp = opp;
       emitChat(chatId);
@@ -840,21 +906,21 @@ export const api = {
 
   /* demo helpers */
   simulateIncoming() {
-    const groups = api.groups();
+    const groups = api.groups().filter(g => !g.remote);
     if (groups.length && Math.random() < 0.3) {
       const g = pick(groups);
       const from = pick(g.members.filter(m => m !== ME && db.users[m]));
       if (from) return receive(g.id, from, { text: Math.random() < 0.35 ? `@${firstName(db.me.name)} ${pick(['kamu ikut ga?', 'gimana menurutmu?', 'cek ini dong 👀'])}` : pick(GROUP_INCOMING) });
     }
-    const id = pick(api.friends()).id;
+    const id = pick(api.friends().filter(u => !u.remote)).id;
     const c = api.directWith(id);
     setTyping(c.id, id, true);
     setTimeout(() => { setTyping(c.id, id, false); receive(c.id, id, { text: pick(INCOMING) }); }, 1500);
   },
   simulateIncomingCall(video = false, group = false) {
-    const gs = api.groups();
+    const gs = api.groups().filter(g => !g.remote);
     if (group && gs.length) return bus.emit('incoming-call', { chatId: pick(gs).id, video });
-    const id = pick(api.friends()).id;
+    const id = pick(api.friends().filter(u => !u.remote)).id;
     const c = api.directWith(id);
     bus.emit('incoming-call', { chatId: c.id, video });
   },

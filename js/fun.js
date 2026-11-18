@@ -276,7 +276,7 @@ function recapImage(ch, s) {
 /* ============ VIBE CHAT ============
    Suasana obrolan dari 40 pesan terakhir -> emoji + warna di header */
 const VIBES = [
-  ['kocak', '😂', 'Kocak', '#FFB020', /wk{2,}|ha(ha)+|he(he)+|ngakak|lol|😂|🤣|😆|😹|lucu/giu],
+  ['kocak', '😂', 'Kocak', '#FFB020', /(?:wk){2,}|wkk+|ha(ha)+|he(he)+|ngakak|lol|😂|🤣|😆|😹|lucu/giu],
   ['manis', '💗', 'Manis', '#FF5CA8', /sayang|kangen|love|❤️|💖|🥰|😍|🫶|💕|💗|💜/giu],
   ['seru', '🔥', 'Seru', '#FF6B1A', /\bgas+\b|anjay|keren|mantap|🔥|🤩|🎉|seru|wih|gokil/giu],
   ['galau', '🥲', 'Galau', '#5B8CFF', /sedih|capek|cape|galau|nangis|😭|🥲|😢|💔|huhu/giu],
@@ -1555,7 +1555,7 @@ const SMART = [
   [/\b(gimana|gmn|bagaimana)\b/i, ['Aman kok', 'Lumayan', 'Kacau 😭']],
   [/\b(sedih|capek|cape|galau|nangis|pusing|stres)\b|😭|🥲|😢/i, ['Semangat ya 💪', 'Peluk virtual 🫂', 'Kenapa?']],
   [/\b(otw|on the way|nyampe|sampe|sampai)\b/i, ['Oke ditunggu', 'Hati-hati!', 'Udah di mana?']],
-  [/\b(wk{2,}|ha(ha)+|ngakak|lol)\b|😂|🤣/i, ['wkwkwk', '😂😂', 'NGAKAK']],
+  [/\b((?:wk){2,}|wkk+|ha(ha)+|ngakak|lol)\b|😂|🤣/i, ['wkwkwk', '😂😂', 'NGAKAK']],
   [/\b(selamat|congrats|hbd|ultah|ulang tahun)\b/i, ['Makasih!! 🥹', 'Aaa makasih 🫶']],
   [/^(halo|hai|hi|hei|hey|p|pagi|siang|sore|malam)\b/i, ['Haii 👋', 'Kenapa?', 'Iya?']],
   [/\?\s*$|^(apa|siapa|mau|jadi|bisa|udah|sudah|lagi)\b/i, ['Iya 👍', 'Nggak dulu', 'Bentar ya']],
@@ -1571,5 +1571,23 @@ export function smartReplies(chatId) {
   if (m.type === 'voice') return ['Oke, siap!', 'Wkwk iya'];
   if (m.type !== 'text') return [];
   for (const [re, out] of SMART) if (re.test(m.text || '')) return out;
+  return [];
+}
+
+/* ============ SARAN STIKER SAAT NGETIK ============ */
+const STK_MAP = [
+  [/(?:wk){2,}|wkk+|ha(ha)+|he(he)+|ngakak|lucu|lol/i, ['😂', '🤣', '😆', '😹']], [/sedih|nangis|huhu|hiks|capek|cape/i, ['😭', '🥲', '😢', '🫂']],
+  [/sayang|love|kangen|cinta|luv/i, ['🥰', '💖', '🫶', '😘']], [/^(ok|oke|okee|siap|sip|baik)$|setuju/i, ['👍', '👌', '🫡', '🤝']],
+  [/makasih|thanks|thx|terima ?kasih|tengkyu/i, ['🙏', '🥹', '💐', '🫶']], [/marah|kesel|sebel|bete|anjir/i, ['😤', '😡', '🙄', '💢']],
+  [/ngantuk|tidur|bobo|capek/i, ['😴', '🥱', '🛌', '💤']], [/makan|laper|lapar|maem|jajan/i, ['🍜', '🤤', '🍕', '🍩']],
+  [/wow|hah|serius|beneran|kaget/i, ['😮', '😳', '🤯', '👀']], [/gas+|semangat|ayo|yuk/i, ['🔥', '💪', '🚀', '✨']],
+  [/^(halo|hai|hi|hei|pagi|malam)$/i, ['👋', '☀️', '🌙', '😊']], [/maaf|sorry|sori/i, ['🙏', '🥺', '😔']], [/selamat|congrats|hbd|ultah/i, ['🎉', '🎂', '🥳', '🎊']],
+  [/mantap|keren|bagus|cakep/i, ['😎', '🤩', '👏', '💯']], [/bingung|hmm|gatau/i, ['🤔', '😵‍💫', '🫠']],
+];
+export function stickerSuggest(text) {
+  const t = text.trim();
+  if (!t || t.length > 40) return [];
+  const last = t.split(/\s+/).slice(-2).join(' ');
+  for (const [re, out] of STK_MAP) if (re.test(last) || re.test(t)) return out;
   return [];
 }

@@ -1999,3 +1999,9 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 [data-skin=neon] .me .bubble { box-shadow: 0 0 16px rgba(255, 43, 214, .45); }
 [data-skin=neon] .them .bubble { box-shadow: 0 0 0 1px rgba(124, 59, 255, .35); }
 [data-skin=mono][data-theme=dark] .back-count, [data-skin=mono][data-theme=dark] .unread, [data-skin=mono][data-theme=dark] .cu-btn.at, [data-skin=mono][data-theme=dark] .att-cats button.on, [data-skin=mono][data-theme=dark] .sr-kinds button.on, [data-skin=mono][data-theme=dark] .fc-chips .on { color: #0D0D12; }
+
+/* ============ H3: saran stiker ============ */
+.stk-bar { display: flex; gap: 4px; padding: 0 10px 6px; animation: panelIn .25s var(--ease); }
+.stk-bar[hidden] { display: none; }
+.stk-bar button { width: 56px; height: 56px; border-radius: 16px; font-size: 38px; background: var(--surface); box-shadow: 0 2px 8px rgba(0,0,0,.07); transition: transform .15s var(--ease); filter: drop-shadow(0 2px 3px rgba(0,0,0,.1)); }
+.stk-bar button:active { transform: scale(.85); }

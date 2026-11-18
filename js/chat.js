@@ -197,6 +197,7 @@ function ChatScreen(chatId) {
     <div class="composer-wrap">
       <div class="ice-bar" hidden></div>
       <div class="smart-bar" hidden></div>
+      <div class="stk-bar" hidden></div>
       <div class="mention-list" hidden></div>
       <button class="sched-bar" data-act="sched-list" hidden></button>
       <div class="wait-bar" hidden></div>
@@ -593,6 +594,7 @@ function ChatScreen(chatId) {
       return;
     }
     api.send(chatId, withReply({ type: 'text', text }), { hold: undoOn() ? UNDO_MS : 0 });
+    stkBar.hidden = true;
     ta.value = '';
     autosize();
     ta.focus();
@@ -611,6 +613,13 @@ function ChatScreen(chatId) {
     if (list.length) smartBar.innerHTML = list.map(s => `<button data-act="smart" data-t="${esc(s)}">${esc(s)}</button>`).join('');
   }
   ta.addEventListener('input', () => renderSmart());
+  const stkBar = $('.stk-bar', el);
+  let stkT;
+  ta.addEventListener('input', () => { clearTimeout(stkT); stkT = setTimeout(() => {
+    const list = editing ? [] : fun.stickerSuggest(ta.value);
+    stkBar.hidden = !list.length;
+    if (list.length) stkBar.innerHTML = list.map(s => `<button data-act="stk-sug" data-s="${s}">${s}</button>`).join('');
+  }, 180); });
   let iceKey = null;
   function renderIce(force) {
     const ib = fun.icebreaker(chatId);
@@ -1044,6 +1053,7 @@ function ChatScreen(chatId) {
     'ice-x': () => { iceOff.add(fun.icebreaker(chatId)?.key); iceBar.hidden = true; },
     'wait-cancel': () => { api.waits().filter(w => w.chatId === chatId).forEach(w => api.cancelWait(w.id)); toast('Dibatalin'); },
     pcat: t => { panelCat = t.dataset.k; renderPanel(); },
+    'stk-sug': t => { sendSticker(t.dataset.s); if (ta.value.trim().split(/\s+/).length <= 2) { ta.value = ''; autosize(); } stkBar.hidden = true; },
     smart: t => { api.send(chatId, { type: 'text', text: t.dataset.t }, { hold: undoOn() ? UNDO_MS : 0 }); vibrate(6); smartBar.hidden = true; },
     'cu-first': () => { bindGoto(cu.first); catchBar.hidden = true; },
     'cu-at': () => { bindGoto(cu.mentions[cuAt++ % cu.mentions.length]); },

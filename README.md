@@ -62,6 +62,11 @@ Semua ada di tombol **+** di chat → bagian *Khas Onix*, dan ikut tersinkron on
 - **Kartu hoki harian**, **Emoji campur** (2 emoji jadi stiker), **Kartu ucapan bareng** (semua tanda tangan, penerima buka kartu)
 - **Hemat kuota** (Kamu): foto lebih kecil, tanpa efek layar, gambar VOOM ditap dulu
 - Menu ⋮ di chat sekarang grid ikon
+- Menu **+**: cari fitur + kategori (Sering, Pesan, Main, Bareng, Kreatif); **Kamu → Khas Onix** buat lihat semua fitur + tombol Coba
+- **Mulai bareng 3-2-1** (hitung mundur pas sama di semua HP), **Tebak emoji**, **Lencana** dari kebiasaan chat (Kamu)
+- **Balas cepat pintar**: saran balasan 1-tap dari pesan terakhir teman
+- **Sampah**: pesan yang dihapus bisa dibalikin 7 hari (ada tombol *Batal* juga); **cari di chat** bisa difilter Foto/Link/File/Voice/Khas
+- Data sekarang disimpan di **IndexedDB** (nggak mentok 5 MB lagi)
 
 Catatan: isi kapsul waktu, pesan gosok, kuis & cek kabar cuma disembunyikan di tampilan (tidak dienkripsi).
 Pengingat, mode fokus & balas otomatis jalan selama app hidup.

@@ -20,13 +20,25 @@ function applyTheme() {
   const s = api.settings();
   const root = document.documentElement;
   root.dataset.accent = s.accent || 'violet';
+  if (s.skin && s.skin !== 'onix') root.dataset.skin = s.skin; else delete root.dataset.skin;
   root.dataset.font = s.fontSize || 'm';
   const dark = s.theme === 'dark' || (s.theme !== 'light' && mq.matches);
   root.dataset.theme = dark ? 'dark' : 'light';
   document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#0B0B10' : '#F7F7F9');
-  try { localStorage.setItem('onix:theme', JSON.stringify({ theme: root.dataset.theme, accent: root.dataset.accent })); } catch { /* */ }
+  try { localStorage.setItem('onix:theme', JSON.stringify({ theme: root.dataset.theme, accent: root.dataset.accent, skin: root.dataset.skin || '' })); } catch { /* */ }
 }
 mq.addEventListener?.('change', applyTheme);
+
+/* ---------- gaya (skin) ala tema LINE ---------- */
+const SKINS = [['onix', 'Onix', '#7C5CFF', '#7C5CFF'], ['matcha', 'Matcha', '#3FA672', '#EEF5EC'], ['sakura', 'Sakura', 'linear-gradient(135deg,#FF8FB8,#FF6FA5)', '#FFF0F5'], ['ocean', 'Laut', 'linear-gradient(135deg,#3BA0FF,#5B6CFF)', '#EAF3FF'], ['mono', 'Mono', '#15151C', '#F2F2F2'], ['retro', 'Retro', '#E86A33', '#FBF3E4'], ['neon', 'Neon', 'linear-gradient(135deg,#FF2BD6,#7C3BFF)', '#14102A']];
+function skinSheet() {
+  const cur = api.settings().skin || 'onix';
+  sheet({
+    title: 'Gaya',
+    top: `<div class="skin-grid">${SKINS.map(([k, l, me, bg]) => `<button class="skin-card ${k === cur ? 'on' : ''}" data-k="${k}" data-skin-prev="${k}"><span class="sk-bg" style="background:${bg}"><i class="sk-them"></i><i class="sk-me" style="background:${me}"></i><i class="sk-them s"></i></span><small>${l}</small></button>`).join('')}</div>`,
+    onMount: (s, close) => s.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); api.setSetting('skin', b.dataset.k); vibrate(6); close(); toast('Gaya ' + b.querySelector('small').textContent + ' ✨'); })),
+  });
+}
 
 /* ================= TABS ================= */
 const TABS = [
@@ -172,8 +184,9 @@ function TabsScreen() {
         <div class="set-group">
           <div class="set-row">${icon('moon')}<div class="set-txt"><span>Tema</span></div>
             <div class="seg sm icons">${[['system', 'sparkle'], ['light', 'sun'], ['dark', 'moon']].map(([k, ic]) => `<button class="${s.theme === k ? 'on' : ''}" data-act="theme" data-v="${k}" aria-label="${k}">${icon(ic)}</button>`).join('')}</div></div>
-          <div class="set-row">${icon('palette')}<div class="set-txt"><span>Aksen</span></div>
-            <div class="swatches">${ACCENTS.map(([k, c]) => `<button class="${s.accent === k ? 'on' : ''}" style="--c:${c}" data-act="accent" data-v="${k}" aria-label="${k}"></button>`).join('')}</div></div>
+          <button class="set-row" data-act="skins">${icon('sparkle')}<div class="set-txt"><span>Gaya</span></div><span class="count">${esc((SKINS.find(k => k[0] === (s.skin || 'onix')) || SKINS[0])[1])}</span>${icon('chevronRight', 'tiny')}</button>
+          ${s.skin && s.skin !== 'onix' ? '' : `<div class="set-row">${icon('palette')}<div class="set-txt"><span>Aksen</span></div>
+            <div class="swatches">${ACCENTS.map(([k, c]) => `<button class="${s.accent === k ? 'on' : ''}" style="--c:${c}" data-act="accent" data-v="${k}" aria-label="${k}"></button>`).join('')}</div></div>`}
           <div class="set-row">${icon('type')}<div class="set-txt"><span>Teks</span></div>
             <div class="seg sm fs">${[['s', 13], ['m', 16], ['l', 19]].map(([k, px]) => `<button class="${s.fontSize === k ? 'on' : ''}" data-act="font" data-v="${k}" style="font-size:${px}px">A</button>`).join('')}</div></div>
         </div>
@@ -305,6 +318,7 @@ function TabsScreen() {
     keep: () => router.push(KeepScreen()),
     badges: () => router.push(fun.BadgesScreen()),
     fungal: async () => router.push((await import('./fun.js')).FunGalleryScreen()),
+    skins: () => skinSheet(),
     focus: async () => (await import('./fun.js')).focusSheet(),
     feed: t => { if (st.feed === t.dataset.v) return; st.feed = t.dataset.v; renderBody(); body.scrollTo({ top: 0 }); },
     'hidden-chats': () => openHiddenChats(),

@@ -1328,3 +1328,47 @@ export function cardSheet(chatId) {
     },
   });
 }
+
+/* ============ KATEGORI & PENJELASAN FITUR KHAS ============ */
+export const FUN_CATS = [['sering', '⭐ Sering'], ['pesan', '💬 Pesan'], ['main', '🎮 Main'], ['bareng', '👥 Bareng'], ['kreatif', '🎨 Kreatif']];
+export const FUN_INFO = {
+  sopan: ['pesan', 'Ubah bahasa gaul jadi sopan buat dosen/atasan'], style: ['pesan', 'Tulisan tebal, sambung, spongebob, terbalik…'],
+  capsule: ['pesan', 'Pesan disegel, baru kebuka di tanggal tertentu'], scratch: ['pesan', 'Isi pesan harus digosok dulu'],
+  nudge: ['main', 'Bikin layar teman goyang + getar'], quiz: ['main', 'Seberapa kenal teman sama kamu?'], spin: ['main', 'Roda buat ambil keputusan'],
+  guess: ['main', 'Coretan + kata rahasia, teman nebak'], bomb: ['main', 'Oper bom, jangan sampai meledak di kamu'], fortune: ['main', 'Ramalan lucu yang ganti tiap hari'],
+  emoji: ['main', 'Tebak judul dari petunjuk emoji'], game: ['main', 'Dadu, koin, suit'],
+  checkin: ['bareng', 'Jawaban teman kebuka setelah kamu jawab'], todo: ['bareng', 'Checklist yang bisa dicentang semua'], story: ['bareng', 'Cerita estafet, gantian satu kalimat'],
+  when: ['bareng', 'Cari hari ketemuan yang paling banyak bisa'], who: ['bareng', 'Polling yang pilihannya anggota chat'], challenge: ['bareng', 'Semua kirim foto sesuai tantangan'],
+  card: ['bareng', 'Kartu ucapan, semua ikut tanda tangan'], countdown: ['bareng', 'Hitung mundur ke hari spesial'], sync: ['bareng', 'Mulai nonton/main pas barengan 3-2-1'], pay: ['bareng', 'Kirim, minta, patungan'],
+  doodle: ['kreatif', 'Gambar tangan yang diputar ulang'], tsticker: ['kreatif', 'Ketik teks, jadi stiker'], mix: ['kreatif', 'Gabung 2 emoji jadi stiker'], recap: ['kreatif', 'Rekap obrolan ala Wrapped'],
+};
+export function funFilter(items, cat, q) {
+  if (q) { q = q.toLowerCase(); return items.filter(([a, , l]) => l.toLowerCase().includes(q) || (FUN_INFO[a]?.[1] || '').toLowerCase().includes(q)); }
+  if (cat === 'sering') return sortByUse(items).slice(0, 10);
+  return items.filter(([a]) => FUN_INFO[a]?.[0] === cat);
+}
+
+/* ============ GALERI KHAS ONIX (di Kamu) ============ */
+export function FunGalleryScreen() {
+  const all = [...FUN_ITEMS, ['game', 'dice', 'Game', '#FF3D6E'], ['pay', 'wallet', 'Pay', '#0FB46C']];
+  const el = h(`<div class="sub-screen">${navbar('Khas Onix ✨')}<div class="content fg">
+    <p class="fg-intro">Fitur yang nggak ada di app chat lain. Semuanya ada di tombol <b>+</b> di chat.</p>
+    ${FUN_CATS.slice(1).map(([k, l]) => `<div class="section-h">${l}</div><div class="fg-list">${all.filter(([a]) => FUN_INFO[a]?.[0] === k).map(([a, ic, label, col]) => `<button class="fg-item" data-act="try" data-a="${a}"><span style="--c:${col}">${icon(ic)}</span><div><b>${esc(label)}</b><small>${esc(FUN_INFO[a][1])}</small></div><em>Coba</em></button>`).join('')}</div>`).join('')}
+  </div></div>`);
+  bindActs(el, {
+    try: t => {
+      const a = t.dataset.a;
+      const chats = api.allChats().filter(c => !api.peerOf(c)?.official).slice(0, 8);
+      if (!chats.length) return toast('Belum ada chat');
+      sheet({
+        title: 'Coba di chat mana?',
+        actions: chats.map(c => ({ label: api.chatTitle(c), run: async () => {
+          const { openChat } = await import('./chat.js');
+          openChat(c.id);
+          setTimeout(() => router.top()?.att?.(a), 450);
+        } })),
+      });
+    },
+  });
+  return { el };
+}

@@ -178,6 +178,7 @@ function TabsScreen() {
         <div class="set-group">
           ${link('online', 'globe', 'Onix Online', api.remote.state() ? `<span class="on-pill">@${esc(api.remote.state().handle)}</span>` : '')}
           ${link('wallet', 'wallet', 'Onix Pay', `<span class="count">${(api.wallet().balance / 1000).toLocaleString('id-ID')}rb</span>`)}
+          ${link('fungal', 'sparkle', 'Khas Onix', '<span class="count">✨</span>')}
           ${link('focus', 'headphones', 'Mode fokus', api.focus() ? `<span class="on-pill">🎧 s/d ${new Date(api.focus().until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>` : '')}
           ${link('keep', 'bookmark', 'Keep', `<span class="count">${api.keep().length || ''}</span>`)}
           ${link('archived', 'archive', 'Arsip', `<span class="count">${api.archived().length || ''}</span>`)}
@@ -298,6 +299,7 @@ function TabsScreen() {
     'clear-calls': async () => { if (await confirmBox({ title: 'Hapus riwayat panggilan?', ok: 'Hapus', danger: true })) api.clearCalls(); },
     'edit-profile': () => router.push(EditProfileScreen()),
     keep: () => router.push(KeepScreen()),
+    fungal: async () => router.push((await import('./fun.js')).FunGalleryScreen()),
     focus: async () => (await import('./fun.js')).focusSheet(),
     feed: t => { if (st.feed === t.dataset.v) return; st.feed = t.dataset.v; renderBody(); body.scrollTo({ top: 0 }); },
     'hidden-chats': () => openHiddenChats(),

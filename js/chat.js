@@ -213,7 +213,7 @@ function ChatScreen(chatId) {
   </div>`);
 
   const sc = $('.msgs', el), inner = $('.msgs-inner', el), ta = $('textarea', el);
-  el.addEventListener('click', e => { const b = e.target.closest('.attach-grid.sm [data-act^="att-"]'); if (b) fun.noteUse(b.dataset.act.slice(4)); }, true);
+  el.addEventListener('click', e => { const b = e.target.closest('.att-fun [data-act^="att-"]'); if (b) fun.noteUse(b.dataset.act.slice(4)); }, true);
   const sendBtn = $('.send-btn', el), panel = $('.panel', el), jump = $('.jump', el);
   onLongPress(panel, '.my-st', async n => { if (await confirmBox({ title: 'Hapus sticker ini?', ok: 'Hapus', danger: true })) api.removeMySticker(n.dataset.id); });
   const replyBar = $('.reply-bar', el), recBar = $('.rec-bar', el), typingRow = $('.typing-row', el);
@@ -648,6 +648,7 @@ function ChatScreen(chatId) {
   }
 
   /* ---------- panels ---------- */
+  let panelCat = 'sering', panelQ = '';
   function openPanel(mode) {
     if (panelMode === mode) return closePanel();
     panelMode = mode;
@@ -658,14 +659,29 @@ function ChatScreen(chatId) {
     scrollBottom();
   }
   function closePanel() {
+    panelQ = '';
     panelMode = null; panel.hidden = true; el.classList.remove('panel-open');
   }
   function renderPanel() {
     if (panelMode === 'plus') {
       const basic = [['photo', 'image', 'Foto', '#7C5CFF'], ['camera', 'camera', 'Kamera', '#FF3D81'], ['video', 'film', 'Video', '#14B8C4'], ['file', 'file', 'File', '#5B6CFF'], ['location', 'location', 'Lokasi', '#10B26C'], ['voice', 'mic', 'Voice', '#FF7A1A'], ['poll', 'poll', 'Polling', '#E1A100'], ['event', 'calendar', 'Event', '#2E7BFF']];
-      const funItems = fun.sortByUse([...FUN_ITEMS, ['game', 'dice', 'Game', '#FF3D6E'], ['pay', 'wallet', 'Pay', '#0FB46C']]);
+      const allFun = [...FUN_ITEMS, ['game', 'dice', 'Game', '#FF3D6E'], ['pay', 'wallet', 'Pay', '#0FB46C']];
       const grid = (items, cls = '') => `<div class="attach-grid ${cls}">${items.map(([a, ic, label, col]) => `<button data-act="att-${a}"><span style="--c:${col}">${icon(ic)}</span><small>${label}</small></button>`).join('')}</div>`;
-      panel.innerHTML = `<div class="attach-scroll">${grid(basic)}<div class="attach-h">✨ Khas Onix</div>${grid(funItems, 'sm')}</div>`;
+      const funBody = () => {
+        const list = fun.funFilter(panelQ ? [...basic, ...allFun] : allFun, panelCat, panelQ);
+        return list.length ? grid(list, 'sm') : `<p class="att-none">Nggak ketemu 🔍</p>`;
+      };
+      panel.innerHTML = `<div class="attach-scroll">
+        <div class="att-search">${icon('search')}<input placeholder="Cari fitur (mis. kuis, stiker)" value="${esc(panelQ)}" enterkeyhint="search"></div>
+        ${panelQ ? '' : grid(basic)}
+        ${panelQ ? '' : `<div class="attach-h">✨ Khas Onix</div><div class="att-cats">${fun.FUN_CATS.map(([k, l]) => `<button class="${k === panelCat ? 'on' : ''}" data-act="pcat" data-k="${k}">${l}</button>`).join('')}</div>`}
+        <div class="att-fun">${funBody()}</div></div>`;
+      const inp = panel.querySelector('.att-search input');
+      inp.addEventListener('input', () => {
+        const was = !!panelQ; panelQ = inp.value.trim();
+        if (was !== !!panelQ) { renderPanel(); const n = panel.querySelector('.att-search input'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
+        else panel.querySelector('.att-fun').innerHTML = funBody();
+      });
     } else if (panelMode === 'stickers') {
       const owned = api.packs();
       if (stickerTab !== 'emoji' && stickerTab !== 'mine' && !owned.includes(stickerTab)) stickerTab = owned[0] || 'emoji';
@@ -968,7 +984,7 @@ function ChatScreen(chatId) {
   sc.addEventListener('touchend', endSwipe);
   sc.addEventListener('touchcancel', endSwipe);
 
-  bindActs(el, {
+  const ACTS = {
     vote: t => { api.vote(chatId, t.dataset.mid, t.dataset.o); vibrate(8); },
     readers: t => { const m = msgById(t.dataset.mid); if (m) showReaders(m); },
     'ann-go': () => {
@@ -1002,6 +1018,7 @@ function ChatScreen(chatId) {
     'ice-more': () => renderIce(true),
     'ice-x': () => { iceOff.add(fun.icebreaker(chatId)?.key); iceBar.hidden = true; },
     'wait-cancel': () => { api.waits().filter(w => w.chatId === chatId).forEach(w => api.cancelWait(w.id)); toast('Dibatalin'); },
+    pcat: t => { panelCat = t.dataset.k; renderPanel(); },
     'cu-first': () => { bindGoto(cu.first); catchBar.hidden = true; },
     'cu-at': () => { bindGoto(cu.mentions[cuAt++ % cu.mentions.length]); },
     'cu-x': () => { catchBar.hidden = true; },
@@ -1116,7 +1133,8 @@ function ChatScreen(chatId) {
       const rows = Object.entries(m.reactions).flatMap(([e, ids]) => ids.map(id => `<div class="list-item">${avatar(api.user(id), 36)}<div class="li-main"><div class="li-name">${esc(id === ME ? 'Kamu' : api.user(id)?.name)}</div></div><span class="react-big">${e}</span></div>`)).join('');
       sheet({ top: `<div class="sheet-list">${rows}</div>` });
     },
-  });
+  };
+  bindActs(el, ACTS);
   // ketuk 2x = ❤️
   let lastTap = { mid: null, t: 0 };
   inner.addEventListener('click', e => {
@@ -1158,7 +1176,7 @@ function ChatScreen(chatId) {
   renderWaits();
 
   return {
-    el, chatId, goto: bindGoto,
+    el, chatId, goto: bindGoto, att: k => ACTS['att-' + k]?.(),
     show() { api.setActive(chatId); api.markRead(chatId); renderHeader(); },
     destroy() {
       offs.forEach(f => f());

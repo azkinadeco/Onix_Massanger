@@ -5,7 +5,7 @@ import { icon } from './icons.js';
 import { router, bindActs, navbar, sheet, toast } from './ui.js';
 
 // item tambahan di menu + : [aksi, ikon, label, warna]
-export const FUN_ITEMS = [['sopan', 'sparkle', 'Sopanin', '#3B2E7A'], ['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4'], ['spin', 'refresh', 'Roda putar', '#B05CFF'], ['todo', 'checks', 'Checklist', '#0FB46C'], ['story', 'note', 'Cerita', '#7C5CFF'], ['guess', 'brush', 'Tebak gambar', '#FF5C8A'], ['tsticker', 'sticker', 'Stiker teks', '#FF7A1A'], ['when', 'calendar', 'Kapan bisa', '#2E7BFF'], ['bomb', 'sparkle', 'Bom waktu', '#15151C'], ['challenge', 'camera', 'Tantangan foto', '#FF3D6E'], ['fortune', 'star', 'Kartu hoki', '#9B5CFF'], ['mix', 'smile', 'Emoji campur', '#FFB020'], ['card', 'gift', 'Kartu ucapan', '#FF5C8A'], ['who', 'users', 'Siapa paling', '#E1A100']];
+export const FUN_ITEMS = [['sopan', 'sparkle', 'Sopanin', '#3B2E7A'], ['style', 'type', 'Gaya teks', '#5B6CFF'], ['recap', 'chart', 'Rekap', '#2E7BFF'], ['capsule', 'hourglass', 'Kapsul', '#9B5CFF'], ['scratch', 'sparkle', 'Gosok', '#FF5CA8'], ['nudge', 'hand', 'Colek', '#FFB020'], ['doodle', 'brush', 'Coretan', '#10B2A0'], ['quiz', 'star', 'Kuis', '#FF3D81'], ['countdown', 'clock', 'Countdown', '#FF7A1A'], ['checkin', 'smile', 'Cek kabar', '#14B8C4'], ['spin', 'refresh', 'Roda putar', '#B05CFF'], ['todo', 'checks', 'Checklist', '#0FB46C'], ['story', 'note', 'Cerita', '#7C5CFF'], ['guess', 'brush', 'Tebak gambar', '#FF5C8A'], ['tsticker', 'sticker', 'Stiker teks', '#FF7A1A'], ['when', 'calendar', 'Kapan bisa', '#2E7BFF'], ['bomb', 'sparkle', 'Bom waktu', '#15151C'], ['challenge', 'camera', 'Tantangan foto', '#FF3D6E'], ['fortune', 'star', 'Kartu hoki', '#9B5CFF'], ['mix', 'smile', 'Emoji campur', '#FFB020'], ['card', 'gift', 'Kartu ucapan', '#FF5C8A'], ['sync', 'play', 'Mulai bareng', '#10B26C'], ['emoji', 'smile', 'Tebak emoji', '#FF7A1A'], ['who', 'users', 'Siapa paling', '#E1A100']];
 
 /* ============ MODE KALEM ============
    Pesan yang kelihatan lagi emosi -> ditawarin tahan dulu sebelum kekirim */
@@ -61,7 +61,7 @@ const dateTxt = ts => new Date(ts).toLocaleDateString('id-ID', { day: 'numeric',
 const txt = s => esc(s || '').replace(/\n/g, '<br>');
 const buzz = p => { try { navigator.vibrate?.(p); } catch { /* */ } };
 // tipe pesan yang isinya rahasia (jangan diteruskan / disalin / di-keep)
-export const SECRET_TYPES = ['capsule', 'scratch', 'nudge', 'quiz', 'quizres', 'checkin', 'checkans', 'todo', 'story', 'when', 'bomb', 'card'];
+export const SECRET_TYPES = ['capsule', 'scratch', 'nudge', 'quiz', 'quizres', 'checkin', 'checkans', 'todo', 'story', 'when', 'bomb', 'card', 'emojiq'];
 
 /* sheet nulis pesan khusus: judul, placeholder, opsi tambahan */
 async function composeSheet({ head, ph, extra = '', go, bind }) {
@@ -1371,4 +1371,144 @@ export function FunGalleryScreen() {
     },
   });
   return { el };
+}
+
+/* ============ LENCANA ============
+   Didapat dari kebiasaan chat kamu (dihitung di HP ini) */
+const BADGES = [
+  ['chatty', '🔥', 'Cerewet', 'Kirim 200 pesan', s => s.sent >= 200],
+  ['owl', '🦉', 'Burung hantu', '20 pesan jam 00–04', s => s.night >= 20],
+  ['photo', '📸', 'Fotografer', 'Kirim 10 foto', s => s.k.image >= 10],
+  ['voice', '🎤', 'Penyanyi', 'Kirim 5 voice note', s => s.k.voice >= 5],
+  ['artist', '🎨', 'Seniman', 'Kirim 3 coretan', s => s.k.doodle >= 3],
+  ['time', '⏳', 'Penjaga waktu', 'Kirim 2 kapsul waktu', s => s.k.capsule >= 2],
+  ['quiz', '🧠', 'Kenal banget', 'Skor sempurna di kuis teman', s => s.perfect >= 1],
+  ['bomb', '💣', 'Lolos bom', 'Selamat dari bom waktu', s => s.bombSafe >= 1],
+  ['care', '🫶', 'Peduli', 'Jawab 3 cek kabar', s => s.k.checkans >= 3],
+  ['team', '🧩', 'Tim solid', 'Centang 5 checklist', s => s.ticks >= 5],
+  ['love', '💌', 'Penyayang', 'Bikin / tanda tangan kartu ucapan', s => s.k.card + s.signs >= 1],
+  ['polite', '🎩', 'Sopan santun', 'Pakai Sopanin 3x', s => s.sopan >= 3],
+  ['nudge', '👉', 'Tukang colek', 'Colek 10x', s => s.k.nudge >= 10],
+  ['story', '📖', 'Pendongeng', 'Nambah 3 kalimat cerita', s => s.lines >= 3],
+];
+export function badgeStats() {
+  const s = { sent: 0, night: 0, k: new Proxy({}, { get: (o, p) => o[p] || 0, set: (o, p, v) => (o[p] = v, true) }), perfect: 0, bombSafe: 0, ticks: 0, signs: 0, lines: 0, sopan: 0 };
+  for (const c of api.allChats()) for (const m of api.messages(c.id)) {
+    if (m.acts?.[ME]) {
+      const v = m.acts[ME];
+      if (m.type === 'todo') s.ticks += Object.values(v).filter(a => a?.[0]).length;
+      if (m.type === 'card' && v.t) s.signs++;
+      if (m.type === 'story' && Array.isArray(v)) s.lines += v.length;
+    }
+    if (m.type === 'bomb' && Date.now() > m.endAt) { const st = bombState(m); if (st.holder !== ME && (m.from === ME || m.acts?.[ME])) s.bombSafe++; }
+    if (m.from !== ME || m.type === 'system') continue;
+    s.sent++; s.k[m.type]++;
+    const h = new Date(m.ts).getHours(); if (h < 4) s.night++;
+    if (m.type === 'quizres' && m.score === m.total && m.total) s.perfect++;
+  }
+  try { s.sopan = JSON.parse(localStorage.getItem('onix:funUse') || '{}').sopan || 0; } catch { /* */ }
+  return s;
+}
+export function myBadges() { const s = badgeStats(); return BADGES.map(([k, e, n, how, ok]) => ({ k, e, n, how, got: ok(s) })); }
+export function BadgesScreen() {
+  const list = myBadges(), got = list.filter(b => b.got).length;
+  const el = h(`<div class="sub-screen">${navbar('Lencana')}<div class="content bd">
+    <div class="bd-top"><b>${got}</b><small>dari ${list.length} lencana</small></div>
+    <div class="bd-grid">${list.map(b => `<div class="bd-item ${b.got ? 'got' : ''}"><span>${b.e}</span><b>${esc(b.n)}</b><small>${esc(b.how)}</small></div>`).join('')}</div>
+  </div></div>`);
+  return { el };
+}
+
+/* ============ MULAI BARENG 3-2-1 ============
+   Semua HP hitung mundur bareng, pas 0 layar bilang MULAI! */
+const SYNC_WHAT = [['🎬', 'Nonton'], ['🎮', 'Main'], ['🍽️', 'Makan'], ['🎧', 'Dengerin lagu'], ['😴', 'Tidur'], ['📚', 'Belajar']];
+export function syncHtml(m) {
+  const left = m.at - Date.now(), ready = actsOf(m).filter(([, v]) => v).map(([u]) => u);
+  const all = [m.from, ...ready.filter(u => u !== m.from)];
+  const iReady = all.includes(ME);
+  return `<div class="bubble syncm ${left <= 0 ? 'go' : ''}"><div class="sy-emo">${esc(m.emoji || '🎬')}</div><b>${esc(m.what || 'Mulai bareng')}</b>
+    <div class="sy-num" data-sync="${m.id}">${left <= 0 ? 'MULAI! 🎉' : Math.ceil(left / 1000) + ' dtk'}</div>
+    <div class="sy-av">${all.slice(0, 6).map(u => avatar(u === ME ? api.me() : api.user(u), 22)).join('')}<small>${all.length} siap</small></div>
+    ${left > 0 && !iReady ? `<button data-act="sync-ready" data-mid="${m.id}">✋ Aku siap</button>` : ''}</div>`;
+}
+const synced = new Set();
+export function initSyncs(root, getMsg, host) {
+  root.querySelectorAll('.sy-num[data-sync]:not([data-on])').forEach(n => {
+    const m = getMsg(n.dataset.sync);
+    if (!m || m.at <= Date.now()) return;
+    n.dataset.on = 1;
+    const tick = () => {
+      if (!n.isConnected) return;
+      const left = m.at - Date.now();
+      if (left <= 0) { n.textContent = 'MULAI! 🎉'; n.closest('.syncm')?.classList.add('go'); return; }
+      n.textContent = Math.ceil(left / 1000) + ' dtk';
+      if (left <= 3200 && !synced.has(m.id)) { synced.add(m.id); bigCountdown(host, m); }
+      setTimeout(tick, Math.min(250, left));
+    };
+    tick();
+  });
+}
+function bigCountdown(host, m) {
+  const ov = h(`<div class="sy-over"><b></b><small>${esc(m.emoji || '')} ${esc(m.what || '')}</small></div>`);
+  host.appendChild(ov);
+  const b = ov.querySelector('b');
+  const step = () => {
+    const left = m.at - Date.now();
+    if (left <= 0) { b.textContent = 'MULAI!'; ov.classList.add('go'); buzz([60, 40, 120]); setTimeout(() => ov.remove(), 1400); return; }
+    const n = String(Math.ceil(left / 1000));
+    if (b.textContent !== n) { b.textContent = n; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; buzz(25); }
+    setTimeout(step, 50);
+  };
+  step();
+}
+export function syncSheet(chatId) {
+  let w = 0, sec = 30;
+  sheet({
+    top: `<div class="fun-compose">
+      <div class="fc-h">🚦 <b>Mulai bareng</b><small>Hitung mundur pas sama di semua HP</small></div>
+      <div class="fc-chips">${SYNC_WHAT.map(([e, l], i) => `<button class="${i ? '' : 'on'}" data-w="${i}">${e} ${l}</button>`).join('')}</div>
+      <div class="fc-chips">${[10, 30, 60, 300].map(s => `<button class="${s === sec ? 'on' : ''}" data-s="${s}">${s < 60 ? s + ' detik' : s / 60 + ' menit'}</button>`).join('')}</div>
+      <button class="btn primary wide" data-go>Mulai hitung</button>
+    </div>`,
+    onMount: (s, close) => {
+      s.querySelectorAll('[data-w]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); w = +b.dataset.w; s.querySelectorAll('[data-w]').forEach(x => x.classList.toggle('on', x === b)); }));
+      s.querySelectorAll('[data-s]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); sec = +b.dataset.s; s.querySelectorAll('[data-s]').forEach(x => x.classList.toggle('on', x === b)); }));
+      s.querySelector('[data-go]').addEventListener('click', e => {
+        e.stopPropagation();
+        const m = api.send(chatId, { type: 'sync', emoji: SYNC_WHAT[w][0], what: SYNC_WHAT[w][1], at: Date.now() + sec * 1000 });
+        demoPeer(chatId, m.id, p => api.funActAs(chatId, m.id, p, true), 2500);
+        buzz(10); close();
+      });
+    },
+  });
+}
+
+/* ============ TEBAK EMOJI ============ */
+const EMQ_CAT = ['Film', 'Lagu', 'Makanan', 'Tempat', 'Bebas'];
+export function emojiQHtml(m) {
+  return `<div class="emq-wrap"><div class="bubble emq"><small>🧩 Tebak ${esc(m.cat || 'emoji')}</small><div class="emq-clue">${esc(m.clue || '')}</div></div>${guessHtml(m)}</div>`;
+}
+export function emojiQSheet(chatId) {
+  let cat = 'Film';
+  sheet({
+    top: `<div class="fun-compose">
+      <div class="fc-h">🧩 <b>Tebak emoji</b><small>Kasih petunjuk pakai emoji aja</small></div>
+      <div class="fc-chips">${EMQ_CAT.map((c, i) => `<button class="${i ? '' : 'on'}" data-c="${c}">${c}</button>`).join('')}</div>
+      <input class="fc-in emq-in" maxlength="24" placeholder="Petunjuk (mis. 🦁👑)">
+      <input class="fc-in" maxlength="40" placeholder="Jawabannya (mis. Lion King)">
+      <button class="btn primary wide" data-go>Kirim tebakan</button>
+    </div>`,
+    onMount: (s, close) => {
+      s.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); cat = b.dataset.c; s.querySelectorAll('[data-c]').forEach(x => x.classList.toggle('on', x === b)); }));
+      s.querySelector('[data-go]').addEventListener('click', e => {
+        e.stopPropagation();
+        const [clue, ans] = [...s.querySelectorAll('.fc-in')].map(x => x.value.trim());
+        if (!clue || !(clue.match(EMO_RE) || []).length) return toast('Petunjuknya harus emoji 😆');
+        if (!ans) return toast('Isi jawabannya dulu');
+        const m = api.send(chatId, { type: 'emojiq', clue: (clue.match(EMO_RE) || []).join(''), word: ans, cat });
+        demoPeer(chatId, m.id, p => api.funActAs(chatId, m.id, p, { ok: Math.random() < .5, n: 1, g: '?', ts: Date.now() }), 4000);
+        buzz(10); close();
+      });
+    },
+  });
 }

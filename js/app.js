@@ -7,6 +7,7 @@ import { openChat, startCall } from './chat.js';
 import { clearMedia } from './media.js';
 import { OnlineScreen, handleJoinLink } from './online.js';
 import * as backend from './backend.js';
+import * as fun from './fun.js';
 import { KeepScreen, ArchivedScreen, setupPasscode, lockApp, StickerStoreScreen, ActivityScreen, hideChat, openHiddenChats, StorageScreen, moodRow, setMoodSheet, viewMoodSheet, WalletScreen, BackupScreen } from './features.js';
 import {
   OnboardingScreen, ProfileScreen, EditProfileScreen, AddFriendScreen, NewGroupScreen, FriendPicker,
@@ -161,6 +162,7 @@ function TabsScreen() {
       return `<div class="me-hero" style="--h:${me.hue}">
           <button data-act="open-me">${avatar(me, 84)}</button>
           <h2>${esc(me.name)}</h2><span>@${esc(me.id)}</span>
+          ${(() => { const b = fun.myBadges().filter(x => x.got); return `<button class="me-badges" data-act="badges">${b.length ? b.slice(0, 6).map(x => `<span title="${esc(x.n)}">${x.e}</span>`).join('') + (b.length > 6 ? `<small>+${b.length - 6}</small>` : '') : '<small>🏅 Kumpulin lencana</small>'}</button>`; })()}
           <div class="me-btns">
             <button class="round-btn" data-act="edit-profile" aria-label="Edit profil">${icon('edit')}</button>
             <button class="round-btn" data-act="my-qr" aria-label="QR">${icon('qr')}</button>
@@ -299,6 +301,7 @@ function TabsScreen() {
     'clear-calls': async () => { if (await confirmBox({ title: 'Hapus riwayat panggilan?', ok: 'Hapus', danger: true })) api.clearCalls(); },
     'edit-profile': () => router.push(EditProfileScreen()),
     keep: () => router.push(KeepScreen()),
+    badges: () => router.push(fun.BadgesScreen()),
     fungal: async () => router.push((await import('./fun.js')).FunGalleryScreen()),
     focus: async () => (await import('./fun.js')).focusSheet(),
     feed: t => { if (st.feed === t.dataset.v) return; st.feed = t.dataset.v; renderBody(); body.scrollTo({ top: 0 }); },

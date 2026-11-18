@@ -1912,3 +1912,39 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .fg-item b { font-size: 15px; }
 .fg-item small { font-size: 12.5px; color: var(--text-2); }
 .fg-item em { font-style: normal; font-size: 12.5px; font-weight: 700; color: var(--accent); padding: 5px 10px; border-radius: 12px; background: rgba(var(--accent-rgb), .1); }
+
+/* ============ G3: lencana ============ */
+.me-badges { display: inline-flex; align-items: center; gap: 4px; margin: 6px auto 0; padding: 5px 12px; border-radius: 16px; background: var(--surface-2); font-size: 18px; }
+.me-badges small { font-size: 12.5px; color: var(--text-2); font-weight: 600; }
+.bd { padding: 8px 16px 40px; }
+.bd-top { display: flex; flex-direction: column; align-items: center; margin: 6px 0 16px; }
+.bd-top b { font-size: 44px; font-weight: 900; line-height: 1; }
+.bd-top small { color: var(--text-2); }
+.bd-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.bd-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 14px 6px; border-radius: 20px; background: var(--surface); text-align: center; opacity: .45; filter: grayscale(1); }
+.bd-item.got { opacity: 1; filter: none; box-shadow: var(--shadow); }
+.bd-item span { font-size: 34px; }
+.bd-item b { font-size: 13px; }
+.bd-item small { font-size: 11px; color: var(--text-2); line-height: 1.25; }
+
+/* ============ G4: mulai bareng ============ */
+.bubble.syncm { min-width: 210px; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; color: #fff; background: linear-gradient(150deg, #10B26C, #0E7C8C); }
+.bubble.syncm.go { background: linear-gradient(150deg, #FFB020, #FF3D6E); }
+.sy-emo { font-size: 34px; }
+.sy-num { font-size: 30px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.sy-av { display: flex; align-items: center; gap: 0; padding-left: 6px; }
+.sy-av .av { margin-left: -6px; box-shadow: 0 0 0 2px rgba(255,255,255,.6); }
+.sy-av small { margin-left: 8px; font-size: 12px; opacity: .9; }
+.bubble.syncm button { margin-top: 6px; height: 36px; padding: 0 18px; border-radius: 18px; background: #fff; color: #0E7C8C; font-weight: 800; }
+.sy-over { position: absolute; inset: 0; z-index: 70; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: rgba(10, 10, 16, .72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); color: #fff; pointer-events: none; }
+.sy-over b { font-size: 140px; font-weight: 900; line-height: 1; animation: syPop .9s var(--ease); }
+.sy-over.go b { font-size: 64px; color: #FFD24D; }
+.sy-over small { font-size: 18px; font-weight: 700; opacity: .9; }
+@keyframes syPop { from { transform: scale(1.8); opacity: 0; } 30% { opacity: 1; } to { transform: scale(1); } }
+
+/* ============ G5: tebak emoji ============ */
+.emq-wrap { display: flex; flex-direction: column; gap: 6px; }
+.bubble.emq { min-width: 200px; display: flex; flex-direction: column; align-items: center; gap: 4px; background: linear-gradient(140deg, #FFB020, #FF7A1A); color: #fff; }
+.bubble.emq small { font-size: 12px; font-weight: 700; opacity: .9; }
+.emq-clue { font-size: 44px; letter-spacing: 4px; line-height: 1.2; }
+.me-badges { display: flex; width: max-content; }

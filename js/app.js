@@ -183,6 +183,7 @@ function TabsScreen() {
           ${link('fungal', 'sparkle', 'Khas Onix', '<span class="count">✨</span>')}
           ${link('focus', 'headphones', 'Mode fokus', api.focus() ? `<span class="on-pill">🎧 s/d ${new Date(api.focus().until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>` : '')}
           ${link('keep', 'bookmark', 'Keep', `<span class="count">${api.keep().length || ''}</span>`)}
+          ${link('trash', 'trash', 'Sampah', `<span class="count">${api.trash().length || ''}</span>`)}
           ${link('archived', 'archive', 'Arsip', `<span class="count">${api.archived().length || ''}</span>`)}
           ${s.passcode ? link('hidden-chats', 'lock', 'Tersembunyi', '') : ''}
           ${link('store', 'store', 'Sticker', `<span class="count">${api.packs().length}</span>`)}
@@ -322,6 +323,7 @@ function TabsScreen() {
       openChat(c.id);
     },
     archived: () => router.push(ArchivedScreen()),
+    trash: () => router.push(fun.TrashScreen()),
     font: t => { api.setSetting('fontSize', t.dataset.v); applyTheme(); vibrate(5); },
     'my-qr': () => router.push(AddFriendScreen('qr')),
     theme: t => { api.setSetting('theme', t.dataset.v); applyTheme(); },

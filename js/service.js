@@ -951,9 +951,25 @@ export const api = {
     if (db.chats[chatId].remote && m.rid) hooks.update?.(chatId, m, { unsent: true, text: '', data: {}, reactions: {} });
   },
   deleteMessage(chatId, msgId) {
+    const m = db.messages[chatId].find(x => x.id === msgId);
     db.messages[chatId] = db.messages[chatId].filter(x => x.id !== msgId);
+    if (m && m.type !== 'system') { api.trash().unshift({ id: uid('tr'), chatId, m, at: Date.now() }); db.trash = db.trash.slice(0, 300); bus.emit('trash'); }
     emitChat(chatId);
+    return m;
   },
+  /* tong sampah: pesan yang dihapus (buat saya) bisa dibalikin 7 hari */
+  trash() { db.trash ||= []; const lim = Date.now() - 7 * 864e5; if (db.trash.some(t => t.at < lim)) db.trash = db.trash.filter(t => t.at >= lim); return db.trash; },
+  restoreTrash(id) {
+    const t = api.trash().find(x => x.id === id);
+    if (!t || !db.messages[t.chatId]) return false;
+    db.trash = db.trash.filter(x => x !== t);
+    const list = db.messages[t.chatId];
+    if (!list.some(x => x.id === t.m.id)) { list.push(t.m); list.sort((a, b) => a.ts - b.ts); }
+    db.chats[t.chatId].hidden = false;
+    emitChat(t.chatId); bus.emit('trash');
+    return true;
+  },
+  emptyTrash() { db.trash = []; save(); bus.emit('trash'); },
   editMessage(chatId, msgId, text) {
     const m = db.messages[chatId].find(x => x.id === msgId);
     if (!m || m.unsent) return;

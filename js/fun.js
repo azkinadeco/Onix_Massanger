@@ -1512,3 +1512,35 @@ export function emojiQSheet(chatId) {
     },
   });
 }
+
+/* ============ TONG SAMPAH ============ */
+export function TrashScreen() {
+  const el = h(`<div class="sub-screen">${navbar('Sampah', `<button class="text-btn danger-txt" data-act="empty">Kosongkan</button>`)}<div class="content tr-body"></div></div>`);
+  const body = el.querySelector('.tr-body');
+  const render = () => {
+    const list = api.trash();
+    body.innerHTML = list.length ? `<p class="fg-intro">Pesan yang kamu hapus disimpan 7 hari. Tap buat balikin.</p><div class="fg-list">${list.map(t => {
+      const c = api.chat(t.chatId), left = Math.max(1, Math.ceil((t.at + 7 * 864e5 - Date.now()) / 864e5));
+      return `<button class="fg-item" data-act="restore" data-id="${t.id}"><span style="--c:var(--surface-3);color:var(--text-2)">${icon('trash')}</span><div><b>${esc(c ? api.chatTitle(c) : 'Chat')}</b><small>${esc((t.m.from === ME ? 'Kamu: ' : '') + (t.m.text || t.m.secret || { image: '📷 Foto', sticker: 'Sticker', voice: '🎤 Voice note' }[t.m.type] || t.m.type))}</small></div><em>${left} hari</em></button>`;
+    }).join('')}</div>` : `<div class="rc-empty">🗑️<b>Sampah kosong</b></div>`;
+  };
+  bindActs(el, {
+    restore: t => { if (api.restoreTrash(t.dataset.id)) { toast('Dibalikin ✅'); buzz(8); } else toast('Chat-nya udah nggak ada'); render(); },
+    empty: async () => { const { confirmBox } = await import('./ui.js'); if (await confirmBox({ title: 'Kosongkan sampah?', text: 'Pesan di sini hilang permanen', ok: 'Kosongkan', danger: true })) { api.emptyTrash(); render(); } },
+  });
+  render();
+  return { el };
+}
+
+/* ============ FILTER CARI PER JENIS ============ */
+export const SEARCH_KINDS = [['all', 'Semua'], ['image', '📷 Foto'], ['link', '🔗 Link'], ['file', '📎 File'], ['voice', '🎤 Voice'], ['khas', '✨ Khas']];
+const KHAS_T = ['capsule', 'scratch', 'doodle', 'quiz', 'countdown', 'checkin', 'spin', 'todo', 'story', 'when', 'bomb', 'challenge', 'fortune', 'card', 'sync', 'emojiq', 'poll', 'event'];
+export function searchMatch(m, kind, q) {
+  if (m.unsent || m.type === 'system') return false;
+  const ok = kind === 'all' ? true : kind === 'image' ? m.type === 'image' : kind === 'link' ? m.type === 'text' && /https?:\/\/|www\./i.test(m.text || '')
+    : kind === 'file' ? ['file', 'video'].includes(m.type) : kind === 'voice' ? m.type === 'voice' : KHAS_T.includes(m.type);
+  if (!ok) return false;
+  if (!q) return kind !== 'all';
+  const hay = [m.type === 'text' ? m.text : '', m.name, m.title, m.task, m.q, m.what, m.poll?.q, m.event?.title].filter(Boolean).join(' ').toLowerCase();
+  return hay.includes(q);
+}

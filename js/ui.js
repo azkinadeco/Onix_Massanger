@@ -146,12 +146,14 @@ export const navbar = (title, right = '', cls = '') =>
   `<header class="navbar ${cls}"><button class="icon-btn" data-act="back" aria-label="Kembali">${icon('back')}</button><div class="nav-title">${title}</div><div class="nav-right">${right}</div></header>`;
 
 /* ---------- toast ---------- */
-export function toast(msg) {
+export function toast(msg, act) {
   app().querySelectorAll('.toast').forEach(t => t.remove());
-  const t = h(`<div class="toast">${esc(msg)}</div>`);
+  const t = h(`<div class="toast ${act ? 'act' : ''}">${esc(msg)}${act ? `<button>${esc(act.label)}</button>` : ''}</div>`);
   app().appendChild(t);
+  const hide = () => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); };
+  if (act) t.querySelector('button').addEventListener('click', () => { act.run(); hide(); });
   requestAnimationFrame(() => t.classList.add('show'));
-  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 2000);
+  setTimeout(hide, act ? 4500 : 2000);
 }
 
 /* ---------- bottom sheet ---------- */

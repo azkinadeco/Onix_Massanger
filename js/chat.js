@@ -187,6 +187,7 @@ function ChatScreen(chatId) {
       <button class="icon-btn sm" data-act="sr-up">${icon('chevronUp')}</button>
       <button class="icon-btn sm" data-act="sr-down">${icon('chevronDown')}</button>
       <button class="text-btn" data-act="sr-close">Batal</button>
+      <div class="sr-kinds">${fun.SEARCH_KINDS.map(([k, l]) => `<button class="${k === 'all' ? 'on' : ''}" data-act="sr-kind" data-k="${k}">${l}</button>`).join('')}</div>
     </div>
     <div class="announce" hidden></div>
     <div class="memo-bar" hidden></div>
@@ -257,7 +258,7 @@ function ChatScreen(chatId) {
     requestAnimationFrame(() => { loadingOlder = false; });
   }
   let replyTo = null, panelMode = null, stickerTab = 'anim', editing = null;
-  let searchQ = '', hits = [], hitIdx = -1;
+  let searchQ = '', hits = [], hitIdx = -1, srKind = 'all';
   const searchBar = $('.search-bar', el), searchInp = $('.search-bar input', el), announce = $('.announce', el), mentionList = $('.mention-list', el);
   const c = () => api.chat(chatId);
 
@@ -862,7 +863,11 @@ function ChatScreen(chatId) {
       if (m.type === 'image') acts.push({ label: 'Simpan foto', icon: 'download', run: () => { const a = document.createElement('a'); a.href = m.src; a.download = 'onix-foto.jpg'; a.click(); } });
       if (mine && Date.now() - m.ts < 24 * 3600e3) acts.push({ label: 'Tarik', icon: 'undo', run: () => api.unsend(chatId, m.id) });
     }
-    acts.push({ label: 'Hapus', icon: 'trash', danger: true, run: async () => { if (await confirmBox({ title: 'Hapus pesan?', ok: 'Hapus', danger: true })) api.deleteMessage(chatId, m.id); } });
+    acts.push({ label: 'Hapus', icon: 'trash', danger: true, run: () => {
+      api.deleteMessage(chatId, m.id);
+      const t = api.trash()[0];
+      toast('Pesan dihapus', { label: 'Batal', run: () => t && api.restoreTrash(t.id) });
+    } });
     const top = m.unsent ? '' : `<div class="react-strip">${REACTS.map(e => `<button data-r="${e}" class="${(m.reactions?.[e] || []).includes(ME) ? 'on' : ''}">${e}</button>`).join('')}</div>`;
     sheet({
       top, actions: acts,
@@ -926,20 +931,21 @@ function ChatScreen(chatId) {
   }
   function closeSearch() {
     searchBar.hidden = true; el.classList.remove('searching');
-    searchQ = ''; searchInp.value = ''; hits = []; hitIdx = -1;
+    searchQ = ''; searchInp.value = ''; hits = []; hitIdx = -1; srKind = 'all';
+    el.querySelectorAll('[data-act=sr-kind]').forEach(b => b.classList.toggle('on', b.dataset.k === 'all'));
     $('.sr-count', el).textContent = '';
     renderMsgs();
   }
   function runSearch() {
     searchQ = searchInp.value.trim();
     const q = searchQ.toLowerCase();
-    hits = q ? api.messages(chatId).filter(m => m.type === 'text' && !m.unsent && m.text.toLowerCase().includes(q)).map(m => m.id) : [];
+    hits = api.messages(chatId).filter(m => fun.searchMatch(m, srKind, q)).map(m => m.id);
     hitIdx = hits.length - 1;
     renderMsgs();
     gotoHit();
   }
   function gotoHit() {
-    $('.sr-count', el).textContent = searchQ ? (hits.length ? `${hitIdx + 1}/${hits.length}` : '0') : '';
+    $('.sr-count', el).textContent = searchQ || srKind !== 'all' ? (hits.length ? `${hitIdx + 1}/${hits.length}` : '0') : '';
     inner.querySelectorAll('.hit-current').forEach(n => n.classList.remove('hit-current'));
     if (hitIdx < 0) return;
     ensureLoaded(hits[hitIdx]);
@@ -999,6 +1005,7 @@ function ChatScreen(chatId) {
     },
     'ann-close': async () => { if (await confirmBox({ title: 'Hapus pengumuman?', ok: 'Hapus', danger: true })) api.setAnnouncement(chatId, null); },
     'sr-close': closeSearch,
+    'sr-kind': t => { srKind = t.dataset.k; el.querySelectorAll('[data-act=sr-kind]').forEach(b => b.classList.toggle('on', b === t)); runSearch(); },
     'sr-up': () => { if (hits.length) { hitIdx = Math.max(0, hitIdx - 1); gotoHit(); } },
     'sr-down': () => { if (hits.length) { hitIdx = Math.min(hits.length - 1, hitIdx + 1); gotoHit(); } },
     mention: t => {

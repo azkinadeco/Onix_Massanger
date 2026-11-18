@@ -196,6 +196,7 @@ function ChatScreen(chatId) {
     <button class="jump" hidden>${icon('chevronDown')}<b></b></button>
     <div class="composer-wrap">
       <div class="ice-bar" hidden></div>
+      <div class="smart-bar" hidden></div>
       <div class="mention-list" hidden></div>
       <button class="sched-bar" data-act="sched-list" hidden></button>
       <div class="wait-bar" hidden></div>
@@ -466,6 +467,7 @@ function ChatScreen(chatId) {
     if (newLast && !firstRender && lm.type === 'nudge' && Date.now() - lm.ts < 20e3) fun.shake(el, lm.from !== ME);
     fun.initScratch(inner, mid => api.setLocal(chatId, mid, { scratched: true }));
     renderIce();
+    renderSmart();
     fun.initDoodles(inner, msgById);
     fun.initSpins(inner, msgById);
     fun.initSyncs(inner, msgById, el);
@@ -597,7 +599,18 @@ function ChatScreen(chatId) {
     vibrate(6);
   }
   const calmOk = new Set();
-  const iceBar = $('.ice-bar', el), iceOff = new Set();
+  const iceBar = $('.ice-bar', el), iceOff = new Set(), smartBar = $('.smart-bar', el);
+  let smartKey = '';
+  function renderSmart() {
+    const last = api.messages(chatId).at(-1);
+    const list = !iceBar.hidden || ta.value.trim() || editing ? [] : fun.smartReplies(chatId);
+    const key = (last?.id || '') + list.join('|');
+    if (key === smartKey && smartBar.hidden === !list.length) return;
+    smartKey = key;
+    smartBar.hidden = !list.length;
+    if (list.length) smartBar.innerHTML = list.map(s => `<button data-act="smart" data-t="${esc(s)}">${esc(s)}</button>`).join('');
+  }
+  ta.addEventListener('input', () => renderSmart());
   let iceKey = null;
   function renderIce(force) {
     const ib = fun.icebreaker(chatId);
@@ -1031,6 +1044,7 @@ function ChatScreen(chatId) {
     'ice-x': () => { iceOff.add(fun.icebreaker(chatId)?.key); iceBar.hidden = true; },
     'wait-cancel': () => { api.waits().filter(w => w.chatId === chatId).forEach(w => api.cancelWait(w.id)); toast('Dibatalin'); },
     pcat: t => { panelCat = t.dataset.k; renderPanel(); },
+    smart: t => { api.send(chatId, { type: 'text', text: t.dataset.t }, { hold: undoOn() ? UNDO_MS : 0 }); vibrate(6); smartBar.hidden = true; },
     'cu-first': () => { bindGoto(cu.first); catchBar.hidden = true; },
     'cu-at': () => { bindGoto(cu.mentions[cuAt++ % cu.mentions.length]); },
     'cu-x': () => { catchBar.hidden = true; },

@@ -1544,3 +1544,32 @@ export function searchMatch(m, kind, q) {
   const hay = [m.type === 'text' ? m.text : '', m.name, m.title, m.task, m.q, m.what, m.poll?.q, m.event?.title].filter(Boolean).join(' ').toLowerCase();
   return hay.includes(q);
 }
+
+/* ============ BALAS CEPAT PINTAR ============
+   Saran balasan dari pesan terakhir teman (aturan sederhana, tanpa AI) */
+const SMART = [
+  [/\b(makasih|mksh|thx|thanks|terima ?kasih|tengkyu)\b/i, ['Sama-sama 🫶', 'Santai', 'Anytime!']],
+  [/\b(maaf|sorry|sori|maap)\b/i, ['Gapapa kok', 'Santai aja 🤝', 'Iya, nggak masalah']],
+  [/\bkapan\b/i, ['Besok?', 'Nanti malam', 'Weekend aja']],
+  [/\b(di ?mana|dmn)\b/i, ['Di rumah', 'Otw', 'Share loc dong 📍']],
+  [/\b(gimana|gmn|bagaimana)\b/i, ['Aman kok', 'Lumayan', 'Kacau 😭']],
+  [/\b(sedih|capek|cape|galau|nangis|pusing|stres)\b|😭|🥲|😢/i, ['Semangat ya 💪', 'Peluk virtual 🫂', 'Kenapa?']],
+  [/\b(otw|on the way|nyampe|sampe|sampai)\b/i, ['Oke ditunggu', 'Hati-hati!', 'Udah di mana?']],
+  [/\b(wk{2,}|ha(ha)+|ngakak|lol)\b|😂|🤣/i, ['wkwkwk', '😂😂', 'NGAKAK']],
+  [/\b(selamat|congrats|hbd|ultah|ulang tahun)\b/i, ['Makasih!! 🥹', 'Aaa makasih 🫶']],
+  [/^(halo|hai|hi|hei|hey|p|pagi|siang|sore|malam)\b/i, ['Haii 👋', 'Kenapa?', 'Iya?']],
+  [/\?\s*$|^(apa|siapa|mau|jadi|bisa|udah|sudah|lagi)\b/i, ['Iya 👍', 'Nggak dulu', 'Bentar ya']],
+];
+export function smartReplies(chatId) {
+  if (api.settings().smart === false) return [];
+  const list = api.messages(chatId);
+  const m = list[list.length - 1];
+  if (!m || m.from === ME || m.type === 'system' || m.unsent || Date.now() - m.ts > 6 * 3600e3) return [];
+  if (api.peerOf(api.chat(chatId))?.official) return [];
+  if (m.type === 'image') return ['Keren! 😍', 'Di mana tuh?', 'Save ah'];
+  if (m.type === 'sticker') return ['😂', '🫶', '😳'];
+  if (m.type === 'voice') return ['Oke, siap!', 'Wkwk iya'];
+  if (m.type !== 'text') return [];
+  for (const [re, out] of SMART) if (re.test(m.text || '')) return out;
+  return [];
+}

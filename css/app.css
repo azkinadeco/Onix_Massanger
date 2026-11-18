@@ -1959,3 +1959,10 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .sr-kinds::-webkit-scrollbar { display: none; }
 .sr-kinds button { flex-shrink: 0; height: 30px; padding: 0 12px; border-radius: 15px; background: var(--surface-2); font-size: 13px; font-weight: 600; }
 .sr-kinds button.on { background: var(--accent); color: #fff; }
+
+/* ============ G8: balas cepat ============ */
+.smart-bar { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 0 10px 6px; animation: panelIn .3s var(--ease); }
+.smart-bar[hidden] { display: none; }
+.smart-bar::-webkit-scrollbar { display: none; }
+.smart-bar button { flex-shrink: 0; height: 34px; padding: 0 14px; border-radius: 17px; background: var(--surface); color: var(--accent); font-weight: 700; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.06); border: 1px solid rgba(var(--accent-rgb), .25); }
+.smart-bar button:active { transform: scale(.95); }

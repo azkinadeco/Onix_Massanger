@@ -790,7 +790,7 @@ export function BackupScreen() {
       if (!(await confirmBox({ title: `Pulihkan backup ${who}?`, text: `${new Date(payload.at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })} · data sekarang diganti`, ok: 'Pulihkan', danger: true }))) return;
       try {
         if (payload.media) { const { importMedia } = await import('./media.js'); await importMedia(payload.media); }
-        api.importData(payload.data);
+        await api.importData(payload.data);
         toast('Dipulihkan ✅');
         setTimeout(() => location.reload(), 500);
       } catch { toast('Gagal memulihkan 😢'); }

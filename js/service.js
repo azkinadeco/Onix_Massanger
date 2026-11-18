@@ -33,21 +33,52 @@ export const firstName = n => (n || '').split(' ')[0];
 /* ---------- persistence ---------- */
 let saveT;
 function save() { clearTimeout(saveT); saveT = setTimeout(flush, 250); }
+/* IndexedDB = gudang utama (muat besar), localStorage = salinan cepat kalau masih muat (~5 MB) */
+const IDB = (() => {
+  let p = null;
+  const open = () => p ||= new Promise((res, rej) => {
+    if (!window.indexedDB) return rej(new Error('no idb'));
+    const r = indexedDB.open('onix-store', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+  const run = (mode, fn) => open().then(d => new Promise((res, rej) => {
+    const t = d.transaction('kv', mode), q = fn(t.objectStore('kv'));
+    t.oncomplete = () => res(q.result); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+  }));
+  return { get: k => run('readonly', s => s.get(k)), set: (k, v) => run('readwrite', s => s.put(v, k)), del: k => run('readwrite', s => s.delete(k)) };
+})();
+let idbOk = false;
 function flush() {
   if (!db) return;
-  try { localStorage.setItem(KEY, JSON.stringify(db)); }
-  catch (e) { bus.emit('storage-full'); }
+  db.savedAt = Date.now();
+  const s = JSON.stringify(db);
+  if (idbOk) IDB.set(KEY, s).catch(() => bus.emit('storage-full'));
+  try { localStorage.setItem(KEY, s); }
+  catch {
+    try { localStorage.removeItem(KEY); } catch { /* */ } // kegedean: biar IndexedDB aja
+    if (!idbOk) bus.emit('storage-full');
+  }
 }
 window.addEventListener('pagehide', flush);
 document.addEventListener('visibilitychange', () => document.hidden && flush());
 
-try {
-  const d = JSON.parse(localStorage.getItem(KEY) || 'null');
-  if (d && d.v === 1 && d.me) {
+{
+  let lsRaw = null, idbRaw = null;
+  try { lsRaw = localStorage.getItem(KEY); } catch { /* */ }
+  try { idbRaw = await Promise.race([IDB.get(KEY), new Promise((_, rej) => setTimeout(() => rej(new Error('lama')), 2500))]); idbOk = true; } catch { /* nggak ada IndexedDB */ }
+  let wiped = 0;
+  try { wiped = +(localStorage.getItem(KEY + ':wiped') || 0); } catch { /* */ }
+  const parse = r => { try { const x = r ? JSON.parse(r) : null; return x && x.v === 1 && x.me && (x.savedAt || 0) >= wiped ? x : null; } catch { return null; } };
+  const a = parse(lsRaw), b = parse(idbRaw);
+  // pakai salinan yang paling baru
+  const d = b && (!a || (b.savedAt || 0) > (a.savedAt || 0)) ? b : a;
+  if (d) try {
     db = migrate(d);
     Object.entries(db.messages).forEach(([cid, list]) => list.forEach(m => { if (m.status === 'sending' || m.status === 'hold') m.status = db.chats[cid]?.remote && !m.rid ? 'queued' : 'sent'; }));
-  }
-} catch { /* data rusak -> mulai baru */ }
+  } catch { /* data rusak -> mulai baru */ }
+}
 
 /* ---------- migrasi data lama -> fitur baru ---------- */
 function migrate(d) {
@@ -571,12 +602,20 @@ export const api = {
     flush();
   },
   idTaken(id) { return USERS.some(u => u.id === String(id).toLowerCase()); },
-  reset() { db = null; localStorage.removeItem(KEY); },
+  reset() {
+    db = null;
+    try { localStorage.removeItem(KEY); localStorage.setItem(KEY + ':wiped', String(Date.now())); } catch { /* */ }
+    IDB.del(KEY).catch(() => {});
+  },
+  storageMode() { return idbOk ? 'IndexedDB' : 'localStorage'; },
   exportData() { return JSON.parse(JSON.stringify(db)); },
   importData(data) {
     if (!data || !data.me || !data.chats || !data.messages) throw new Error('bad');
-    localStorage.setItem(KEY, JSON.stringify(data));
+    data.savedAt = Date.now() + 1;
+    const s = JSON.stringify(data);
+    try { localStorage.setItem(KEY, s); } catch { try { localStorage.removeItem(KEY); } catch { /* */ } }
     db = null; // cegah flush data lama saat reload
+    return idbOk ? IDB.set(KEY, s) : Promise.resolve();
   },
 
   me() { return { ...db.me, id: db.me.id }; },

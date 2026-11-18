@@ -596,9 +596,23 @@ export const api = {
   remote,
   get ready() { return !!db?.me; },
 
-  register({ name, id, phone = null, avatar = null, hue }) {
+  // clean: akun beneran (online) -> tanpa teman/chat contoh, cuma Onix Team
+  register({ name, id, phone = null, avatar = null, hue, clean = false }) {
     db = migrate(buildSeed({ name, id, hue: hue ?? Math.floor(Math.random() * 360) }));
     Object.assign(db.me, { phone, avatar });
+    if (clean) {
+      const keep = Object.keys(db.chats).filter(cid => db.chats[cid].members.some(m => db.users[m]?.official));
+      db.chats = Object.fromEntries(keep.map(k => [k, db.chats[k]]));
+      db.messages = Object.fromEntries(keep.map(k => [k, db.messages[k] || []]));
+      const now = Date.now();
+      for (const c of Object.values(db.chats)) {
+        c.unread = 1; c.pinned = false; c.updatedAt = now;
+        const bot = c.members.find(m => db.users[m]?.official);
+        db.messages[c.id] = [newMsg(c.id, bot, { text: `Haii ${firstName(name)}! 👋 Selamat datang di Onix.\n\nCari teman: tab Chat → tombol ✏️ → ketik ID mereka.\nID kamu: @${id} — bagikan ke teman biar bisa langsung chat ✨`, ts: now })];
+      }
+      Object.assign(db, { friends: [], favorites: [], posts: [], stories: [], calls: [], moods: {}, activity: [], myStory: null });
+      db.settings.simulate = false;
+    }
     flush();
   },
   idTaken(id) { return USERS.some(u => u.id === String(id).toLowerCase()); },

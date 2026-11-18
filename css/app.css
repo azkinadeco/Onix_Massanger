@@ -2005,3 +2005,9 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .stk-bar[hidden] { display: none; }
 .stk-bar button { width: 56px; height: 56px; border-radius: 16px; font-size: 38px; background: var(--surface); box-shadow: 0 2px 8px rgba(0,0,0,.07); transition: transform .15s var(--ease); filter: drop-shadow(0 2px 3px rgba(0,0,0,.1)); }
 .stk-bar button:active { transform: scale(.85); }
+
+/* ============ H4: layar awal ============ */
+.onb-demo { margin-top: 4px; color: var(--text-2); font-size: 14px; font-weight: 600; align-self: center; }
+.onb-srv { align-self: flex-start; color: var(--text-3); font-size: 12.5px; }
+.onb-form .btn.ghost { height: 50px; }
+.btn.loading { opacity: .7; pointer-events: none; }

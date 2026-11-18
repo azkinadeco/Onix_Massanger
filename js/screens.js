@@ -15,6 +15,8 @@ export function OnboardingScreen(onDone) {
   let step = 'welcome', resendT = null;
 
   function go(s) { step = s; clearInterval(resendT); render(); }
+  let srv = '';
+  import('./backend.js').then(b => { srv = b.serverUrl(); if (step === 'signup' || step === 'login') render(); });
   const onbTop = (t, sub = '') => `<div class="onb-top"><button class="icon-btn" data-act="prev" aria-label="Kembali">${icon('back')}</button><div class="onb-steps">${['phone', 'otp', 'profile'].map(s => `<i class="${s === step ? 'on' : ''}"></i>`).join('')}</div><span></span></div><div class="onb-title"><h2>${t}</h2>${sub ? `<p>${sub}</p>` : ''}</div>`;
   const fmtPhone = p => p.replace(/(\d{3})(\d{4})(\d+)/, '$1 $2 $3');
 
@@ -26,7 +28,36 @@ export function OnboardingScreen(onDone) {
           <div class="logo-big"><img src="icons/icon.svg" alt=""></div>
           <h1>onix</h1><p>chat bareng circle kamu</p>
         </div>
-        <div class="onb-form"><button class="btn primary wide" data-act="start">Mulai ${icon('send')}</button></div>`;
+        <div class="onb-form">
+          <button class="btn primary wide" data-act="signup">Bikin akun ${icon('send')}</button>
+          <button class="btn ghost wide" data-act="login">Udah punya akun? Masuk</button>
+          <button class="text-btn onb-demo" data-act="start">Coba mode demo dulu</button>
+        </div>`;
+    } else if (step === 'signup' || step === 'login') {
+      const up = step === 'signup';
+      el.innerHTML = `<div class="onb-top"><button class="icon-btn" data-act="prev" aria-label="Kembali">${icon('back')}</button><span></span><span></span></div>
+        <div class="onb-title"><h2>${up ? 'Bikin akun' : 'Masuk'}</h2><p>${up ? 'Teman cukup cari ID kamu' : 'Pakai ID & password Onix kamu'}</p></div>
+        <div class="onb-body">
+          ${up ? `<input class="field" name="name" maxlength="30" placeholder="Nama" value="${esc(data.name)}">` : ''}
+          <div class="field-prefix"><span>@</span><input class="field" name="id" maxlength="20" placeholder="onix id" autocapitalize="off" autocorrect="off" value="${esc(data.id)}"></div>
+          <input class="field" name="pw" type="password" placeholder="Password (min. 8)" autocomplete="${up ? 'new-password' : 'current-password'}">
+          <small class="id-hint bad"></small>
+          <button class="text-btn onb-srv" data-act="server">Server: ${esc(srv.replace(/^https?:\/\//, ''))}</button>
+        </div>
+        <div class="onb-form"><button class="btn primary wide" data-act="auth" disabled>${up ? 'Daftar' : 'Masuk'} ${icon('check')}</button></div>`;
+      const nm = $('[name=name]', el), id = $('[name=id]', el), pw = $('[name=pw]', el), btn = $('[data-act=auth]', el);
+      let touched = !!data.id;
+      const chk = () => {
+        if (nm) data.name = nm.value.trim();
+        id.value = id.value.toLowerCase().replace(/[^a-z0-9._]/g, ''); data.id = id.value; data.pw = pw.value;
+        btn.disabled = (up && data.name.length < 2) || data.id.length < 3 || data.pw.length < 8;
+      };
+      nm?.addEventListener('input', () => { if (!touched) id.value = nm.value.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '').slice(0, 20); chk(); });
+      id.addEventListener('input', () => { touched = true; chk(); });
+      pw.addEventListener('input', chk);
+      pw.addEventListener('keydown', e => { if (e.key === 'Enter' && !btn.disabled) btn.click(); });
+      chk();
+      setTimeout(() => (nm || id).focus(), 300);
     } else if (step === 'phone') {
       el.innerHTML = `${onbTop('Nomor HP')}
         <div class="onb-body">
@@ -121,7 +152,26 @@ export function OnboardingScreen(onDone) {
 
   bindActs(el, {
     start: () => go('phone'),
-    prev: () => go(step === 'phone' ? 'welcome' : 'phone'),
+    prev: () => go(['phone', 'signup', 'login'].includes(step) ? 'welcome' : 'phone'),
+    signup: () => go('signup'),
+    login: () => go('login'),
+    server: async () => { const v = await promptBox({ title: 'Alamat server', value: srv, placeholder: 'https://…', ok: 'Simpan', max: 200 }); if (v) { srv = v.replace(/\/+$/, ''); render(); } },
+    auth: async () => {
+      const up = step === 'signup', btn = $('[data-act=auth]', el), hint = $('.id-hint', el);
+      btn.disabled = true; btn.classList.add('loading'); hint.textContent = '';
+      const be = await import('./backend.js');
+      api.register({ name: up ? data.name : data.id, id: data.id, hue: data.hue, clean: true });
+      try {
+        up ? await be.signUp({ handle: data.id, password: data.pw, url: srv }) : await be.signIn({ handle: data.id, password: data.pw, url: srv });
+        vibrate(15);
+        onDone();
+      } catch (e) {
+        api.reset();
+        const st = e?.status;
+        hint.textContent = !st ? 'Server nggak bisa dihubungi' : up ? (JSON.stringify(e?.response || '').includes('handle') ? 'ID udah dipakai' : 'Gagal daftar, cek ID/password') : 'ID atau password salah';
+        btn.disabled = false; btn.classList.remove('loading');
+      }
+    },
     'send-otp': sendOtp,
     resend: sendOtp,
     photo: async () => { const f = await pickFile('image/*'); if (f) { data.avatar = (await compressImage(f, 400, 0.8)).src; render(); } },

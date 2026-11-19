@@ -2223,3 +2223,36 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .voice .wave i.on { opacity: 1; }
 .voice.playing .vplay { animation: none; box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .18); }
 .me .voice.playing .vplay { box-shadow: 0 0 0 3px rgba(255, 255, 255, .2); }
+
+/* ============ B9: Kamu — ikon berwarna ala iOS ============ */
+.set-group { box-shadow: 0 1px 2px rgba(0, 0, 0, .04); }
+.set-row { min-height: 52px; gap: 13px; }
+.set-row { border-bottom: 0 !important; position: relative; }
+.set-row:not(:last-child)::after { content: ''; position: absolute; left: 57px; right: 0; bottom: 0; height: 1px; background: var(--border); pointer-events: none; }
+.set-row > .ic:first-child { --tile: #8E8E9C; box-sizing: border-box; width: 30px; height: 30px; padding: 6px; border-radius: 9px; background: var(--tile); color: #fff; stroke-width: 2.2; }
+.set-row.danger-txt > .ic:first-child { --tile: var(--danger); color: #fff; }
+.set-group .set-row:nth-child(1) > .ic:first-child { --tile: #5B6CFF; }
+.set-group .set-row:nth-child(2) > .ic:first-child { --tile: #B05CFF; }
+.set-group .set-row:nth-child(3) > .ic:first-child { --tile: #FF5F98; }
+.set-group .set-row:nth-child(4) > .ic:first-child { --tile: #FF9F1A; }
+[data-act=online] > .ic:first-child { --tile: #2E7BFF !important; }
+[data-act=wallet] > .ic:first-child { --tile: #0FB46C !important; }
+[data-act=fungal] > .ic:first-child { --tile: #B05CFF !important; }
+[data-act=focus] > .ic:first-child { --tile: #5B4BDB !important; }
+[data-act=keep] > .ic:first-child { --tile: #FF9F1A !important; }
+[data-act=trash] > .ic:first-child { --tile: #8E8E9C !important; }
+[data-act=archived] > .ic:first-child { --tile: #E1A100 !important; }
+[data-act=hidden-chats] > .ic:first-child { --tile: #3A3A48 !important; }
+[data-act=store] > .ic:first-child { --tile: #FF5F98 !important; }
+[data-act=storage] > .ic:first-child { --tile: #14B8C4 !important; }
+[data-act=backup] > .ic:first-child { --tile: #3BA0FF !important; }
+[data-act=demo] > .ic:first-child { --tile: #FF7A1A !important; }
+.set-row:has([data-lock]) > .ic:first-child { --tile: #3A3A48 !important; }
+.set-row:has([data-set=notif]) > .ic:first-child { --tile: #FF3B5C !important; }
+.set-row:has([data-set=sound]) > .ic:first-child { --tile: #FF5F98 !important; }
+.set-row:has([data-set=calm]) > .ic:first-child { --tile: #14B8C4 !important; }
+.set-row:has([data-set=undoSend]) > .ic:first-child { --tile: #5B6CFF !important; }
+.set-row:has([data-set=saver]) > .ic:first-child { --tile: #0FB46C !important; }
+.set-row:has([data-set=smart]) > .ic:first-child { --tile: #B05CFF !important; }
+.set-row span { font-weight: 550; }
+.me-hero { box-shadow: var(--shadow); }

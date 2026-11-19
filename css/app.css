@@ -2065,3 +2065,20 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .bubble.voice, .bubble.filemsg { padding-bottom: 20px; }
 .bubble .bt.blk { bottom: 6px; }
 .mention.me { font-weight: 800; }
+
+/* ============ B2: wallpaper doodle + tanggal melayang ============ */
+.chat-screen { --doodle: url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%22180%22%20height=%22180%22%20viewBox=%220%200%20180%20180%22%20fill=%22none%22%20stroke=%22%23000%22%20stroke-width=%222.2%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%20%3Cpath%20d=%22M14%2018h26a6%206%200%200%201%206%206v14a6%206%200%200%201-6%206H26l-8%207v-7h-4a6%206%200%200%201-6-6V24a6%206%200%200%201%206-6z%22/%3E%20%3Cpath%20d=%22M118%2022c-4-6-14-4-14%204%200%207%2014%2015%2014%2015s14-8%2014-15c0-8-10-10-14-4z%22/%3E%20%3Cpath%20d=%22M76%2070l3%207%207%201-5%205%201%207-6-3-6%203%201-7-5-5%207-1z%22/%3E%20%3Ccircle%20cx=%22150%22%20cy=%2286%22%20r=%227%22/%3E%3Cpath%20d=%22M146%2084h.01M154%2084h.01M146.5%2089a5%205%200%200%200%207%200%22/%3E%20%3Cpath%20d=%22M22%20100v-14l14-3v14%22/%3E%3Ccircle%20cx=%2218%22%20cy=%22100%22%20r=%224%22/%3E%3Ccircle%20cx=%2232%22%20cy=%2297%22%20r=%224%22/%3E%20%3Cpath%20d=%22M118%20132l2%206%206%202-6%202-2%206-2-6-6-2%206-2z%22/%3E%20%3Cpath%20d=%22M60%20128h24v18H60zM66%20128v-4h12v4%22/%3E%3Ccircle%20cx=%2272%22%20cy=%22137%22%20r=%224%22/%3E%20%3Cpath%20d=%22M156%20150c4%200%208%204%208%208M152%20160c0-4%204-8%208-8%22/%3E%20%3Ccircle%20cx=%2296%22%20cy=%2216%22%20r=%222%22/%3E%3Ccircle%20cx=%2244%22%20cy=%2262%22%20r=%222%22/%3E%3Ccircle%20cx=%22168%22%20cy=%2240%22%20r=%222%22/%3E%3Ccircle%20cx=%2212%22%20cy=%22150%22%20r=%222%22/%3E%3Ccircle%20cx=%22104%22%20cy=%22104%22%20r=%222%22/%3E%20%3Cpath%20d=%22M28%20160l10-6M33%20152l10%2010%22/%3E%20%3C/svg%3E"); }
+.chat-screen::before {
+  opacity: 1; background: rgba(var(--accent-rgb), .062);
+  -webkit-mask-image: var(--doodle); mask-image: var(--doodle);
+  -webkit-mask-size: 180px 180px; mask-size: 180px 180px;
+}
+[data-theme=dark] .chat-screen::before { background: rgba(255, 255, 255, .045); }
+.chat-screen:not([data-wall=default]):not([data-wall=plain])::before { opacity: .6; }
+.chat-screen[data-wall=night]::before { background: rgba(255, 255, 255, .06); }
+.msgs { z-index: 1; }
+.day-sep { position: sticky; top: 6px; z-index: 3; pointer-events: none; }
+.day-sep span { box-shadow: 0 1px 2px rgba(0, 0, 0, .06); background: var(--surface); color: var(--text-2); text-transform: none; }
+[data-theme=dark] .day-sep span { background: var(--surface-2); }
+.sys span { background: var(--surface); box-shadow: 0 1px 2px rgba(0, 0, 0, .05); }
+[data-theme=dark] .sys span { background: var(--surface-2); }

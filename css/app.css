@@ -2116,3 +2116,24 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .mood-em.add { top: auto; bottom: -2px; right: -2px; width: 22px; height: 22px; background: var(--accent); color: #fff; box-shadow: 0 0 0 2.5px var(--bg); }
 .mood-em.add .ic { width: 13px; height: 13px; stroke-width: 3; }
 .mood-item small { font-size: 11px; max-width: 62px; color: var(--text-2); }
+
+/* ============ B4: composer ala WhatsApp ============ */
+.composer { gap: 6px; padding: 7px 8px calc(var(--sab) + 7px); align-items: flex-end; }
+.composer-wrap { background: color-mix(in srgb, var(--chat-bg) 70%, transparent); border-top: 0; }
+.input-wrap { border-radius: 24px; min-height: 44px; border: 0; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); align-items: flex-end; }
+[data-theme=dark] .input-wrap { background: var(--surface-2); box-shadow: none; }
+.input-wrap textarea { padding: 11px 4px 11px 16px; height: 44px; min-height: 44px; }
+.input-wrap .icon-btn.in { width: 38px; height: 44px; border-radius: 0; }
+.input-wrap .icon-btn.in:active { background: none; transform: scale(.88); }
+.input-wrap .cam-in { margin-right: 4px; transition: width .2s var(--ease), opacity .15s; overflow: hidden; }
+.has-text .input-wrap .cam-in { width: 0 !important; opacity: 0; margin-right: 6px; pointer-events: none; }
+.composer > .icon-btn[data-act=plus] { width: 44px; height: 44px; margin-bottom: 0; color: var(--text-2); }
+.composer .send-btn { width: 46px; height: 46px; margin-bottom: -1px; background: var(--accent); color: #fff; position: relative; box-shadow: 0 4px 12px rgba(var(--accent-rgb), .3); }
+.composer .send-btn .sb-ic { position: absolute; inset: 0; display: grid; place-items: center; transition: transform .25s var(--ease), opacity .2s; }
+.composer .send-btn .sb-send { opacity: 0; transform: scale(.4) rotate(-45deg); }
+.composer .send-btn.active .sb-send { opacity: 1; transform: none; }
+.composer .send-btn.active .sb-mic { opacity: 0; transform: scale(.4) rotate(45deg); }
+.composer .send-btn .sb-send .ic { margin-left: 2px; }
+[data-skin=mono][data-theme=dark] .composer .send-btn { color: #0D0D12; }
+.reply-bar { margin: 8px 8px 0; padding: 8px 6px 8px 10px; border-radius: 14px; background: var(--surface); box-shadow: 0 1px 2px rgba(0, 0, 0, .06); }
+[data-theme=dark] .reply-bar { background: var(--surface-2); }

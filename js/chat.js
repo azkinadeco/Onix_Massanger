@@ -208,8 +208,9 @@ function ChatScreen(chatId) {
         <div class="input-wrap">
           <textarea rows="1" placeholder="Pesan" enterkeyhint="send" maxlength="2000"></textarea>
           <button class="icon-btn in" data-act="stickers" aria-label="Sticker">${icon('smile')}</button>
+          <button class="icon-btn in cam-in" data-act="att-camera" aria-label="Kamera">${icon('camera')}</button>
         </div>
-        <button class="send-btn" data-act="send" aria-label="Kirim">${icon('mic')}</button>
+        <button class="send-btn" data-act="send" aria-label="Kirim"><span class="sb-ic sb-mic">${icon('mic')}</span><span class="sb-ic sb-send">${icon('send')}</span></button>
       </div>
       <div class="panel" hidden></div>
     </div>
@@ -525,8 +526,8 @@ function ChatScreen(chatId) {
     ta.style.height = 'auto';
     if (ta.scrollHeight) ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
     const has = ta.value.trim().length > 0;
-    sendBtn.innerHTML = icon(has ? 'send' : 'mic');
     sendBtn.classList.toggle('active', has);
+    el.classList.toggle('has-text', has);
   }
   ta.addEventListener('input', () => { autosize(); checkMention(); if (ta.value.trim()) api.typingNow(chatId); });
   // tahan tombol kirim = jadwalkan

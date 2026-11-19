@@ -366,7 +366,7 @@ function ChatScreen(chatId) {
       bare = true; body = `<button class="photo ${m.chal ? 'chal-pic' : ''}" data-act="view-img" data-mid="${m.id}">${m.chal ? '<span class="chal-tag">📸 Tantangan</span>' : ''}<img src="${m.src}" style="aspect-ratio:${m.w || 1}/${m.h || 1}" alt="foto">${bt('ov')}</button>`;
       inside = inT;
     } else if (m.type === 'voice') {
-      body = `<div class="bubble voice" data-act="play" data-mid="${m.id}"><span class="vplay">${icon('play')}</span><span class="wave">${waveBars(m.id)}</span><span class="vdur">${dur(Math.round((m.duration || 0) / fun.vfxOf(m.vfx)[2]))}</span>${m.vfx ? `<span class="vfx-tag">${fun.vfxOf(m.vfx)[1]}</span>` : ''}${bt('blk')}</div>`;
+      body = `<div class="bubble voice" data-act="play" data-mid="${m.id}"><span class="vplay">${icon('play')}</span><span class="wave">${waveBars(m.id)}</span><span class="vdur">${dur(Math.round((m.duration || 0) / fun.vfxOf(m.vfx)[2]))}</span><button class="vspd" data-act="vspd" aria-label="Kecepatan">1×</button>${m.vfx ? `<span class="vfx-tag">${fun.vfxOf(m.vfx)[1]}</span>` : ''}${bt('blk')}</div>`;
       inside = inT;
     } else if (m.type === 'location') {
       body = `<div class="bubble loc" data-act="loc" data-mid="${m.id}"><div class="map"><span class="map-pin">${icon('location')}</span></div><div class="loc-txt"><b>${esc(m.title)}</b><small>${esc(m.address)}</small></div></div>`;
@@ -790,6 +790,8 @@ function ChatScreen(chatId) {
   }
 
   let playing = null;
+  let vSpeed = +(localStorage.getItem('onix:vspeed') || 1) || 1;
+  const spdLabel = v => (v === 1.5 ? '1,5' : v) + '×';
   function playVoice(mid) {
     const m = api.messages(chatId).find(x => x.id === mid);
     if (!m) return;
@@ -798,30 +800,45 @@ function ChatScreen(chatId) {
       stopPlay();
       if (same) return;
     }
-    const p = { mid, t0: Date.now(), audio: null, raf: 0 };
+    const p = { mid, last: performance.now(), prog: 0, audio: null, raf: 0 };
     playing = p;
     const rate = fun.vfxOf(m.vfx)[2];
-    const total = (m.duration || 1) * 1000 / rate;
+    const secs = (m.duration || 1) / rate;
+    p.apply = () => { if (p.audio) { p.audio.preservesPitch = rate === 1; p.audio.webkitPreservesPitch = rate === 1; p.audio.playbackRate = rate * vSpeed; } };
     if (m.src) {
       p.audio = new Audio(m.src);
-      if (rate !== 1) { p.audio.preservesPitch = false; p.audio.webkitPreservesPitch = false; p.audio.playbackRate = rate; }
+      p.apply();
       p.audio.play().catch(() => {});
-      p.audio.onended = stopPlay;
+      p.audio.onended = () => { stopPlay(); playNext(mid); };
     }
-    const tick = () => {
+    const tick = now => {
       if (playing !== p) return;
+      const dt = (now || performance.now()) - p.last; p.last = now || performance.now();
+      if (p.audio && p.audio.duration && isFinite(p.audio.duration)) p.prog = p.audio.currentTime / p.audio.duration;
+      else if (!p.audio) p.prog += dt / (secs * 1000 / vSpeed);
       const node = inner.querySelector(`.voice[data-mid="${mid}"]`);
-      const prog = p.audio && p.audio.duration && isFinite(p.audio.duration) ? p.audio.currentTime / p.audio.duration : (Date.now() - p.t0) / total;
       if (node) {
-        node.classList.add('playing');
-        const bars = node.querySelectorAll('.wave i'), k = Math.floor(Math.min(1, prog) * bars.length);
+        if (!node.classList.contains('playing')) { node.classList.add('playing'); $('.vplay', node).innerHTML = icon('pause'); }
+        const bars = node.querySelectorAll('.wave i'), k = Math.floor(Math.min(1, p.prog) * bars.length);
         bars.forEach((b, i) => b.classList.toggle('on', i < k));
-        $('.vplay', node).innerHTML = icon('pause');
+        const vd = $('.vdur', node); if (vd) vd.textContent = dur(Math.max(0, Math.round(secs * (1 - Math.min(1, p.prog)))));
+        const sp = $('.vspd', node); if (sp) sp.textContent = spdLabel(vSpeed);
       }
-      if (!p.audio && prog >= 1) return stopPlay();
+      if (!p.audio && p.prog >= 1) { stopPlay(); playNext(mid); return; }
       p.raf = requestAnimationFrame(tick);
     };
     tick();
+  }
+  // voice berikutnya yang nyambung langsung diputer (kayak WA)
+  function playNext(mid) {
+    const all = api.messages(chatId), i = all.findIndex(x => x.id === mid), nx = all[i + 1];
+    if (nx && nx.type === 'voice' && !nx.unsent && !nx.cleared) setTimeout(() => playVoice(nx.id), 250);
+  }
+  function cycleSpeed() {
+    vSpeed = vSpeed === 1 ? 1.5 : vSpeed === 1.5 ? 2 : 1;
+    try { localStorage.setItem('onix:vspeed', vSpeed); } catch { /* */ }
+    playing?.apply?.();
+    vibrate(5);
   }
   function stopPlay() {
     if (!playing) return;
@@ -829,7 +846,11 @@ function ChatScreen(chatId) {
     cancelAnimationFrame(p.raf);
     p.audio?.pause();
     const node = inner.querySelector(`.voice[data-mid="${p.mid}"]`);
-    if (node) { node.classList.remove('playing'); node.querySelectorAll('.wave i.on').forEach(b => b.classList.remove('on')); $('.vplay', node).innerHTML = icon('play'); }
+    const m = api.messages(chatId).find(x => x.id === p.mid);
+    if (node) {
+      node.classList.remove('playing'); node.querySelectorAll('.wave i.on').forEach(b => b.classList.remove('on')); $('.vplay', node).innerHTML = icon('play');
+      const vd = $('.vdur', node); if (vd && m) vd.textContent = dur(Math.round((m.duration || 0) / fun.vfxOf(m.vfx)[2]));
+    }
   }
 
   /* ---------- actions ---------- */
@@ -1179,6 +1200,7 @@ function ChatScreen(chatId) {
       openGallery(all.map(x => ({ src: x.src, caption: api.user(x.from)?.name || '' })), at);
     },
     play: t => playVoice(t.dataset.mid),
+    vspd: () => cycleSpeed(),
     loc: t => { const m = msgById(t.dataset.mid); if (m) window.open('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(m.title + ' ' + m.address), '_blank'); },
     profile: t => router.push(ProfileScreen(t.dataset.id)),
     goto: t => bindGoto(t.dataset.mid),

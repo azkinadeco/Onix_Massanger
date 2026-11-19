@@ -2137,3 +2137,31 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 [data-skin=mono][data-theme=dark] .composer .send-btn { color: #0D0D12; }
 .reply-bar { margin: 8px 8px 0; padding: 8px 6px 8px 10px; border-radius: 14px; background: var(--surface); box-shadow: 0 1px 2px rgba(0, 0, 0, .06); }
 [data-theme=dark] .reply-bar { background: var(--surface-2); }
+
+/* ============ B5: tab bar pill, FAB, header saat scroll ============ */
+.tabs-screen .tab-head { transition: box-shadow .2s; }
+.tabs-screen .tab-head.scrolled { box-shadow: 0 1px 0 var(--border), 0 6px 16px rgba(0, 0, 0, .04); }
+.tabbar { padding: 6px 8px calc(var(--sab) + 6px); }
+.tab { height: 44px; justify-content: center; padding: 0; z-index: 1; }
+.tab.active::before { display: none; }
+.tab.active { color: var(--accent); }
+.tab.active .ic { transform: scale(1.04); }
+.tab-pill { position: absolute; top: 6px; left: 8px; width: calc((100% - 16px) / 5); height: 44px; pointer-events: none; transform: translateX(calc(var(--ti, 1) * 100%)); transition: transform .38s var(--ease); }
+.tab-pill::before { content: ''; position: absolute; left: 50%; top: 50%; width: 58px; height: 36px; margin: -18px 0 0 -29px; border-radius: 99px; background: var(--accent-soft); }
+.tab .badge { top: 2px; margin-left: 4px; }
+.fab {
+  position: absolute; right: 16px; bottom: calc(var(--sab) + 74px); z-index: 4;
+  width: 56px; height: 56px; border-radius: 18px; background: var(--accent); color: #fff;
+  box-shadow: 0 10px 24px rgba(var(--accent-rgb), .38), 0 2px 6px rgba(0, 0, 0, .12);
+  display: none; place-items: center; transition: transform .25s var(--ease), border-radius .25s;
+  animation: pop .35s var(--ease);
+}
+.fab:active { transform: scale(.9); }
+.fab .fab-ic { display: none; grid-area: 1 / 1; }
+.fab .ic { width: 24px; height: 24px; }
+.tabs-screen[data-tab=chats] .fab { display: grid; }
+.tabs-screen[data-tab=chats] .fab .fab-ic[data-for=chats] { display: grid; }
+.tabs-screen.fab-mini .fab { transform: scale(.88); }
+[data-skin=mono][data-theme=dark] .fab { color: #0D0D12; }
+.tabs-screen[data-tab=chats] .tab-body { padding-bottom: 90px; }
+.tab.active::after { display: none; }

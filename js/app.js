@@ -53,7 +53,8 @@ function TabsScreen() {
   const el = h(`<div class="tabs-screen">
     <div class="tab-head"></div>
     <div class="content tab-body"></div>
-    <nav class="tabbar">${TABS.map(t => `<button class="tab" data-tab="${t.id}" aria-label="${t.label}">${icon(t.icon)}<b class="badge" hidden></b></button>`).join('')}</nav>
+    <button class="fab" data-act="fab" aria-label="Baru"><span class="fab-ic" data-for="chats">${icon('compose')}</span><span class="fab-ic" data-for="calls">${icon('phone')}</span><span class="fab-ic" data-for="voom">${icon('plus')}</span></button>
+    <nav class="tabbar"><i class="tab-pill"></i>${TABS.map(t => `<button class="tab" data-tab="${t.id}" aria-label="${t.label}">${icon(t.icon)}<b class="badge" hidden></b></button>`).join('')}</nav>
   </div>`);
   const head = $('.tab-head', el), body = $('.tab-body', el);
   let cur = 'chats';
@@ -102,7 +103,7 @@ function TabsScreen() {
   /* ----- CHATS ----- */
   const FILTERS = [['all', 'Semua'], ['unread', 'Belum dibaca'], ['groups', 'Grup']];
   const chats = {
-    head: () => title('Chat', `<button class="icon-btn" data-act="compose-menu" aria-label="Baru">${icon('compose')}</button>`) + searchBox('chatQ', 'Cari')
+    head: () => title('Chat') + searchBox('chatQ', 'Cari')
       + `<div class="chips scroll-x">${FILTERS.map(([k, l]) => `<button class="chip ${st.filter === k ? 'on' : ''}" data-act="filter" data-f="${k}">${l}</button>`).join('')}</div>`,
     body: () => {
       const q = st.chatQ.trim().toLowerCase();
@@ -239,8 +240,10 @@ function TabsScreen() {
     cur = id;
     $$('.tab', el).forEach(t => t.classList.toggle('active', t.dataset.tab === id));
     el.dataset.tab = id;
+    movePill();
     renderHead(); renderBody();
     body.scrollTop = scrollPos[id] || 0;
+    onScroll();
     vibrate(4);
   }
 
@@ -311,6 +314,7 @@ function TabsScreen() {
     'add-story': addStoryFlow,
     filter: t => { st.filter = t.dataset.f; renderHead(); renderBody(); },
     'compose-post': () => router.push(PostComposeScreen()),
+    fab: () => { vibrate(6); handlers[cur === 'calls' ? 'new-call' : cur === 'voom' ? 'compose-post' : 'compose-menu'](); },
     qcall: t => startCall(api.directWith(t.dataset.id).id, false),
     recall: (t, e) => { e.stopPropagation(); startCall(t.dataset.id, t.dataset.v === '1'); },
     'clear-calls': async () => { if (await confirmBox({ title: 'Hapus riwayat panggilan?', ok: 'Hapus', danger: true })) api.clearCalls(); },
@@ -450,9 +454,14 @@ function TabsScreen() {
     if (it && (it._swiped && Date.now() - it._swiped < 350 || it === openItem)) { e.stopPropagation(); e.preventDefault(); closeOpen(); }
   }, true);
 
+  // pill tab aktif + header pas discroll
+  function movePill() { el.style.setProperty('--ti', TABS.findIndex(t => t.id === cur)); }
+  function onScroll() { head.classList.toggle('scrolled', body.scrollTop > 6); el.classList.toggle('fab-mini', body.scrollTop > 120); }
+  body.addEventListener('scroll', onScroll, { passive: true });
   // render awal
   $$('.tab', el).forEach(t => t.classList.toggle('active', t.dataset.tab === cur));
   el.dataset.tab = cur;
+  movePill();
   renderHead(); renderBody(); renderBadges();
 
   return {

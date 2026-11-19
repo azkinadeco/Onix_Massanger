@@ -2019,3 +2019,49 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .gc-tile .gc-name { z-index: 2; }
 .gc-tile:not(.joined) { opacity: .45; }
 .gc-tile.live { box-shadow: 0 0 0 2px rgba(19, 178, 107, .8); }
+
+/* ============ B1: bubble ala WhatsApp (jam & centang di dalam, ekor) ============ */
+:root { --tick: #7FF0FF; }
+[data-skin=mono][data-theme=dark] { --tick: #2E7BFF; --bubble-tail: #F3F3F7; }
+[data-skin=sakura] { --bubble-tail: #FF8FB8; }
+[data-skin=ocean] { --bubble-tail: #3BA0FF; }
+[data-skin=neon] { --bubble-tail: #FF2BD6; }
+.bubble { border-radius: 18px; position: relative; }
+.them.first .bubble { border-top-left-radius: 4px; }
+.me.first .bubble { border-top-right-radius: 4px; }
+.them.first:not(.bare) .bubble-line > .bubble::before,
+.me.first:not(.bare) .bubble-line > .bubble::before {
+  content: ''; position: absolute; top: 0; width: 9px; height: 13px; pointer-events: none;
+}
+.them.first:not(.bare) .bubble-line > .bubble::before { left: -7px; background: var(--them); clip-path: path('M9 0 H2 Q0 0 1.2 1.6 L9 13 Z'); }
+.me.first:not(.bare) .bubble-line > .bubble::before { right: -7px; background: var(--bubble-tail, var(--bubble-me, var(--accent))); clip-path: path('M0 0 H7 Q9 0 7.8 1.6 L0 13 Z'); }
+.bubble.unsent::before, .bubble.typing::before { display: none !important; }
+.msg-row.inm { padding-top: 1px; padding-bottom: 1px; }
+.msg-row.inm.first { margin-top: 6px; }
+.bubble.tx { padding: 7px 10px 7px 12px; }
+.bt-sp { display: inline-block; width: 44px; height: 1px; }
+.me .bt-sp { width: 62px; }
+.bubble .bt {
+  position: absolute; right: 9px; bottom: 5px; display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10.5px; font-weight: 500; line-height: 1; color: var(--text-3); white-space: nowrap; font-style: normal;
+}
+.me .bubble .bt { color: currentColor; opacity: .78; }
+.bt em { font-style: normal; margin-right: 2px; }
+.bt .ic, .bt .bt-ic { width: 13px; height: 13px; }
+.bt .read, .bt .sent, .bt .queued { display: inline-flex; align-items: center; gap: 1px; font-size: 10px; font-weight: 700; color: inherit; order: 2; }
+.me .bubble .bt .read { color: var(--tick); opacity: 1; }
+.me .bubble .bt:has(.read) { opacity: .95; }
+.bt .read .ic { width: 16px; height: 16px; }
+.bt .sending { width: 9px; height: 9px; border: 1.5px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; order: 2; }
+.bt.ov {
+  position: absolute; display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; line-height: 1; font-weight: 600;
+  right: 8px; bottom: 8px; padding: 4px 7px; border-radius: 99px; background: rgba(0, 0, 0, .38);
+  color: #fff !important; opacity: 1 !important; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: 2;
+}
+.bt.ov .read { color: #B6F0FF !important; }
+.photo { position: relative; }
+.vid .bt.ov { left: auto; }
+.vid .vid-dur { right: auto; left: 8px; }
+.bubble.voice, .bubble.filemsg { padding-bottom: 20px; }
+.bubble .bt.blk { bottom: 6px; }
+.mention.me { font-weight: 800; }

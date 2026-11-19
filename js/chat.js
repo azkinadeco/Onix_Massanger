@@ -330,16 +330,31 @@ function ChatScreen(chatId) {
     const mine = m.from === ME;
     const u = api.user(m.from) || { name: '?' };
     const first = brk(prev, m), last = brk(m, next);
+    let read = '';
+    if (mine && !m.unsent) {
+      const n = (m.readBy || []).filter(api.readVisible).length;
+      if (m.status === 'hold') read = `<button class="undo-send" data-act="undo-send" data-mid="${m.id}" style="--t:${Math.max(0, UNDO_MS - (Date.now() - m.ts))}ms">Batal</button>`;
+      else if (m.status === 'sending') read = '<span class="sending"></span>';
+      else if (m.status === 'failed') read = `<button class="failed" data-act="retry" data-mid="${m.id}" aria-label="Kirim ulang">!</button>`;
+      else if (m.status === 'queued') read = `<span class="queued" title="Nunggu sinyal">${icon('clock')}</span>`;
+      else if (n) read = group ? `<button class="read" data-act="readers" data-mid="${m.id}">${icon('checks')}${n}</button>` : `<span class="read">${icon('checks')}</span>`;
+      else read = `<span class="sent">${icon('check')}</span>`;
+    }
     let body, bare = false;
+    const inT = m.status !== 'hold' && m.status !== 'failed' && !m.unsent;
+    const bt = cls => inT ? `<span class="bt ${cls || ''}">${m.edited ? '<em>diedit</em>' : ''}${m.expires ? icon('clock', 'bt-ic') : ''}${hm(m.ts)}${cls ? read.replace(/<button([^>]*)>(.*?)<\/button>/, '<span$1>$2</span>') : read}</span>` : '';
+    let inside = false;
     const quote = m.replyTo ? `<button class="quote" data-act="goto" data-mid="${m.replyTo.id}"><b>${esc(m.replyTo.name)}</b><span>${esc(m.replyTo.text)}</span></button>` : '';
     if (m.unsent) {
       body = `<div class="bubble unsent">${icon('undo', 'tiny')} Pesan ditarik</div>`;
     } else if (m.type === 'sticker') {
       bare = true; body = m.img ? `<div class="sticker"><img class="sticker-img" src="${m.img}" alt="sticker"></div>` : `<div class="sticker">${m.anim ? `<span class="anim-${m.anim}">${m.sticker}</span>` : m.sticker}</div>`;
     } else if (m.type === 'video') {
-      bare = true; body = `<button class="photo vid" data-act="open-video" data-mid="${m.id}">${m.thumb ? `<img src="${m.thumb}" style="aspect-ratio:${m.w || 16}/${m.h || 9}" alt="video">` : `<span class="vid-ph" style="aspect-ratio:${m.w || 16}/${m.h || 9}"></span>`}<span class="vid-play">${icon('play')}</span><span class="vid-dur">${dur(m.duration || 0)}</span></button>`;
+      bare = true; body = `<button class="photo vid" data-act="open-video" data-mid="${m.id}">${m.thumb ? `<img src="${m.thumb}" style="aspect-ratio:${m.w || 16}/${m.h || 9}" alt="video">` : `<span class="vid-ph" style="aspect-ratio:${m.w || 16}/${m.h || 9}"></span>`}<span class="vid-play">${icon('play')}</span><span class="vid-dur">${dur(m.duration || 0)}</span>${bt('ov')}</button>`;
+      inside = inT;
     } else if (m.type === 'file') {
-      body = `<button class="bubble filemsg" data-act="open-file" data-mid="${m.id}"><span class="file-ic">${esc(fileExt(m.name || 'FILE')) || icon('file')}</span><span class="file-txt"><b>${esc(m.name)}</b><small>${fmtSize(m.size || 0)}</small></span>${icon('download', 'file-dl')}</button>`;
+      body = `<button class="bubble filemsg" data-act="open-file" data-mid="${m.id}"><span class="file-ic">${esc(fileExt(m.name || 'FILE')) || icon('file')}</span><span class="file-txt"><b>${esc(m.name)}</b><small>${fmtSize(m.size || 0)}</small></span>${icon('download', 'file-dl')}${bt('blk')}</button>`;
+      inside = inT;
     } else if (m.cleared && ['image', 'video', 'file', 'voice'].includes(m.type)) {
       body = `<div class="bubble cleared">${icon(m.type === 'image' ? 'image' : m.type === 'video' ? 'film' : m.type === 'voice' ? 'mic' : 'file', 'tiny')} ${m.type === 'image' ? 'Foto' : m.type === 'video' ? 'Video' : m.type === 'voice' ? 'Voice note' : esc(m.name || 'File')} dihapus</div>`;
     } else if (m.type === 'image' && m.album?.length > 1) {
@@ -347,9 +362,11 @@ function ChatScreen(chatId) {
       const a = m.album, n = a.length, show = a.slice(0, 4);
       body = `<div class="photo-grid g${Math.min(n, 4)}">${show.map((x, i) => `<button data-act="view-img" data-mid="${m.id}" data-i="${i}"><img src="${x.src}" alt="foto" loading="lazy">${i === 3 && n > 4 ? `<b>+${n - 4}</b>` : ''}</button>`).join('')}</div>`;
     } else if (m.type === 'image') {
-      bare = true; body = `<button class="photo ${m.chal ? 'chal-pic' : ''}" data-act="view-img" data-mid="${m.id}">${m.chal ? '<span class="chal-tag">📸 Tantangan</span>' : ''}<img src="${m.src}" style="aspect-ratio:${m.w || 1}/${m.h || 1}" alt="foto"></button>`;
+      bare = true; body = `<button class="photo ${m.chal ? 'chal-pic' : ''}" data-act="view-img" data-mid="${m.id}">${m.chal ? '<span class="chal-tag">📸 Tantangan</span>' : ''}<img src="${m.src}" style="aspect-ratio:${m.w || 1}/${m.h || 1}" alt="foto">${bt('ov')}</button>`;
+      inside = inT;
     } else if (m.type === 'voice') {
-      body = `<div class="bubble voice" data-act="play" data-mid="${m.id}"><span class="vplay">${icon('play')}</span><span class="wave">${waveBars(m.id)}</span><span class="vdur">${dur(Math.round((m.duration || 0) / fun.vfxOf(m.vfx)[2]))}</span>${m.vfx ? `<span class="vfx-tag">${fun.vfxOf(m.vfx)[1]}</span>` : ''}</div>`;
+      body = `<div class="bubble voice" data-act="play" data-mid="${m.id}"><span class="vplay">${icon('play')}</span><span class="wave">${waveBars(m.id)}</span><span class="vdur">${dur(Math.round((m.duration || 0) / fun.vfxOf(m.vfx)[2]))}</span>${m.vfx ? `<span class="vfx-tag">${fun.vfxOf(m.vfx)[1]}</span>` : ''}${bt('blk')}</div>`;
+      inside = inT;
     } else if (m.type === 'location') {
       body = `<div class="bubble loc" data-act="loc" data-mid="${m.id}"><div class="map"><span class="map-pin">${icon('location')}</span></div><div class="loc-txt"><b>${esc(m.title)}</b><small>${esc(m.address)}</small></div></div>`;
     } else if (m.type === 'pay') {
@@ -408,23 +425,15 @@ function ChatScreen(chatId) {
     } else if (!m.replyTo && !m.forwarded && isJumbo(m.text)) {
       bare = true; body = `<div class="jumbo">${esc(m.text)}</div>`;
     } else {
-      body = `<div class="bubble ${effectOf(m) ? 'has-fx' : ''}" ${effectOf(m) ? `data-act="replay-fx" data-mid="${m.id}"` : ''}>${m.forwarded ? `<span class="fwd">${icon('forward', 'tiny')} Diteruskan</span>` : ''}${quote}<span class="txt">${fmtText(m.text)}</span>${linkCard(m.text)}</div>`;
+      body = `<div class="bubble tx ${effectOf(m) ? 'has-fx' : ''}" ${effectOf(m) ? `data-act="replay-fx" data-mid="${m.id}"` : ''}>${m.forwarded ? `<span class="fwd">${icon('forward', 'tiny')} Diteruskan</span>` : ''}${quote}<span class="txt">${fmtText(m.text)}${inT ? '<i class="bt-sp"></i>' : ''}</span>${bt()}${linkCard(m.text)}</div>`;
+      inside = inT;
     }
     const reacts = Object.entries(m.reactions || {}).filter(([, a]) => a.length);
     const reactHtml = reacts.length ? `<div class="reacts" data-act="react-info" data-mid="${m.id}">${reacts.map(([e, a]) => `<span class="${a.includes(ME) ? 'mine' : ''}">${e}${a.length > 1 ? `<small>${a.length}</small>` : ''}</span>`).join('')}</div>` : '';
-    let read = '';
-    if (mine && !m.unsent) {
-      const n = (m.readBy || []).filter(api.readVisible).length;
-      if (m.status === 'hold') read = `<button class="undo-send" data-act="undo-send" data-mid="${m.id}" style="--t:${Math.max(0, UNDO_MS - (Date.now() - m.ts))}ms">Batal</button>`;
-      else if (m.status === 'sending') read = '<span class="sending"></span>';
-      else if (m.status === 'failed') read = `<button class="failed" data-act="retry" data-mid="${m.id}" aria-label="Kirim ulang">!</button>`;
-      else if (m.status === 'queued') read = `<span class="queued" title="Nunggu sinyal">${icon('clock')}</span>`;
-      else if (n) read = group ? `<button class="read" data-act="readers" data-mid="${m.id}">${icon('checks')}${n}</button>` : `<span class="read">${icon('checks')}</span>`;
-      else read = `<span class="sent">${icon('check')}</span>`;
-    }
     const rem = api.reminderFor(m.id);
-    const meta = last || m.edited || m.expires || rem ? `<div class="meta">${rem ? `<span class="rem-ic" title="Diingetin">${icon('bell')}</span>` : ''}${m.expires ? `<span class="exp">${icon('clock')}</span>` : ''}${m.edited ? `<span class="edited">${icon('edit')}</span>` : ''}${last ? `<span class="tm">${read}${hm(m.ts)}</span>` : ''}</div>` : '';
-    return `<div class="msg-row ${mine ? 'me' : 'them'} ${first ? 'first' : ''} ${last ? 'last' : ''} ${bare ? 'bare' : ''}" data-mid="${m.id}">
+    const meta = inside ? (rem ? `<div class="meta"><span class="rem-ic" title="Diingetin">${icon('bell')}</span></div>` : '')
+      : last || m.edited || m.expires || rem ? `<div class="meta">${rem ? `<span class="rem-ic" title="Diingetin">${icon('bell')}</span>` : ''}${m.expires ? `<span class="exp">${icon('clock')}</span>` : ''}${m.edited ? `<span class="edited">${icon('edit')}</span>` : ''}${last ? `<span class="tm">${read}${hm(m.ts)}</span>` : ''}</div>` : '';
+    return `<div class="msg-row ${mine ? 'me' : 'them'} ${first ? 'first' : ''} ${last ? 'last' : ''} ${bare ? 'bare' : ''} ${inside ? 'inm' : ''}" data-mid="${m.id}">
       ${!mine ? `<div class="av-col">${first ? `<button data-act="profile" data-id="${m.from}">${avatar(u, 32)}</button>` : ''}</div>` : ''}
       <div class="msg-col">${!mine && first && group ? `<div class="sender">${esc(u.name)}</div>` : ''}
         <div class="bubble-line">${body}${meta}</div>${reactHtml}</div>

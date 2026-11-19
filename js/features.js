@@ -540,8 +540,8 @@ export function moodRow() {
   const others = list.filter(m => m.userId !== ME);
   const me = api.me();
   const item = (u, m, act) => `<button class="mood-item" data-act="${act}" data-id="${u.id}">
-    <span class="mood-bub ${m ? '' : 'add'}">${m ? `<b>${m.emoji}</b>${m.text ? `<span>${esc(m.text)}</span>` : ''}` : icon('plus')}</span>
-    ${avatar(u, 50)}<small>${esc(u.id === ME ? 'Kamu' : firstName(u.name))}</small></button>`;
+    <span class="mood-av ${m ? 'has' : ''}">${avatar(u, 50)}<span class="mood-em ${m ? '' : 'add'}">${m ? m.emoji : icon('plus')}</span></span>
+    <small>${m?.text ? esc(m.text) : esc(u.id === ME ? 'Kamu' : firstName(u.name))}</small></button>`;
   return `<div class="mood-row">${item(me, mine, 'mood-me')}${others.map(m => item(api.user(m.userId), m, 'mood-view')).join('')}</div>`;
 }
 export function setMoodSheet() {

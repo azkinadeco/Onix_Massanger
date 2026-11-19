@@ -2082,3 +2082,37 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 [data-theme=dark] .day-sep span { background: var(--surface-2); }
 .sys span { background: var(--surface); box-shadow: 0 1px 2px rgba(0, 0, 0, .05); }
 [data-theme=dark] .sys span { background: var(--surface-2); }
+
+/* ============ B3: daftar chat lebih rapi ============ */
+.chat-item { padding-top: 10px; padding-bottom: 10px; min-height: 74px; }
+.chat-item::after { content: ''; position: absolute; left: 83px; right: 0; bottom: 0; height: 1px; background: var(--border); }
+.chat-item:last-child::after, .chat-item:active::after { display: none; }
+.chat-item .li-name { font-size: 16px; font-weight: 650; }
+.chat-item .li-sub { display: flex; align-items: center; gap: 3px; font-size: 14px; }
+.chat-item .li-sub > .lt { flex-shrink: 0; display: inline-flex; color: var(--text-3); }
+.chat-item .li-sub > .lt .ic { width: 17px; height: 17px; }
+.chat-item .li-sub > .lt.rd { color: var(--accent); }
+.chat-item .li-sub > .lt.fail { width: 16px; height: 16px; border-radius: 50%; background: var(--danger); color: #fff; font-size: 11px; font-weight: 800; justify-content: center; align-items: center; }
+.chat-item .li-sub { overflow: hidden; }
+.chat-item .li-sub::after { content: ''; flex: 0 0 0; }
+.chat-item.is-unread .li-time { color: var(--accent); font-weight: 700; }
+.chat-item.is-unread .li-sub { color: var(--text); font-weight: 550; }
+.chat-item .li-bottom { gap: 6px; }
+.chat-item .unread { min-width: 22px; height: 22px; font-size: 12px; }
+.typing-sub { display: inline-flex; align-items: center; gap: 2px; font-weight: 600; }
+.typing-sub i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: typing 1.2s infinite; margin-top: 4px; }
+.typing-sub i:first-of-type { margin-left: 2px; }
+.typing-sub i:nth-of-type(2) { animation-delay: .15s; }
+.typing-sub i:nth-of-type(3) { animation-delay: .3s; }
+.arc-row { min-height: 54px; }
+.arc-row .round-ic { width: 54px; height: 40px; background: none; }
+/* mood: emoji nempel di avatar */
+.mood-row { gap: 2px; padding: 4px 10px 10px; border-bottom: 1px solid var(--border); align-items: flex-start; }
+.mood-item, .mood-item:has(.add) { width: 64px; padding-top: 0; gap: 5px; justify-content: flex-start; }
+.mood-av { position: relative; padding: 2.5px; border-radius: 50%; }
+.mood-av.has { background: linear-gradient(135deg, rgba(var(--accent-rgb), .55), #FFB341); }
+.mood-av .avatar { box-shadow: 0 0 0 2.5px var(--bg); }
+.mood-em { position: absolute; right: -4px; top: -4px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); box-shadow: 0 2px 8px rgba(0, 0, 0, .14); font-size: 14px; line-height: 1; }
+.mood-em.add { top: auto; bottom: -2px; right: -2px; width: 22px; height: 22px; background: var(--accent); color: #fff; box-shadow: 0 0 0 2.5px var(--bg); }
+.mood-em.add .ic { width: 13px; height: 13px; stroke-width: 3; }
+.mood-item small { font-size: 11px; max-width: 62px; color: var(--text-2); }

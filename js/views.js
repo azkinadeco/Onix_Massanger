@@ -48,11 +48,18 @@ export function chatRow(c) {
   const last = api.lastMessage(c.id);
   const typing = api.typingIn(c.id);
   let sub;
-  if (typing.length) sub = `<span class="accent-txt">${c.type === 'group' ? esc(firstName(api.user(typing[0])?.name)) + ' ' : ''}lagi ngetik…</span>`;
+  if (typing.length) sub = `<span class="accent-txt typing-sub">${c.type === 'group' ? esc(firstName(api.user(typing[0])?.name)) + ' ' : ''}lagi ngetik<i></i><i></i><i></i></span>`;
   else if (c.draft) sub = `<span class="draft">Draft:</span> ${esc(c.draft)}`;
-  else sub = esc(preview(last, c)).replace(/(^|\s)[*_~`]([^*_~`\n]+)[*_~`](?=$|[\s.,!?])/g, '$1$2');
+  else {
+    sub = esc(preview(last, c)).replace(/(^|\s)[*_~`]([^*_~`\n]+)[*_~`](?=$|[\s.,!?])/g, '$1$2');
+    if (last && last.from === ME && !last.unsent && last.type !== 'system') {
+      const rd = (last.readBy || []).filter(api.readVisible).length;
+      const tk = last.status === 'failed' ? `<span class="lt fail">!</span>` : last.status === 'sending' || last.status === 'hold' || last.status === 'queued' ? `<span class="lt">${icon('clock')}</span>` : `<span class="lt ${rd ? 'rd' : ''}">${icon(rd ? 'checks' : 'check')}</span>`;
+      sub = tk + sub.replace(/^Kamu: /, '');
+    }
+  }
   const peer = api.peerOf(c);
-  return `<div class="list-item chat-item" data-act="open-chat" data-id="${c.id}">
+  return `<div class="list-item chat-item ${c.unread ? 'is-unread' : ''}" data-act="open-chat" data-id="${c.id}">
     ${chatAvatar(c, 54)}
     <div class="li-main">
       <div class="li-top"><span class="li-name">${esc(title)}</span>${peer?.official ? verified() : ''}${c.muted ? icon('bellOff', 'tiny muted-ic') : ''}<span class="li-time">${last ? listTime(last.ts) : ''}</span></div>

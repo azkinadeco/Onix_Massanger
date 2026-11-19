@@ -2256,3 +2256,26 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .set-row:has([data-set=smart]) > .ic:first-child { --tile: #B05CFF !important; }
 .set-row span { font-weight: 550; }
 .me-hero { box-shadow: var(--shadow); }
+
+/* ============ B10: layar awal pakai logo baru ============ */
+.onb-hero.wel::before { display: none; }
+.wel-glow { position: absolute; border-radius: 50%; filter: blur(40px); pointer-events: none; animation: drift 9s ease-in-out infinite alternate; }
+.wel-glow.g1 { width: 300px; height: 300px; top: 8%; left: -60px; background: rgba(var(--accent-rgb), .35); }
+.wel-glow.g2 { width: 240px; height: 240px; top: 30%; right: -60px; background: rgba(120, 255, 90, .22); animation-delay: -4s; }
+[data-theme=dark] .wel-glow.g2 { background: rgba(120, 255, 90, .14); }
+.wel .logo-big { width: 132px; height: 132px; border-radius: 34px; box-shadow: 0 24px 60px rgba(var(--accent-rgb), .45), 0 0 0 1px rgba(255, 255, 255, .08); animation: bob 5s ease-in-out infinite; }
+.wel .logo-big img { object-fit: cover; }
+.wel h1 { margin-top: 22px; }
+.wel-bub { position: absolute; z-index: 1; padding: 8px 13px; border-radius: 18px; border-top-left-radius: 5px; background: var(--surface); box-shadow: var(--shadow); font-size: 14px; font-weight: 600; animation: welIn .6s var(--ease) both, bob 6s ease-in-out infinite; }
+.wel-bub.me { background: var(--accent); color: #fff; border-radius: 18px; border-top-right-radius: 5px; }
+.wel-bub.me small { font-size: 10px; opacity: .8; margin-left: 4px; color: #7FF0FF; }
+.wel-bub.b1 { top: calc(var(--sat) + 13%); left: 9%; animation-delay: .2s, 0s; }
+.wel-bub.b2 { top: calc(var(--sat) + 19%); right: 6%; animation-delay: .45s, -2s; }
+.wel-bub.b3 { bottom: 12%; right: 16%; font-size: 26px; padding: 6px 10px; border-radius: 50%; animation-delay: .7s, -4s; }
+@keyframes welIn { from { opacity: 0; transform: translateY(16px) scale(.8); } }
+.onb[data-step=welcome] .onb-form .btn.primary { height: 56px; border-radius: 18px; }
+/* empty state lebih manis */
+.empty { padding: 64px 32px; }
+.empty-emoji { width: 96px; height: 96px; margin: 0 auto 16px; border-radius: 50%; display: grid; place-items: center; font-size: 44px; background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, .7), transparent 60%), var(--accent-soft); box-shadow: 0 10px 30px rgba(var(--accent-rgb), .15); }
+[data-theme=dark] .empty-emoji { background: var(--accent-soft); }
+.empty b { font-size: 16px; }

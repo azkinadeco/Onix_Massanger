@@ -555,6 +555,7 @@ bus.on('notify', ({ chat, msg, mention }) => {
   banner({ title, text, avatarHtml: chatAvatar(chat, 40, { online: false }), onTap: () => openChat(chat.id) });
 });
 bus.on('incoming-call', ({ chatId, video, rtc }) => startCall(chatId, video, true, rtc));
+bus.on('incoming-gcall', async ({ chatId, video, roomId, from }) => { const { startGroupCall } = await import('./chat.js'); startGroupCall(chatId, video, { roomId, from }); });
 bus.on('storage-full', () => toast('Memori penuh'));
 bus.on('toast', t => toast(t));
 

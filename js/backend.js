@@ -102,12 +102,13 @@ const sessions = new Map(), earlyIce = new Map();
 export const canCall = () => !!navigator.mediaDevices?.getUserMedia && !!window.RTCPeerConnection;
 const signal = (s, kind, data = {}) => pb.collection('call_signals').create({ chat: s.chatId, sender: myId(), target: s.peer, call: s.id, kind, data });
 
-function makeSession({ chatId, peer, video, id, incoming, offer }) {
-  const s = { id, chatId, peer, video, incoming, pc: null, local: null, ended: false, handlers: {}, pending: earlyIce.get(id) || [], offerSent: false, outIce: [] };
+function makeSession({ chatId, peer, video, id, incoming, offer, stream = null }) {
+  const s = { id, chatId, peer, video, incoming, pc: null, local: null, ended: false, handlers: {}, pending: earlyIce.get(id) || [], offerSent: false, outIce: [], shared: !!stream };
   earlyIce.delete(id);
   const emit = (ev, x) => s.handlers[ev]?.(x);
   s.on = (ev, fn) => { s.handlers[ev] = fn; if (ev === 'local' && s.local) fn(s.local); };
   async function media() {
+    if (stream) { s.local = stream; emit('local', s.local); return; }
     s.local = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: video ? { facingMode: 'user', width: { ideal: 720 } } : false });
     emit('local', s.local);
   }
@@ -130,7 +131,7 @@ function makeSession({ chatId, peer, video, id, incoming, offer }) {
     if (s.ended) return;
     s.ended = true;
     try { s.pc?.close(); } catch { /* */ }
-    s.local?.getTracks().forEach(t => t.stop());
+    if (!s.shared) s.local?.getTracks().forEach(t => t.stop());
     sessions.delete(s.id);
   }
   s.fail = r => { if (s.ended) return; cleanup(); emit('ended', r); };
@@ -177,6 +178,16 @@ export function callSession(chatId, video) {
 
 async function onSignal(r) {
   if (r.target !== myId() || r.sender === myId()) return;
+  const fresh = Date.now() - Date.parse(r.created) < 45000;
+  if (r.kind === 'gring') {
+    if (!fresh || room || sessions.size || api.isBlocked(r.sender)) return;
+    if (!api.chat(r.chat)) return;
+    bus.emit('incoming-gcall', { chatId: r.chat, video: !!r.data?.video, roomId: r.call, from: r.sender });
+    return;
+  }
+  if (r.kind === 'gjoin') { if (room && r.call === room.id) room.onJoin(r.sender, r.data?.t || 0); return; }
+  if (r.kind === 'gend') { bus.emit('gcall-cancel', r.call); return; }
+  if (r.kind === 'offer' && room && r.call.startsWith(room.id + '.')) { room.onOffer(r); return; }
   if (r.kind === 'offer') {
     if (Date.now() - Date.parse(r.created) > 45000 || api.isBlocked(r.sender)) return;
     if (sessions.size) { pb.collection('call_signals').create({ chat: r.chat, sender: myId(), target: r.sender, call: r.call, kind: 'busy', data: {} }).catch(() => {}); return; }
@@ -569,3 +580,62 @@ export async function init() {
 window.addEventListener('online', () => { if (started) { sync(); flushOutbox(); } else if (api.remote.state()) init(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && started) sync(); });
 export { ME };
+
+/* ---------- telepon grup (mesh: tiap orang nyambung langsung ke semua) ---------- */
+let room = null;
+const pairId = (rid, a, b) => { const k = [a, b].sort().join(''); let x = 0; for (const ch of k) x = (Math.imul(x, 33) + ch.charCodeAt(0)) >>> 0; return rid + '.' + x.toString(36); };
+const gsig = (chatId, target, call, kind, data = {}) => pb.collection('call_signals').create({ chat: chatId, sender: myId(), target, call, kind, data }).catch(() => {});
+function makeRoom(chatId, id, video) {
+  const handlers = {};
+  const r = { id, chatId, video, local: null, joinedAt: 0, peers: new Map(), ended: false };
+  const emit = (ev, ...a) => handlers[ev]?.(...a);
+  r.on = (ev, fn) => { handlers[ev] = fn; };
+  const others = () => (api.chat(chatId)?.members || []).filter(m => m !== ME).map(m => api.remote.mapId(m) === ME ? null : m).filter(Boolean);
+  async function media() {
+    r.local = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: video ? { facingMode: 'user', width: { ideal: 480 } } : false });
+    emit('local', r.local);
+  }
+  function wire(uid, s) {
+    r.peers.set(uid, s);
+    s.on('remote', st => emit('peer', uid, st));
+    s.on('connected', () => emit('connected', uid));
+    s.on('ended', () => { if (r.peers.get(uid) === s) { r.peers.delete(uid); emit('peerleft', uid); } });
+  }
+  r.onJoin = (uid, t) => {
+    if (r.ended || r.peers.has(uid)) return;
+    if (t < r.joinedAt || (t === r.joinedAt && uid < myId())) return; // yang join belakangan selalu jadi penerima
+    const s = makeSession({ chatId, peer: uid, video, id: pairId(id, myId(), uid), incoming: false, stream: r.local });
+    wire(uid, s); s.start();
+  };
+  r.onOffer = rec => {
+    if (r.ended) return;
+    const old = r.peers.get(rec.sender); if (old && !old.ended) old.hangup();
+    const s = makeSession({ chatId, peer: rec.sender, video, id: rec.call, incoming: true, offer: rec.data.sdp, stream: r.local });
+    wire(rec.sender, s); s.accept();
+  };
+  // mulai (penelepon) atau gabung (yang ditelepon)
+  r.begin = async ring => {
+    try { await media(); } catch { r.leave(); emit('ended', 'nomedia'); return false; }
+    r.joinedAt = Date.now();
+    for (const m of others()) gsig(chatId, m, id, ring ? 'gring' : 'gjoin', ring ? { video } : { t: r.joinedAt });
+    return true;
+  };
+  r.leave = () => {
+    if (r.ended) return;
+    r.ended = true;
+    r.peers.forEach(s => s.hangup()); r.peers.clear();
+    r.local?.getTracks().forEach(t => t.stop());
+    if (room === r) room = null;
+  };
+  r.cancelRing = () => { for (const m of others()) gsig(chatId, m, id, 'gend'); };
+  r.setMute = m => r.local?.getAudioTracks().forEach(t => { t.enabled = !m; });
+  r.setCam = on => r.local?.getVideoTracks().forEach(t => { t.enabled = on; });
+  r.hasVideo = () => !!r.local?.getVideoTracks().length;
+  return r;
+}
+export function groupRoom(chatId, video, roomId) {
+  if (room || sessions.size) return null;
+  room = makeRoom(chatId, roomId || 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), video);
+  return room;
+}
+export const roomInfo = () => room && { id: room.id, peers: [...room.peers.entries()].map(([u, s]) => [u, s.pc?.connectionState || 'new']) };

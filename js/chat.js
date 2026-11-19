@@ -1,5 +1,5 @@
 import { TTL_OPTS, ttlLabel, suitResult, rupiah } from './service.js';
-import { canCall, callSession } from './backend.js';
+import { canCall, callSession, groupRoom } from './backend.js';
 import * as fun from './fun.js';
 import { FUN_ITEMS, calmOn, calmReason, calmSheet, undoOn, UNDO_MS, SECRET_TYPES } from './fun.js';
 import { api, bus, ME, firstName, mentionRe } from './service.js';
@@ -1244,8 +1244,8 @@ export function startCall(chatId, video = false, incoming = false, rtc = null) {
   const ch = api.chat(chatId);
   if (!ch) return;
   if (ch.remote && !incoming) {
-    if (ch.type !== 'direct') return toast('Call grup online belum ada');
     if (!canCall()) return toast('Telepon butuh HTTPS 🔒');
+    if (ch.type !== 'direct') return startGroupCall(chatId, video);
     rtc = callSession(chatId, video);
     if (!rtc) return;
   }
@@ -1406,4 +1406,75 @@ export function startCall(chatId, video = false, incoming = false, rtc = null) {
   } else {
     ringT = setTimeout(() => { if (state === 'ringing') end('missed'); }, 20000);
   }
+}
+
+/* ---------- telepon grup online ---------- */
+export function startGroupCall(chatId, video = false, incoming = null) {
+  if (callOpen) return;
+  const ch = api.chat(chatId);
+  if (!ch) return;
+  if (!canCall()) return toast('Telepon butuh HTTPS 🔒');
+  const rm = groupRoom(chatId, video, incoming?.roomId);
+  if (!rm) return toast('Lagi di panggilan lain');
+  callOpen = true;
+  const tile = id => { const u = id === ME ? api.me() : api.user(id); return `<div class="gc-tile ${id === ME ? 'me joined' : ''}" data-u="${id}"><video playsinline autoplay ${id === ME ? 'muted' : ''} hidden></video>${avatar(u, 60)}<span class="gc-name">${esc(id === ME ? 'Kamu' : firstName(u?.name))}<i class="gc-mute">${icon('micOff')}</i></span></div>`; };
+  const others = ch.members.filter(id => id !== ME && api.user(id));
+  const el = h(`<div class="call is-group ${video ? 'is-video' : ''} ${incoming ? 'is-incoming' : ''}" style="--h:${ch.hue ?? 260}">
+    <div class="call-bg"></div>
+    <div class="call-top"><span class="enc">${icon('lock', 'tiny')}</span></div>
+    <div class="call-center gc">
+      <div class="gc-head"><h2>${esc(api.chatTitle(ch))}</h2><p class="call-status">${incoming ? `${esc(firstName(api.user(incoming.from)?.name || ''))} ngajak ${video ? 'video call' : 'telepon'} grup` : 'Memanggil grup…'}</p></div>
+      <div class="gc-grid n${Math.min(others.length + 1, 6)}">${[ME, ...others].slice(0, 6).map(tile).join('')}</div>
+    </div>
+    <div class="call-controls"></div>
+  </div>`);
+  document.getElementById('app').appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  vibrate([20, 60, 20]);
+  let state = incoming ? 'ringing' : 'calling', t0 = 0, timer = null, waitT = null, muted = false, camOn = video;
+  const status = $('.call-status', el), ctr = $('.call-controls', el);
+  const tileOf = id => el.querySelector(`.gc-tile[data-u="${id}"]`);
+  rm.on('local', s => { const v = tileOf(ME)?.querySelector('video'); if (v && s.getVideoTracks().length) { v.srcObject = s; v.hidden = !camOn; } });
+  rm.on('peer', (uid, s) => {
+    const t = tileOf(uid); if (!t) return;
+    const v = t.querySelector('video');
+    v.srcObject = s; v.hidden = !s.getVideoTracks().length; v.play?.().catch(() => {});
+    t.classList.add('joined', 'live');
+  });
+  rm.on('connected', uid => { tileOf(uid)?.classList.add('joined'); if (state !== 'live') live(); clearTimeout(waitT); });
+  rm.on('peerleft', uid => { const t = tileOf(uid); if (t) { t.classList.remove('joined', 'live'); const v = t.querySelector('video'); v.srcObject = null; v.hidden = true; } if (state === 'live' && !rm.peers.size) waitAlone(); });
+  rm.on('ended', r => { if (r === 'nomedia') toast('Mic/kamera nggak bisa dipakai 🔒'); end(); });
+  const offCancel = bus.on('gcall-cancel', id => { if (id === rm.id && state === 'ringing') end('missed'); });
+  function controls() {
+    if (state === 'ringing') { ctr.innerHTML = `<button class="cbtn end" data-c="decline" aria-label="Tolak">${icon('phoneOff')}</button><button class="cbtn accept" data-c="accept" aria-label="Gabung">${icon(video ? 'video' : 'phone')}</button>`; return; }
+    ctr.innerHTML = `<button class="cbtn ${muted ? 'on' : ''}" data-c="mute" aria-label="Mute">${icon(muted ? 'micOff' : 'mic')}</button>
+      <button class="cbtn ${camOn ? 'on' : ''}" data-c="cam" aria-label="Kamera">${icon(camOn ? 'video' : 'videoOff')}</button>
+      <button class="cbtn end" data-c="end" aria-label="Keluar">${icon('phoneOff')}</button>`;
+    tileOf(ME)?.classList.toggle('muted', muted);
+  }
+  function live() { state = 'live'; t0 = Date.now(); el.classList.add('live'); clearInterval(timer); timer = setInterval(() => { status.textContent = `${dur((Date.now() - t0) / 1000)} · ${rm.peers.size + 1} orang`; }, 500); controls(); }
+  function waitAlone() { status.textContent = 'Nunggu yang lain…'; clearTimeout(waitT); waitT = setTimeout(() => { if (!rm.peers.size) end(); }, 30000); }
+  function end(st) {
+    if (state === 'ended') return;
+    const was = state; state = 'ended';
+    if (was === 'calling' && !rm.peers.size) rm.cancelRing();
+    rm.leave(); offCancel();
+    clearInterval(timer); clearTimeout(waitT);
+    api.logCall({ chatId, video, dir: incoming ? 'in' : 'out', status: was === 'live' ? 'done' : st || (incoming ? 'missed' : 'noanswer'), duration: was === 'live' ? Math.round((Date.now() - t0) / 1000) : 0 });
+    status.textContent = 'Berakhir'; ctr.innerHTML = '';
+    setTimeout(() => { el.classList.remove('show'); setTimeout(() => { el.remove(); callOpen = false; }, 300); }, 700);
+  }
+  ctr.addEventListener('click', async e => {
+    const b = e.target.closest('[data-c]'); if (!b) return;
+    vibrate(8);
+    const a = b.dataset.c;
+    if (a === 'end') end();
+    else if (a === 'decline') end('declined');
+    else if (a === 'accept') { state = 'connecting'; status.textContent = 'Menyambungkan…'; ctr.innerHTML = `<button class="cbtn end" data-c="end" aria-label="Keluar">${icon('phoneOff')}</button>`; if (await rm.begin(false)) waitAlone(); }
+    else if (a === 'mute') { muted = !muted; rm.setMute(muted); controls(); }
+    else if (a === 'cam') { if (!rm.hasVideo()) return toast('Kamera cuma di video call'); camOn = !camOn; rm.setCam(camOn); const v = tileOf(ME)?.querySelector('video'); if (v) v.hidden = !camOn; controls(); }
+  });
+  controls();
+  if (incoming) { waitT = setTimeout(() => { if (state === 'ringing') end('missed'); }, 35000); }
+  else { rm.begin(true).then(ok => { if (ok) waitT = setTimeout(() => { if (state === 'calling') end('noanswer'); }, 40000); }); }
 }

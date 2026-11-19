@@ -2011,3 +2011,11 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 .onb-srv { align-self: flex-start; color: var(--text-3); font-size: 12.5px; }
 .onb-form .btn.ghost { height: 50px; }
 .btn.loading { opacity: .7; pointer-events: none; }
+
+/* ============ H5: telepon grup online ============ */
+.gc-tile { position: relative; overflow: hidden; }
+.gc-tile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; z-index: 1; }
+.gc-tile video[hidden] { display: none; }
+.gc-tile .gc-name { z-index: 2; }
+.gc-tile:not(.joined) { opacity: .45; }
+.gc-tile.live { box-shadow: 0 0 0 2px rgba(19, 178, 107, .8); }

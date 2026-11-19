@@ -186,6 +186,16 @@ export function OnboardingScreen(onDone) {
   return { el, destroy: () => clearInterval(resendT) };
 }
 
+
+const dmOf = uid => api.chat('d_' + uid) || [...api.chats(), ...api.archived()].find(c => c.type === 'direct' && api.peerOf(c)?.id === uid);
+function mediaRow(chat, act = 'media', imgAct = 'pm-img') {
+  if (!chat) return '';
+  const n = mediaCounts(chat.id);
+  if (!n.total) return '';
+  const imgs = api.images(chat.id).slice(-4).reverse();
+  return `<div class="pm-card"><button class="pm-head" data-act="${act}"><b>Media, link & file</b><span>${n.total}</span>${icon('chevronRight', 'tiny')}</button>${imgs.length ? `<div class="mini-album">${imgs.map(m => `<button data-act="${imgAct}" data-${imgAct === 'img' ? 'src' : 'id'}="${m.id}"><img src="${m.src}" alt=""></button>`).join('')}</div>` : ''}</div>`;
+}
+
 /* ================= PROFILE ================= */
 export function ProfileScreen(uid) {
   if (uid === ME) return MyProfileScreen();
@@ -213,6 +223,7 @@ export function ProfileScreen(uid) {
             ${u.official ? '' : `<button data-act="fav" class="${fav ? 'on' : ''}">${icon('star')}<span>Favorit</span></button>`}
           </div>`
           : `<div class="stack"><button class="btn primary wide" data-act="add">${icon('userPlus')} Tambah teman</button><button class="btn ghost wide" data-act="chat">Kirim pesan</button></div>`}
+        ${mediaRow(dmOf(uid))}
       </div>`;
   }
   bindActs(el, {
@@ -223,6 +234,8 @@ export function ProfileScreen(uid) {
     add: () => { api.addFriend(uid); toast('Ditambahkan 🎉'); },
     unblock: () => { api.unblock(uid); ; },
     story: () => openStories([uid]),
+    media: () => router.push(MediaScreen(dmOf(uid).id)),
+    'pm-img': t => { const all = api.images(dmOf(uid).id).slice().reverse(); const i = all.findIndex(x => x.id === t.dataset.id); if (i >= 0) openGallery(all.map(m => ({ src: m.src })), i); },
     more: () => {
       const u = api.user(uid);
       const acts = [{ label: 'Bagikan kontak', icon: 'share', run: () => shareText(`Add ${u.name} di Onix: @${u.id}`) }];
@@ -492,7 +505,6 @@ export function GroupInfoScreen(chatId) {
   function render() {
     const c = api.chat(chatId);
     if (!c) return;
-    const imgs = api.images(chatId);
     body.innerHTML = `
       <div class="gi-head">${chatAvatar(c, 96)}<h2>${esc(c.name)} <button class="icon-btn sm" data-act="rename">${icon('edit')}</button></h2><span>${c.members.length} anggota</span></div>
       <div class="pactions">
@@ -501,7 +513,7 @@ export function GroupInfoScreen(chatId) {
         <button data-act="mute" class="${c.muted ? 'on' : ''}">${icon(c.muted ? 'bellOff' : 'bell')}<span>${c.muted ? 'Dibisukan' : 'Notif'}</span></button>
         <button data-act="album">${icon('grid')}<span>Album</span></button>
       </div>
-      ${imgs.length ? `<div class="section-h">Foto <button class="link" data-act="album">Lihat semua</button></div><div class="mini-album">${imgs.slice(-4).reverse().map(m => `<button data-act="img" data-src="${m.id}"><img src="${m.src}" alt=""></button>`).join('')}</div>` : ''}
+      ${mediaRow(c, 'album', 'img')}
       <div class="list-item slim" data-act="notes"><span class="round-ic">${icon('note')}</span><div class="li-main"><div class="li-name">Catatan</div></div><span class="count">${api.notes(chatId).length || ''}</span>${icon('chevronRight', 'tiny')}</div>
       <div class="section-h">Anggota</div>
       <div class="list-item" data-act="add-members"><span class="round-ic">${icon('userPlus')}</span><div class="li-main"><div class="li-name accent-txt">Tambah anggota</div></div></div>
@@ -567,10 +579,57 @@ export function GroupInfoScreen(chatId) {
   return { el, destroy: () => offs.forEach(f => f()) };
 }
 
-export function AlbumScreen(chatId) {
-  const imgs = api.images(chatId).slice().reverse();
-  const el = h(`<div class="sub-screen">${navbar('Album')}<div class="content">${imgs.length ? `<div class="album">${imgs.map(m => `<button data-act="img" data-id="${m.id}"><img src="${m.src}" alt="" loading="lazy"></button>`).join('')}</div>` : empty('🖼️', 'Belum ada foto')}</div></div>`);
-  bindActs(el, { img: t => { const i = imgs.findIndex(x => x.id === t.dataset.id); if (i >= 0) openGallery(imgs.map(m => ({ src: m.src, caption: api.user(m.from)?.name || '' })), i); } });
+export const AlbumScreen = chatId => MediaScreen(chatId);
+const URL_RE = /https?:\/\/[^\s<]+/g;
+export function mediaCounts(chatId) {
+  const all = api.messages(chatId).filter(m => !m.unsent && !m.cleared);
+  const media = api.images(chatId).length + all.filter(m => m.type === 'video').length;
+  const links = all.filter(m => m.type === 'text').reduce((n, m) => n + ((m.text || '').match(URL_RE) || []).length, 0);
+  const files = all.filter(m => m.type === 'file').length;
+  return { media, links, files, total: media + links + files };
+}
+export function MediaScreen(chatId, tab = 'media') {
+  const el = h(`<div class="sub-screen">${navbar('Media, link & file')}<div class="seg-wrap"><div class="seg">${[['media', 'Media'], ['link', 'Link'], ['file', 'File']].map(([k, l]) => `<button data-act="tab" data-k="${k}">${l}</button>`).join('')}</div></div><div class="content md-body"></div></div>`);
+  const body = $('.md-body', el);
+  const monthOf = ts => new Date(ts).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  const byMonth = (list, row) => { let cur = '', out = ''; for (const x of list) { const mo = monthOf(x.ts); if (mo !== cur) { cur = mo; out += `<div class="section-h md-mo">${esc(mo)}</div>`; } out += row(x); } return out; };
+  let media = [];
+  function render() {
+    el.querySelectorAll('[data-act=tab]').forEach(b => b.classList.toggle('on', b.dataset.k === tab));
+    const all = api.messages(chatId).filter(m => !m.unsent && !m.cleared);
+    if (tab === 'media') {
+      media = [...api.images(chatId).map(x => ({ ...x, kind: 'img' })), ...all.filter(m => m.type === 'video').map(m => ({ id: m.id, mid: m.id, src: m.thumb, ts: m.ts, from: m.from, kind: 'vid', duration: m.duration }))].sort((a, b) => b.ts - a.ts);
+      let cur = '', out = '';
+      media.forEach((x, k) => {
+        const mo = monthOf(x.ts);
+        if (mo !== cur) { if (cur) out += '</div>'; cur = mo; out += `<div class="section-h md-mo">${esc(mo)}</div><div class="album">`; }
+        out += `<button data-act="m" data-k="${k}">${x.src ? `<img src="${x.src}" alt="" loading="lazy">` : '<span class="md-ph"></span>'}${x.kind === 'vid' ? `<span class="md-vid">${icon('play')}<small>${dur(x.duration || 0)}</small></span>` : ''}</button>`;
+      });
+      body.innerHTML = media.length ? out + '</div>' : empty('🖼️', 'Belum ada media');
+    } else if (tab === 'link') {
+      const list = [];
+      all.filter(m => m.type === 'text').forEach(m => (m.text.match(URL_RE) || []).forEach(u => list.push({ url: u, m, ts: m.ts })));
+      list.reverse();
+      body.innerHTML = list.length ? byMonth(list, x => { let host = x.url; try { host = new URL(x.url).hostname.replace(/^www\./, ''); } catch { /* */ } return `<div class="list-item md-link" data-act="link" data-u="${esc(x.url)}"><span class="md-lic">${icon('link')}</span><div class="li-main"><div class="li-name">${esc(host)}</div><div class="li-sub">${esc(x.url)}</div></div><button class="icon-btn sm" data-act="go" data-mid="${x.m.id}" aria-label="Lihat di chat">${icon('chat')}</button></div>`; }) : empty('🔗', 'Belum ada link');
+    } else {
+      const list = all.filter(m => m.type === 'file').reverse();
+      body.innerHTML = list.length ? byMonth(list, m => `<div class="list-item" data-act="go" data-mid="${m.id}"><span class="md-fic">${esc((m.name || '').split('.').pop().slice(0, 4).toUpperCase()) || icon('file')}</span><div class="li-main"><div class="li-name">${esc(m.name || 'File')}</div><div class="li-sub">${fsz(m.size || 0)} · ${esc(firstName(api.user(m.from)?.name || ''))}</div></div></div>`) : empty('📄', 'Belum ada file');
+    }
+  }
+  const fsz = b => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(0) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
+  const dur = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  bindActs(el, {
+    tab: t => { tab = t.dataset.k; vibrate(4); render(); body.scrollTop = 0; },
+    m: t => {
+      const x = media[+t.dataset.k]; if (!x) return;
+      if (x.kind === 'vid') return openChat(chatId, { mid: x.mid });
+      const imgs = media.filter(y => y.kind === 'img');
+      openGallery(imgs.map(y => ({ src: y.src, caption: api.user(y.from)?.name || '' })), imgs.indexOf(x));
+    },
+    link: t => window.open(t.dataset.u, '_blank', 'noopener'),
+    go: t => openChat(chatId, { mid: t.dataset.mid }),
+  });
+  render();
   return { el };
 }
 

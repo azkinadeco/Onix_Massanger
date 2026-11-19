@@ -2195,3 +2195,21 @@ mark { background: rgba(var(--accent-rgb), .22); color: inherit; border-radius: 
 @media (prefers-reduced-motion: reduce) {
   .msg-row.msg-new > *, .tab-body.tb-in, .tab-body.tb-in > .list-item { animation: none !important; }
 }
+
+/* ============ B7: media, link & file ============ */
+.pm-card { margin: 14px 16px 6px; background: var(--surface); border-radius: 20px; padding: 4px 0 10px; box-shadow: var(--shadow); }
+.pm-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 10px 16px 6px; }
+.pm-head b { flex: 1; font-size: 14.5px; }
+.pm-head span { color: var(--text-3); font-size: 13.5px; font-weight: 600; }
+.pm-head .ic { color: var(--text-3); }
+.pm-card .mini-album { padding: 4px 12px 0; }
+.album button { position: relative; display: block; }
+.album img { border-radius: 4px; }
+.md-ph { display: block; width: 100%; aspect-ratio: 1; background: var(--surface-2); border-radius: 4px; }
+.md-vid { position: absolute; left: 6px; bottom: 6px; display: flex; align-items: center; gap: 3px; color: #fff; font-size: 11px; font-weight: 700; text-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
+.md-vid .ic { width: 14px; height: 14px; fill: #fff; }
+.md-mo { text-transform: none; letter-spacing: 0; font-size: 13px; padding: 14px 14px 6px; }
+.md-lic, .md-fic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); flex-shrink: 0; font-size: 11px; font-weight: 800; }
+.md-fic { background: rgba(91, 108, 255, .12); color: #5B6CFF; }
+.md-link .li-sub { font-size: 12.5px; }
+.profile-body .pm-card { align-self: stretch; margin: 22px 0 0; text-align: left; }

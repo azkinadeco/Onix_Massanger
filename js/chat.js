@@ -222,7 +222,7 @@ function ChatScreen(chatId) {
   onLongPress(panel, '.my-st', async n => { if (await confirmBox({ title: 'Hapus sticker ini?', ok: 'Hapus', danger: true })) api.removeMySticker(n.dataset.id); });
   const replyBar = $('.reply-bar', el), recBar = $('.rec-bar', el), typingRow = $('.typing-row', el);
   let nodes = new Map(), lastId = null, firstRender = true, stick = true, newCount = 0;
-  const animated = new Set();
+  const animated = new Set(), seenIds = new Set();
   const bombT = new Map();
   function gameSheet() {
     sheet({
@@ -459,6 +459,11 @@ function ChatScreen(chatId) {
     list.forEach((m, i) => {
       if (!prev || !isSameDay(prev.ts, m.ts)) put('d' + new Date(m.ts).toDateString(), `<div class="day-sep"><span>${dayLabel(m.ts)}</span></div>`);
       put(m.id, msgHtml(m, prev, list[i + 1], group));
+      if (!seenIds.has(m.id)) {
+        seenIds.add(m.id);
+        const n = fresh.get(m.id);
+        if (!firstRender && n && Date.now() - m.ts < 15e3) { n.classList.add('msg-new', m.from === ME ? 'from-me' : 'from-them'); n.addEventListener('animationend', () => n.classList.remove('msg-new'), { once: true }); }
+      }
       prev = m;
     });
     if (!list.length) put('empty', `<div class="chat-empty">${chatAvatar(ch, 72, { online: false })}<b>${esc(api.chatTitle(ch))}</b><div class="quick-stickers">${['👋', '🫶', '😆', '✨'].map(s => `<button data-act="quick-sticker" data-s="${s}">${s}</button>`).join('')}</div></div>`);

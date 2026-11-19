@@ -244,6 +244,7 @@ function TabsScreen() {
     renderHead(); renderBody();
     body.scrollTop = scrollPos[id] || 0;
     onScroll();
+    body.classList.remove('tb-in'); void body.offsetWidth; body.classList.add('tb-in');
     vibrate(4);
   }
 

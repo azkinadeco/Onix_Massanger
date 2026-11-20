@@ -494,7 +494,7 @@ async function askNotifPermission() {
 }
 async function sysNotify(title, body, chatId) {
   if (!canNotify() || Notification.permission !== 'granted') return false;
-  const opt = { body, tag: 'chat-' + chatId, renotify: true, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { chatId } };
+  const opt = { body, tag: 'chat-' + chatId, renotify: true, icon: 'icons/onix-192.png', badge: 'icons/onix-192.png', data: { chatId } };
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) { await reg.showNotification(title || 'Onix', opt); return true; }

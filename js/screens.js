@@ -26,7 +26,7 @@ export function OnboardingScreen(onDone) {
       el.innerHTML = `<div class="onb-hero wel">
           <i class="wel-glow g1"></i><i class="wel-glow g2"></i>
           <div class="wel-bub b1">haii 👋</div><div class="wel-bub b2 me">gas nongkrong? <small>✓✓</small></div><div class="wel-bub b3">🫶</div>
-          <div class="logo-big"><img src="icons/icon-512.png" alt="Onix"></div>
+          <div class="logo-big"><img src="icons/onix-512.png" alt="Onix"></div>
           <h1>onix</h1><p>chat bareng circle kamu</p>
         </div>
         <div class="onb-form">
